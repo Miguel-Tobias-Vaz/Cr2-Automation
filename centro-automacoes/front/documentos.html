@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Download de Documentos — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill">API …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero" id="fluxos">
+        <div class="hero-plane" aria-hidden="true">
+          <div class="hero-grid"></div>
+          <div class="hero-doc d1"></div>
+        </div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Download de Documentos</h1>
+            <p class="lede">
+              Baixa PDFs (e anexos em /uploads/) de páginas de transparência.
+              Organiza em pastas por tipo e ano. Nenhum arquivo perdido — nomes
+              únicos por URL.
+            </p>
+          </header>
+          <article class="stream is-in">
+            <span class="stream-index">01</span>
+            <h3>O que você precisa</h3>
+            <ul>
+              <li>URLs das páginas (uma por linha)</li>
+              <li>Pasta de destino no Windows</li>
+              <li>Tipo opcional (senão usa o título h1)</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="painel" id="painel">
+        <header class="section-head">
+          <h2>Configurar e executar</h2>
+          <p>Os PDFs vão para <code>PASTA_BASE\Tipo\Ano\</code></p>
+        </header>
+        <form class="painel-form" id="form-documentos">
+          <fieldset class="bloco">
+            <legend>Parâmetros</legend>
+            <div class="grid-2">
+              <label class="field">
+                <span class="field-label"><em>Pasta base</em></span>
+                <input type="text" id="pasta_base" value="C:\Downloads" />
+              </label>
+              <label class="field">
+                <span class="field-label"><em>Tipo (opcional)</em></span>
+                <input type="text" id="tipo_documento" placeholder="Vazio = título da página" />
+              </label>
+            </div>
+            <label class="field">
+              <span class="field-label"><em>URLs das páginas *</em></span>
+              <textarea id="urls" rows="8" placeholder="https://site.gov.br/portal/folha-de-pagamento/&#10;https://site.gov.br/portal/rgf/"></textarea>
+            </label>
+          </fieldset>
+          <div class="acao-row">
+            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar download</button>
+            <a class="btn btn-ghost" href="#log">Ver log</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="log-wrap" id="log">
+        <header class="section-head">
+          <h2>Log ao vivo</h2>
+          <p>Status: <strong id="log-state">Parado</strong> · Job: <span id="job-status">—</span></p>
+        </header>
+        <div class="log-console" id="log-console"><p class="log-empty">Aguardando execução…</p></div>
+        <div class="job-bar">
+          <a class="btn btn-ghost" id="btn-download" href="#" hidden>Baixar ZIP</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="/assets/shared.js"></script>
+    <script>
+      CR2Centro.injectNav("documentos");
+      CR2Centro.pingApi();
+      CR2Centro.parallaxHero();
+      const fields = ["pasta_base", "tipo_documento", "urls"];
+      CR2Centro.bindRun("documentos", "form-documentos", fields, () => ({
+        pasta_base: document.getElementById("pasta_base").value.trim(),
+        tipo_documento: document.getElementById("tipo_documento").value.trim(),
+        urls: document.getElementById("urls").value,
+      }), false);
+    </script>
+  </body>
+</html>

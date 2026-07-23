@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Publicação Dic/Est/Ter — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill" title="Status da API">API …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero" id="fluxos">
+        <div class="hero-plane" aria-hidden="true">
+          <div class="hero-grid"></div>
+          <div class="hero-doc d1"></div>
+          <div class="hero-doc d2"></div>
+          <div class="hero-doc d3"></div>
+        </div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Publicação<br />Dic/Est/Ter</h1>
+            <p class="lede">
+              Dívida ativa, estagiários e terceirizados — suba só o que precisa.
+              Validação de cabeçalho, log ao vivo e planilha de não publicadas.
+            </p>
+          </header>
+          <div class="stream-rail hero-streams">
+            <article class="stream is-in">
+              <span class="stream-index">01</span>
+              <h3>Estagiários</h3>
+              <p>Nome, início, fim, lotação, situação e arquivo.</p>
+            </article>
+            <article class="stream is-in">
+              <span class="stream-index">02</span>
+              <h3>Terceirizados</h3>
+              <p>Mês e ano, nome, empresa, função e arquivo.</p>
+            </article>
+            <article class="stream is-in">
+              <span class="stream-index">03</span>
+              <h3>Dívida ativa</h3>
+              <p>Ano, nome, valor, link e arquivo.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="painel" id="painel">
+        <header class="section-head">
+          <h2>Controle da publicação</h2>
+          <p>
+            Acesso ao portal, links das planilhas no Drive e URLs de publicação.
+            Fluxo em branco não publica.
+          </p>
+        </header>
+
+        <form class="painel-form" id="painel-form" autocomplete="on">
+          <fieldset class="bloco bloco-acesso">
+            <legend>Acesso ao portal CR2</legend>
+            <div class="grid-2">
+              <label class="field" id="wrap-usuario">
+                <span class="field-label"><em>Usuário / e-mail</em></span>
+                <input type="email" id="portal-usuario" placeholder="seu@email.com" autocomplete="username" />
+                <span class="field-hint" id="hint-usuario"></span>
+              </label>
+              <label class="field" id="wrap-senha">
+                <span class="field-label"><em>Senha</em></span>
+                <input type="password" id="portal-senha" placeholder="••••••••" autocomplete="current-password" />
+                <span class="field-hint" id="hint-senha"></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="bloco">
+            <legend>Planilhas e locais de publicação</legend>
+            <div class="fluxo-grid">
+              <div class="fluxo-row">
+                <span class="fluxo-nome">Estagiários</span>
+                <label class="field" id="wrap-estagiario">
+                  <span class="field-label"><em>Planilha Drive</em></span>
+                  <input type="url" id="link-estagiario" placeholder="https://docs.google.com/spreadsheets/d/…" />
+                  <span class="field-hint" id="hint-estagiario"></span>
+                </label>
+                <label class="field" id="wrap-portal-estagiario">
+                  <span class="field-label"><em>URL no portal</em></span>
+                  <input type="url" id="portal-estagiario" placeholder="https://www.portalcr2.com.br/relacao-estagiarios/…" />
+                  <span class="field-hint" id="hint-portal-estagiario"></span>
+                </label>
+              </div>
+              <div class="fluxo-row">
+                <span class="fluxo-nome">Terceirizados</span>
+                <label class="field" id="wrap-terceirizado">
+                  <span class="field-label"><em>Planilha Drive</em></span>
+                  <input type="url" id="link-terceirizado" placeholder="https://docs.google.com/spreadsheets/d/…" />
+                  <span class="field-hint" id="hint-terceirizado"></span>
+                </label>
+                <label class="field" id="wrap-portal-terceirizado">
+                  <span class="field-label"><em>URL no portal</em></span>
+                  <input type="url" id="portal-terceirizado" placeholder="https://www.portalcr2.com.br/relacao_prestadores/…" />
+                  <span class="field-hint" id="hint-portal-terceirizado"></span>
+                </label>
+              </div>
+              <div class="fluxo-row">
+                <span class="fluxo-nome">Dívida ativa</span>
+                <label class="field" id="wrap-divida">
+                  <span class="field-label"><em>Planilha Drive</em></span>
+                  <input type="url" id="link-divida" placeholder="https://docs.google.com/spreadsheets/d/…" />
+                  <span class="field-hint" id="hint-divida"></span>
+                </label>
+                <label class="field" id="wrap-portal-divida">
+                  <span class="field-label"><em>URL no portal</em></span>
+                  <input type="url" id="portal-divida" placeholder="https://www.portalcr2.com.br/divida-ativa/…" />
+                  <span class="field-hint" id="hint-portal-divida"></span>
+                </label>
+              </div>
+            </div>
+          </fieldset>
+
+          <div class="painel-footer">
+            <div class="checks">
+              <label class="check-row">
+                <input type="checkbox" id="modo-teste" />
+                <span>Modo teste (1 linha por fluxo)</span>
+              </label>
+              <p class="check-hint" id="hint-modo-publicacao">
+                Igual ao RGF: botão Criar Publicação, uma linha por vez.
+              </p>
+              <label class="check-row">
+                <input type="checkbox" id="lembrar-senha" />
+                <span>Lembrar senha</span>
+              </label>
+            </div>
+            <div class="painel-actions">
+              <button type="button" class="btn btn-ghost" id="btn-validar">Validar</button>
+              <button type="button" class="btn btn-primary" id="btn-publicar">Publicar</button>
+              <button type="button" class="btn btn-stop" id="btn-cancelar" title="Libera a fila se travar">Parar / Liberar</button>
+              <button type="button" class="btn btn-ghost" id="btn-limpar">Limpar</button>
+            </div>
+          </div>
+
+          <p class="painel-status" id="painel-status" role="status"></p>
+
+          <div class="dash-job" id="dash-job" hidden>
+            <h3>Dashboard da publicação</h3>
+            <p class="dash-total" id="dash-total">0 linhas</p>
+            <div class="dash-grid">
+              <div class="dash-card ok">
+                <span class="dash-label">Publicadas</span>
+                <strong id="dash-pub">0</strong>
+              </div>
+              <div class="dash-card err">
+                <span class="dash-label">Erros</span>
+                <strong id="dash-err">0</strong>
+              </div>
+              <div class="dash-card retry">
+                <span class="dash-label">Retries</span>
+                <strong id="dash-retry">0</strong>
+              </div>
+              <div class="dash-card chunk">
+                <span class="dash-label">Progresso</span>
+                <strong id="dash-chunk">0/0</strong>
+              </div>
+            </div>
+            <div class="dash-meta">
+              <span id="dash-fase">parado</span>
+              <span>Tempo restante: <strong id="dash-eta">—</strong></span>
+            </div>
+            <div class="dash-bar" aria-hidden="true"><i id="dash-bar-fill"></i></div>
+          </div>
+
+          <div class="resumo-linhas" id="resumo-linhas" hidden>
+            <h3>Quantidade de linhas</h3>
+            <div class="resumo-grid" id="resumo-grid"></div>
+          </div>
+
+          <div class="erros-box" id="erros-box" hidden>
+            <h3>Problemas encontrados</h3>
+            <ul id="erros-lista"></ul>
+          </div>
+
+          <div class="erros-box nao-pub-box" id="nao-pub-box" hidden>
+            <h3>Linhas não publicadas</h3>
+            <p class="nao-pub-hint">Baixe a planilha, corrija os campos e publique de novo.</p>
+            <a class="btn btn-primary btn-sm" id="btn-download-nao-pub" href="/api/download/nao-publicadas" download hidden>Baixar planilha .xlsx</a>
+            <ul id="nao-pub-lista"></ul>
+          </div>
+        </form>
+      </section>
+
+      <section class="log-section log-wrap" id="log">
+        <header class="section-head section-head-row">
+          <div>
+            <h2>Log da publicação</h2>
+            <p>Validação, downloads, preenchimento e erros ao vivo.</p>
+          </div>
+          <div class="log-meta">
+            <span class="log-state" id="log-state">parado</span>
+            <button type="button" class="btn btn-stop btn-sm" id="btn-cancelar-log">Parar / Liberar</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-limpar-log">Limpar log</button>
+          </div>
+        </header>
+        <div class="log-console" id="log-console" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script src="/assets/shared.js"></script>
+    <script src="/assets/dic-est-ter.js"></script>
+    <script>
+      OptoAutomacoes.injectNav("dic_est_ter");
+      OptoAutomacoes.parallaxHero();
+    </script>
+  </body>
+</html>

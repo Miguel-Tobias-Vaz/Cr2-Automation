@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Publicação CR2 — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill">API …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero">
+        <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div><div class="hero-doc d2"></div></div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Publicação RGF, RREO, Balancete e Balanço</h1>
+            <p class="lede">
+              Playwright no portal Bubble. URL vazia = fila desligada. Use modo
+              teste para publicar só 1 PDF por tipo.
+            </p>
+          </header>
+          <div class="stream-rail hero-streams">
+            <article class="stream is-in"><span class="stream-index">RGF</span><h3>RGF</h3></article>
+            <article class="stream is-in"><span class="stream-index">RREO</span><h3>RREO</h3></article>
+            <article class="stream is-in"><span class="stream-index">BAL</span><h3>Balancete / Balanço</h3></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="painel">
+        <header class="section-head"><h2>Controle da publicação</h2></header>
+        <form class="painel-form" id="form-publicacao">
+          <fieldset class="bloco bloco-acesso">
+            <legend>Portal CR2</legend>
+            <div class="grid-2">
+              <label class="field">
+                <span class="field-label"><em>Usuário *</em></span>
+                <input type="email" id="usuario" autocomplete="username" />
+              </label>
+              <label class="field">
+                <span class="field-label"><em>Senha *</em></span>
+                <input type="password" id="senha" autocomplete="current-password" />
+              </label>
+            </div>
+          </fieldset>
+          <fieldset class="bloco">
+            <legend>URLs admin (vazio = desligado)</legend>
+            <label class="field"><span class="field-label"><em>RGF</em></span><input type="url" id="url_portal_rgf" /></label>
+            <label class="field"><span class="field-label"><em>RREO</em></span><input type="url" id="url_portal_rreo" /></label>
+            <label class="field"><span class="field-label"><em>Balancete</em></span><input type="url" id="url_portal_balancete" /></label>
+            <label class="field"><span class="field-label"><em>Balanço / Rel. Anuais</em></span><input type="url" id="url_portal_balanco" /></label>
+          </fieldset>
+          <fieldset class="bloco">
+            <legend>Pastas locais (opcional)</legend>
+            <div class="grid-2">
+              <label class="field"><span class="field-label"><em>Pasta RGF</em></span><input type="text" id="pasta_rgf" placeholder="C:\Downloads\Relatório de Gestão Fiscal (RGF)" /></label>
+              <label class="field"><span class="field-label"><em>Pasta RREO</em></span><input type="text" id="pasta_rreo" /></label>
+              <label class="field"><span class="field-label"><em>Pasta Balancete</em></span><input type="text" id="pasta_balancete" /></label>
+              <label class="field"><span class="field-label"><em>Pasta Balanço</em></span><input type="text" id="pasta_balanco" /></label>
+            </div>
+          </fieldset>
+          <fieldset class="bloco">
+            <legend>Opções</legend>
+            <label class="check-row"><input type="checkbox" id="modo_teste" checked /> Modo teste (1 PDF por fila)</label>
+            <label class="check-row"><input type="checkbox" id="auto_confirm" checked /> Pular confirmações (--yes)</label>
+            <label class="check-row"><input type="checkbox" id="headless" /> Navegador invisível</label>
+            <label class="field"><span class="field-label"><em>Filtrar ano (opcional)</em></span><input type="text" id="ano" placeholder="2024" /></label>
+          </fieldset>
+          <div class="acao-row">
+            <button type="submit" class="btn btn-primary" id="btn-run">Publicar</button>
+            <a class="btn btn-ghost" href="#log">Ver log</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="log-wrap" id="log">
+        <header class="section-head"><h2>Log Playwright</h2><p>Status: <strong id="log-state">Parado</strong></p></header>
+        <div class="log-console" id="log-console"></div>
+      </section>
+    </main>
+
+    <script src="/assets/shared.js"></script>
+    <script>
+      CR2Centro.injectNav("publicacao");
+      CR2Centro.pingApi();
+      CR2Centro.parallaxHero();
+      const fields = ["usuario","senha","url_portal_rgf","url_portal_rreo","url_portal_balancete","url_portal_balanco","pasta_rgf","pasta_rreo","pasta_balancete","pasta_balanco","modo_teste","auto_confirm","headless","ano"];
+      CR2Centro.bindRun("publicacao","form-publicacao",fields,()=>({
+        usuario: document.getElementById("usuario").value.trim(),
+        senha: document.getElementById("senha").value,
+        url_portal_rgf: document.getElementById("url_portal_rgf").value.trim(),
+        url_portal_rreo: document.getElementById("url_portal_rreo").value.trim(),
+        url_portal_balancete: document.getElementById("url_portal_balancete").value.trim(),
+        url_portal_balanco: document.getElementById("url_portal_balanco").value.trim(),
+        pasta_rgf: document.getElementById("pasta_rgf").value.trim(),
+        pasta_rreo: document.getElementById("pasta_rreo").value.trim(),
+        pasta_balancete: document.getElementById("pasta_balancete").value.trim(),
+        pasta_balanco: document.getElementById("pasta_balanco").value.trim(),
+        modo_teste: document.getElementById("modo_teste").checked,
+        auto_confirm: document.getElementById("auto_confirm").checked,
+        headless: document.getElementById("headless").checked,
+        ano: document.getElementById("ano").value.trim(),
+      }), true);
+    </script>
+  </body>
+</html>

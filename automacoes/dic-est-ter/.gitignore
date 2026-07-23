@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Dados gerados / runtime (não versionar)
+data/cache/
+data/downloads/
+data/planilhas/*.csv
+runtime/jobs/
+runtime/logs/
+runtime/screenshots/
+
+# Mantém a pasta data/planilhas no git (sem CSVs grandes)
+!data/planilhas/.gitkeep

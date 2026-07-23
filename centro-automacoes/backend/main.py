@@ -1,0 +1,190 @@
+"""Opto Automações — API."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from backend.jobs import JobManager, JobStatus  # noqa: E402
+from backend.milagre_routes import router as milagre_router  # noqa: E402
+from backend.runners import dispatch  # noqa: E402
+
+FRONT = ROOT / "front"
+jobs = JobManager()
+
+app = FastAPI(title="Opto Automações", version="1.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.include_router(milagre_router)
+
+if FRONT.is_dir():
+    app.mount("/assets", StaticFiles(directory=str(FRONT)), name="assets")
+
+SERVICES = {
+    "documentos": {
+        "id": "documentos",
+        "nome": "Download de Documentos",
+        "descricao": "Baixa PDFs de páginas de transparência e organiza por tipo e ano.",
+        "pagina": "/documentos.html",
+        "icone": "01",
+    },
+    "categorias": {
+        "id": "categorias",
+        "nome": "Download por Categoria",
+        "descricao": "Varre categorias WordPress e baixa PDFs de cada post.",
+        "pagina": "/categorias.html",
+        "icone": "02",
+    },
+    "publicacao": {
+        "id": "publicacao",
+        "nome": "Publicação CR2",
+        "descricao": "RGF, RREO, Balancete e Balanço no portal Bubble (Playwright).",
+        "pagina": "/publicacao.html",
+        "icone": "03",
+    },
+    "mapa": {
+        "id": "mapa",
+        "nome": "Mapa do Site",
+        "descricao": "Cria páginas WordPress e atualiza o mapa do site.",
+        "pagina": "/mapa.html",
+        "icone": "04",
+    },
+    "dic_est_ter": {
+        "id": "dic_est_ter",
+        "nome": "Publicação Dic/Est/Ter",
+        "descricao": "Dívida ativa, estagiários e terceirizados — planilhas Drive no portal CR2.",
+        "pagina": "/dic-est-ter.html",
+        "icone": "05",
+    },
+}
+
+
+class JobCreate(BaseModel):
+    service_id: str
+    config: dict = {}
+
+
+@app.get("/api/health")
+def health():
+    return {"ok": True}
+
+
+@app.get("/api/services")
+def list_services():
+    return list(SERVICES.values())
+
+
+@app.get("/api/jobs")
+def list_jobs():
+    return jobs.list_jobs()
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job não encontrado")
+    return {**job.to_dict(), "logs": job.logs[-200:]}
+
+
+@app.post("/api/jobs")
+def create_job(body: JobCreate):
+    if body.service_id not in SERVICES or body.service_id == "dic_est_ter":
+        raise HTTPException(400, "Serviço inválido")
+    job = jobs.create(body.service_id, body.config)
+    jobs.save_config(job)
+    jobs.start(job, dispatch)
+    return {"job_id": job.id, "status": job.status.value}
+
+
+@app.get("/api/jobs/{job_id}/logs/stream")
+async def stream_logs(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job não encontrado")
+
+    async def gen():
+        q = job.subscribe()
+        while True:
+            try:
+                entry = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: q.get(timeout=25)
+                )
+                yield "data: {0}\n\n".format(json.dumps(entry, ensure_ascii=False))
+            except Exception:
+                if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                    yield "data: {0}\n\n".format(json.dumps({"level": "done", "msg": "— fim —"}))
+                    break
+                yield ": keepalive\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.get("/api/jobs/{job_id}/download")
+def download_job(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job não encontrado")
+    zip_path = job.result.get("zip")
+    if zip_path and Path(zip_path).is_file():
+        return FileResponse(zip_path, filename="cr2-{0}.zip".format(job_id))
+    raise HTTPException(404, "Nenhum arquivo para download")
+
+
+def _page(name: str):
+    path = FRONT / name
+    if path.is_file():
+        return FileResponse(path)
+    raise HTTPException(404)
+
+
+@app.get("/")
+def index():
+    return _page("index.html")
+
+
+@app.get("/documentos.html")
+def page_documentos():
+    return _page("documentos.html")
+
+
+@app.get("/categorias.html")
+def page_categorias():
+    return _page("categorias.html")
+
+
+@app.get("/publicacao.html")
+def page_publicacao():
+    return _page("publicacao.html")
+
+
+@app.get("/mapa.html")
+def page_mapa():
+    return _page("mapa.html")
+
+
+@app.get("/dic-est-ter.html")
+def page_dic_est_ter():
+    return _page("dic-est-ter.html")
+
+
+@app.get("/transparencia.html")
+def redirect_transparencia():
+    return RedirectResponse(url="/dic-est-ter.html", status_code=302)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8765, reload=True)

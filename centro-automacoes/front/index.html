@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill">API …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero">
+        <div class="hero-plane" aria-hidden="true">
+          <div class="hero-grid"></div>
+          <div class="hero-doc d1"></div>
+          <div class="hero-doc d2"></div>
+          <div class="hero-doc d3"></div>
+        </div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Cinco automações.<br />Um só painel.</h1>
+            <p class="lede">
+              Download de documentos, categorias WordPress, publicação no portal
+              CR2, publicação Dic/Est/Ter e mapa do site — cada fluxo
+              com página própria, mesma atmosfera, navegação entre elas.
+            </p>
+          </header>
+          <div class="hub-grid" id="hub-grid"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/assets/shared.js"></script>
+    <script>
+      CR2Centro.injectNav("hub");
+      CR2Centro.pingApi();
+      CR2Centro.parallaxHero();
+      fetch("/api/services")
+        .then((r) => r.json())
+        .then((list) => {
+          const grid = document.getElementById("hub-grid");
+          grid.innerHTML = list
+            .map(
+              (s) => `
+            <a class="hub-card stream is-in" href="${s.pagina}">
+              <span class="stream-index">${s.icone}</span>
+              <h3>${s.nome}</h3>
+              <p>${s.descricao}</p>
+            </a>`
+            )
+            .join("");
+        });
+    </script>
+  </body>
+</html>
