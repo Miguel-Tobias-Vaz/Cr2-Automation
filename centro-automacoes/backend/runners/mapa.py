@@ -15,7 +15,18 @@ def run(job) -> None:
         raise ValueError("URL WordPress, usuário e senha de aplicativo são obrigatórios.")
 
     paginas_raw = cfg.get("paginas") or "{}"
-    paginas = json.loads(paginas_raw) if isinstance(paginas_raw, str) else paginas_raw
+    try:
+        paginas = json.loads(paginas_raw) if isinstance(paginas_raw, str) else paginas_raw
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "PAGINAS com JSON inválido: {0}. "
+            "Use aspas duplas, sem vírgula sobrando no fim da lista, "
+            "e pares [\"Título\", \"https://...\"] (não use tuplas Python)."
+            .format(exc)
+        ) from exc
+
+    if not isinstance(paginas, dict) or not paginas:
+        raise ValueError("PAGINAS deve ser um objeto JSON com pelo menos uma categoria.")
 
     mod = load_module("mapa_site", SCRIPTS["mapa"])
     apply_globals(mod, {

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Download de Normas — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill">API …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero">
+        <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Download de Normas</h1>
+            <p class="lede">
+              Leis, decretos, portarias e demais publicações. Lê o PDF para
+              nomear no padrão Portaria Nº010/2025, Lei Nº010/2025, LDO, LOA,
+              Decreto.
+            </p>
+          </header>
+          <article class="stream is-in">
+            <span class="stream-index">06</span>
+            <h3>Fontes (uma por linha)</h3>
+            <ul>
+              <li><code>url | modo | pasta</code></li>
+              <li>modos: <code>categoria</code>, <code>hub_anos</code>, <code>pagina</code></li>
+              <li>Lê o texto do PDF quando o link é genérico</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="painel">
+        <header class="section-head"><h2>Painel</h2></header>
+        <form class="painel-form" id="form-normas">
+          <fieldset class="bloco">
+            <legend>Site e destino</legend>
+            <label class="field">
+              <span class="field-label"><em>Site (domínio) *</em></span>
+              <input type="url" id="site" value="https://inhangapi.pa.gov.br" required />
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Pasta base</em></span>
+              <input type="text" id="pasta_base" value="C:\Downloads\Inhangapi" />
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Fontes (url | modo | pasta)</em></span>
+              <textarea id="fontes" rows="8" spellcheck="false">https://inhangapi.pa.gov.br/c/publicacoes/leis/ | categoria | Leis
+https://inhangapi.pa.gov.br/decretos/ | hub_anos | Decretos
+https://inhangapi.pa.gov.br/c/publicacoes/portarias/ | categoria | Portarias
+https://inhangapi.pa.gov.br/c/publicacoes/demais/ | categoria | Demais</textarea>
+            </label>
+            <label class="field field-check">
+              <input type="checkbox" id="ler_pdf" checked />
+              <span>Ler texto do PDF para nomear (recomendado)</span>
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Limite de posts/páginas (0 = todos)</em></span>
+              <input type="number" id="limite_posts" value="0" min="0" />
+            </label>
+          </fieldset>
+          <div class="acao-row">
+            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar download</button>
+            <a class="btn btn-ghost" href="#log">Ver log</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="log-wrap" id="log">
+        <header class="section-head">
+          <h2>Log</h2>
+          <p>Status: <strong id="log-state">Parado</strong></p>
+        </header>
+        <div class="log-console" id="log-console"></div>
+      </section>
+    </main>
+
+    <script src="/assets/shared.js"></script>
+    <script>
+      CR2Centro.injectNav("normas");
+      CR2Centro.pingApi();
+      CR2Centro.parallaxHero();
+      const fields = ["site", "pasta_base", "fontes", "ler_pdf", "limite_posts"];
+      CR2Centro.bindRun("normas", "form-normas", fields, () => ({
+        site: document.getElementById("site").value.trim(),
+        pasta_base: document.getElementById("pasta_base").value.trim(),
+        fontes: document.getElementById("fontes").value,
+        ler_pdf: document.getElementById("ler_pdf").checked,
+        limite_posts: Number(document.getElementById("limite_posts").value || 0),
+      }), false);
+    </script>
+  </body>
+</html>

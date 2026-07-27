@@ -113,6 +113,8 @@ class JobManager:
                 runner(job)
                 if job.status == JobStatus.RUNNING:
                     job.status = JobStatus.COMPLETED
+                msg = (job.result or {}).get("mensagem") or "Automação concluída com sucesso."
+                job.emit("ok", "✓ CONCLUÍDO — {0}".format(msg))
                 job.emit("info", "— fim —")
             except Exception as exc:
                 job.status = JobStatus.FAILED

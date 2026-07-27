@@ -7,6 +7,18 @@ REQUEST_TIMEOUT = 90
 MAX_TENTATIVAS = 3
 PAUSA_ENTRE_PAGINAS_S = 0.5
 
+# Headers de navegador — sites com Mod_Security (ex.: jacinto.mg.gov.br)
+# bloqueiam o User-Agent padrão do requests com HTTP 406.
+HEADERS = {
+	"User-Agent": (
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+		"AppleWebKit/537.36 (KHTML, like Gecko) "
+		"Chrome/120.0.0.0 Safari/537.36"
+	),
+	"Accept": "application/json, text/plain, */*",
+	"Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+}
+
 # =============================================================
 #  CONFIGURAÇÕES
 # =============================================================
@@ -127,6 +139,9 @@ def _request(metodo, url, **kwargs):
 	"""GET/POST com timeout e retry — evita travar se o WordPress demorar."""
 	kwargs.setdefault("auth", _auth())
 	kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+	headers = dict(HEADERS)
+	headers.update(kwargs.pop("headers", None) or {})
+	kwargs["headers"] = headers
 
 	for tentativa in range(1, MAX_TENTATIVAS + 1):
 		try:
@@ -301,17 +316,15 @@ def main():
 	if not testar_conexao():
 		print("")
 		print("Verifique usuário e senha de aplicativo.")
-		input("Enter para fechar...")
-		return
+		print("Se o status for 406, o firewall (Mod_Security) pode estar bloqueando.")
+		raise RuntimeError("Falha na conexão com a REST API do WordPress.")
 
 	id_mapa = buscar_pagina_mapa()
 
 	if not id_mapa:
 		print("")
 		print("Não foi possível continuar porque a página do mapa não foi encontrada.")
-		input("Enter para fechar...")
-		return
-
+		raise RuntimeError("Página do mapa não encontrada (slug: {0}).".format(SLUG_MAPA_DO_SITE))
 	print("")
 	print("Criando páginas...")
 	print("-" * 65)
@@ -344,7 +357,8 @@ def main():
 	print("  Criadas: " + str(ok) + " | Erros: " + str(erros) + " | Total: " + str(total))
 	print("=" * 65)
 	print("")
-	input("Enter para fechar...")
+	if erros:
+		raise RuntimeError("Mapa finalizado com {0} erro(s) de criação.".format(erros))
 
 
 if __name__ == "__main__":

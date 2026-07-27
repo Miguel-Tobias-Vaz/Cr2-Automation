@@ -27,6 +27,7 @@ Passo a passo para **instalar**, **configurar** e **rodar** os scripts da pasta 
 |---------|----------------|
 | `download-documentos/script.py` | Baixa PDFs de **páginas** do site da entidade (RGF, balancete, relatórios…) |
 | `download-categorias/script.py` | Baixa PDFs de uma **categoria WordPress** (lista de posts com paginação) |
+| `download-normas/script.py` | Leis, decretos, portarias — lê o PDF e nomeia (`Lei Nº010/2025`) |
 | `publicacao-cr2/script.py` | Sobe os PDFs para o **portal administrativo CR2** (Bubble) |
 | `mapa-site/script.py` | Cria páginas no **WordPress** e monta o **mapa do site** |
 | `instalar_dependencias.bat` | Instala tudo com um clique |

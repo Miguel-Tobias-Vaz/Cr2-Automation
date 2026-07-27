@@ -46,26 +46,33 @@ SERVICES = {
         "pagina": "/categorias.html",
         "icone": "02",
     },
+    "normas": {
+        "id": "normas",
+        "nome": "Download de Normas",
+        "descricao": "Leis, decretos e portarias com nome padrão (Lei Nº010/2025) e leitura do PDF.",
+        "pagina": "/normas.html",
+        "icone": "03",
+    },
     "publicacao": {
         "id": "publicacao",
         "nome": "Publicação CR2",
         "descricao": "RGF, RREO, Balancete e Balanço no portal Bubble (Playwright).",
         "pagina": "/publicacao.html",
-        "icone": "03",
+        "icone": "04",
     },
     "mapa": {
         "id": "mapa",
         "nome": "Mapa do Site",
         "descricao": "Cria páginas WordPress e atualiza o mapa do site.",
         "pagina": "/mapa.html",
-        "icone": "04",
+        "icone": "05",
     },
     "dic_est_ter": {
         "id": "dic_est_ter",
         "nome": "Publicação Dic/Est/Ter",
         "descricao": "Dívida ativa, estagiários e terceirizados — planilhas Drive no portal CR2.",
         "pagina": "/dic-est-ter.html",
-        "icone": "05",
+        "icone": "06",
     },
 }
 
@@ -162,6 +169,11 @@ def page_documentos():
 @app.get("/categorias.html")
 def page_categorias():
     return _page("categorias.html")
+
+
+@app.get("/normas.html")
+def page_normas():
+    return _page("normas.html")
 
 
 @app.get("/publicacao.html")

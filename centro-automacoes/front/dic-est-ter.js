@@ -617,6 +617,11 @@
                 if (st.progresso) renderDashboard(st.progresso);
                 applyResumoPublicacao(st.resumo || {});
                 const np = ((st.resumo || {}).nao_publicadas || []).length;
+                const msg = np
+                  ? "Publicação encerrada — " +
+                    np.toLocaleString("pt-BR") +
+                    " linha(s) não publicada(s). Baixe o .xlsx para corrigir."
+                  : "Publicação Dic/Est/Ter concluída com sucesso.";
                 setStatus(
                   np
                     ? "Publicação encerrada — " +
@@ -624,9 +629,15 @@
                         " linha(s) não publicada(s). Baixe o .xlsx para corrigir."
                     : "Publicação encerrada. Todas as linhas válidas foram processadas."
                 );
+                if (window.CR2Centro && window.CR2Centro.showNotice) {
+                  window.CR2Centro.showNotice(msg, np ? "error" : "ok");
+                }
               })
               .catch(() => {
                 setStatus("Publicação encerrada. Veja o log abaixo.");
+                if (window.CR2Centro && window.CR2Centro.showNotice) {
+                  window.CR2Centro.showNotice("Publicação Dic/Est/Ter encerrada.", "ok");
+                }
               });
           }
         } catch (_) {

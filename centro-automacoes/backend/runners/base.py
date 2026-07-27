@@ -16,6 +16,7 @@ AUTOMACOES = PROJECT_ROOT / "automacoes"
 SCRIPTS = {
     "documentos": AUTOMACOES / "download-documentos" / "script.py",
     "categorias": AUTOMACOES / "download-categorias" / "script.py",
+    "normas": AUTOMACOES / "download-normas" / "script.py",
     "publicacao": AUTOMACOES / "publicacao-cr2" / "script.py",
     "mapa": AUTOMACOES / "mapa-site" / "script.py",
 }
@@ -67,11 +68,14 @@ def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
 
     def on_line(line: str) -> None:
         low = line.lower()
-        if "erro" in low or "error" in low or "[erro]" in low:
+        # "Erros: 0" no resumo não é falha
+        if "erros:" in low and "erros: 0" in low:
+            job.emit("info", line)
+        elif "[erro]" in low or low.startswith("erro") or " error" in low:
             job.emit("error", line)
         elif "pulado" in low or "aviso" in low:
             job.emit("warn", line)
-        elif "[ok]" in low:
+        elif "[ok]" in low or "conclu" in low:
             job.emit("ok", line)
         else:
             job.emit("info", line)

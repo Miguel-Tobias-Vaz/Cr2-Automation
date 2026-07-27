@@ -4,6 +4,7 @@
     { href: "/", label: "Início", key: "hub" },
     { href: "/documentos.html", label: "Documentos", key: "documentos" },
     { href: "/categorias.html", label: "Categorias", key: "categorias" },
+    { href: "/normas.html", label: "Normas", key: "normas" },
     { href: "/publicacao.html", label: "Publicação", key: "publicacao" },
     { href: "/dic-est-ter.html", label: "Dic/Est/Ter", key: "dic_est_ter" },
     { href: "/mapa.html", label: "Mapa", key: "mapa" },
@@ -81,8 +82,43 @@
     }
   }
 
+  function ensureNoticeHost() {
+    let host = document.getElementById("opto-notice-host");
+    if (host) return host;
+    host = document.createElement("div");
+    host.id = "opto-notice-host";
+    host.className = "opto-notice-host";
+    host.setAttribute("aria-live", "polite");
+    document.body.appendChild(host);
+    return host;
+  }
+
+  function showNotice(message, kind) {
+    const host = ensureNoticeHost();
+    const note = document.createElement("div");
+    note.className = `opto-notice opto-notice-${kind || "ok"}`;
+    note.innerHTML = `<strong>${kind === "error" ? "Erro" : "Concluído"}</strong><span>${message}</span>`;
+    host.appendChild(note);
+    requestAnimationFrame(() => note.classList.add("is-in"));
+    setTimeout(() => {
+      note.classList.remove("is-in");
+      note.classList.add("is-out");
+      setTimeout(() => note.remove(), 380);
+    }, 6500);
+  }
+
+  const SERVICE_LABELS = {
+    documentos: "Download de Documentos",
+    categorias: "Download por Categoria",
+    normas: "Download de Normas",
+    publicacao: "Publicação CR2",
+    mapa: "Mapa do Site",
+    dic_est_ter: "Publicação Dic/Est/Ter",
+  };
+
   let es = null;
   let currentJobId = null;
+  let noticeShownFor = null;
 
   function closeStream() {
     if (es) {
@@ -94,6 +130,7 @@
   function watchJob(jobId) {
     closeStream();
     currentJobId = jobId;
+    noticeShownFor = null;
     setLogState("Executando");
     const box = el("log-console");
     if (box) box.innerHTML = "";
@@ -103,14 +140,12 @@
       try {
         const data = JSON.parse(ev.data);
         if (data.level === "done") {
-          setLogState("Concluído");
           closeStream();
           refreshStatus(jobId);
           return;
         }
         appendLog(data, data.level);
         if ((data.msg || "").includes("— fim —")) {
-          setLogState("Concluído");
           closeStream();
           refreshStatus(jobId);
         }
@@ -133,8 +168,30 @@
         dl.hidden = !job.has_download;
         if (job.has_download) dl.href = `${API}/api/jobs/${jobId}/download`;
       }
-      if (job.status === "failed") setLogState("Erro");
-      if (job.status === "completed") setLogState("Concluído");
+
+      const label = SERVICE_LABELS[job.service_id] || job.service_id || "Automação";
+      const already = noticeShownFor === jobId;
+
+      if (job.status === "failed") {
+        setLogState("Erro");
+        if (job.error) {
+          appendLog({ msg: "ERRO: " + job.error, level: "error" }, "error");
+        }
+        if (!already) {
+          noticeShownFor = jobId;
+          showNotice(job.error || `${label} terminou com erro.`, "error");
+        }
+      }
+      if (job.status === "completed") {
+        setLogState("Concluído");
+        const msg =
+          (job.result && job.result.mensagem) ||
+          `${label} finalizado com sucesso.`;
+        if (!already) {
+          noticeShownFor = jobId;
+          showNotice(msg, "ok");
+        }
+      }
     } catch (_) {}
   }
 
@@ -157,6 +214,7 @@
     } catch (e) {
       appendLog({ msg: String(e.message || e), level: "error" }, "error");
       setLogState("Erro");
+      showNotice(String(e.message || e), "error");
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -189,6 +247,7 @@
     bindRun,
     parallaxHero,
     appendLog,
+    showNotice,
   };
   window.CR2Centro = window.OptoAutomacoes;
 })();

@@ -1348,6 +1348,65 @@ main {
   color: #8fd4c0;
 }
 
+.opto-notice-host {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-width: min(26rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.opto-notice {
+  pointer-events: auto;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem 1.05rem;
+  border: 1px solid rgba(143, 212, 192, 0.45);
+  background: rgba(12, 28, 24, 0.92);
+  color: #e8f6f1;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.opto-notice.is-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.opto-notice.is-out {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.opto-notice strong {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8fd4c0;
+}
+
+.opto-notice span {
+  font-size: 0.92rem;
+  line-height: 1.35;
+  color: #d7ebe4;
+}
+
+.opto-notice-error {
+  border-color: rgba(240, 160, 144, 0.5);
+  background: rgba(40, 16, 14, 0.94);
+}
+
+.opto-notice-error strong {
+  color: #f0a090;
+}
+
 .brand-icon {
   width: 1.75rem;
   height: 1.75rem;
