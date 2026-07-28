@@ -65,7 +65,11 @@ centro-automacoes/           Painel FastAPI + front
 
 | Problema | Solução |
 |----------|---------|
-| `Python não encontrado` | Reinstalar Python com PATH marcado |
+| Janela do `INSTALAR` abre e fecha | Atualize o ZIP (versão nova mantém a janela aberta). Instale Python do [python.org](https://www.python.org/downloads/) com **Add to PATH**. Evite só o atalho da Microsoft Store. |
+| `Python não encontrado` | Reinstalar Python com PATH marcado; feche e abra o `INSTALAR.bat` de novo |
+| Erro na instalação | Envie o arquivo `instalacao-log.txt` (criado ao lado do `INSTALAR.bat`) |
 | Porta 8765 ocupada | Fechar a janela antiga do painel e rodar `INICIAR.bat` de novo |
 | Página em branco / antiga | Ctrl+F5 no navegador |
 | Erro de SSL em sites | Marcar “Ignorar erros de SSL” na automação |
+
+**Importante:** no GitHub use **Code → Download ZIP**, **extraia** a pasta, e só então rode `INSTALAR.bat` (não execute de dentro do visualizador de ZIP).
