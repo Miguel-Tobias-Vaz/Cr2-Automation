@@ -53,26 +53,33 @@ SERVICES = {
         "pagina": "/normas.html",
         "icone": "03",
     },
+    "licitacoes": {
+        "id": "licitacoes",
+        "nome": "Licitações",
+        "descricao": "Baixa anexos de licitações CR2, extrai valores e preenche planilha.",
+        "pagina": "/licitacoes.html",
+        "icone": "04",
+    },
     "publicacao": {
         "id": "publicacao",
         "nome": "Publicação CR2",
         "descricao": "RGF, RREO, Balancete e Balanço no portal Bubble (Playwright).",
         "pagina": "/publicacao.html",
-        "icone": "04",
+        "icone": "05",
     },
     "mapa": {
         "id": "mapa",
         "nome": "Mapa do Site",
         "descricao": "Cria páginas WordPress e atualiza o mapa do site.",
         "pagina": "/mapa.html",
-        "icone": "05",
+        "icone": "06",
     },
     "dic_est_ter": {
         "id": "dic_est_ter",
         "nome": "Publicação Dic/Est/Ter",
         "descricao": "Dívida ativa, estagiários e terceirizados — planilhas Drive no portal CR2.",
         "pagina": "/dic-est-ter.html",
-        "icone": "06",
+        "icone": "07",
     },
 }
 
@@ -115,6 +122,20 @@ def create_job(body: JobCreate):
     return {"job_id": job.id, "status": job.status.value}
 
 
+@app.post("/api/jobs/{job_id}/cancel")
+def cancel_job(job_id: str):
+    job = jobs.cancel(job_id)
+    if not job:
+        raise HTTPException(404, "Job não encontrado")
+    return {
+        "ok": True,
+        "job_id": job.id,
+        "status": job.status.value,
+        "cancel_requested": job.cancel_requested,
+        "msg": "Cancelamento solicitado — a fila deste processo sera interrompida.",
+    }
+
+
 @app.get("/api/jobs/{job_id}/logs/stream")
 async def stream_logs(job_id: str):
     job = jobs.get(job_id)
@@ -130,7 +151,11 @@ async def stream_logs(job_id: str):
                 )
                 yield "data: {0}\n\n".format(json.dumps(entry, ensure_ascii=False))
             except Exception:
-                if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                if job.status in (
+                    JobStatus.COMPLETED,
+                    JobStatus.FAILED,
+                    JobStatus.CANCELLED,
+                ):
                     yield "data: {0}\n\n".format(json.dumps({"level": "done", "msg": "— fim —"}))
                     break
                 yield ": keepalive\n\n"
@@ -174,6 +199,11 @@ def page_categorias():
 @app.get("/normas.html")
 def page_normas():
     return _page("normas.html")
+
+
+@app.get("/licitacoes.html")
+def page_licitacoes():
+    return _page("licitacoes.html")
 
 
 @app.get("/publicacao.html")

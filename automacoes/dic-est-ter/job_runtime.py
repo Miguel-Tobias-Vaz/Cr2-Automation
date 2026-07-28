@@ -71,19 +71,28 @@ def pedido_cancelado():
         return bool(_estado["cancel_requested"])
 
 
-def liberar(motivo="Parar / Liberar"):
+def liberar(motivo="Cancelar fila"):
+    """Pede cancelamento da fila em andamento (o worker para no proximo item)."""
     with _lock:
         estava = _estado["running"]
-        _estado["running"] = False
         _estado["cancel_requested"] = True
         if _estado["resumo"] is None:
             _estado["resumo"] = {"ok": False, "cancelado": True}
         prog = _estado["progresso"]
-        prog["fase"] = "cancelado"
-        prog["msg"] = motivo
+        if estava:
+            prog["fase"] = "cancelando"
+            prog["msg"] = motivo
+        else:
+            # Nada ativo: limpa estado residual (desbloqueio)
+            _estado["running"] = False
+            prog["fase"] = "cancelado"
+            prog["msg"] = motivo
         _persistir_unlocked()
-    emit("warn", "{} — fila liberada. Pode publicar de novo.".format(motivo))
-    emit("info", "— fim —")
+    if estava:
+        emit("warn", "{} — parando a fila deste processo...".format(motivo))
+    else:
+        emit("warn", "{} — nenhuma fila ativa (estado liberado).".format(motivo))
+        emit("info", "— fim —")
     return estava
 
 

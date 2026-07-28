@@ -27,6 +27,20 @@ except ImportError:
     sync_playwright = None
 
 
+class Cancelado(Exception):
+    """Fila interrompida pelo usuario (centro-automacoes)."""
+
+
+def pedido_cancelado():
+    return False
+
+
+def _abortar_se_cancelado():
+    if pedido_cancelado():
+        print("[AVISO] Fila cancelada pelo usuario.")
+        raise Cancelado()
+
+
 def _recarregar_playwright():
     """Tenta importar playwright de novo (apos pip install)."""
     global PWTimeout, sync_playwright
@@ -2454,6 +2468,7 @@ def publicar_filas_combinadas(
             navegar_se_preciso(URL_PORTAL_RGF, "RGF — {}".format(URL_PORTAL_RGF))
 
             for pdf_path in pdfs_rgf:
+                _abortar_se_cancelado()
                 meta = extrair_meta_rgf(pdf_path)
                 if meta is None:
                     print(
@@ -2505,6 +2520,7 @@ def publicar_filas_combinadas(
             navegar_se_preciso(URL_PORTAL_RREO, "RREO — {}".format(URL_PORTAL_RREO))
 
             for pdf_path in pdfs_rreo:
+                _abortar_se_cancelado()
                 meta = extrair_meta_rreo(pdf_path)
                 if meta is None:
                     print(
@@ -2559,6 +2575,7 @@ def publicar_filas_combinadas(
             )
 
             for pdf_path in pdfs_balancete:
+                _abortar_se_cancelado()
                 meta = extrair_meta_balancete(pdf_path)
                 if meta is None:
                     print(
@@ -2608,6 +2625,7 @@ def publicar_filas_combinadas(
             )
 
             for pdf_path in pdfs_balanco_rel_anuais:
+                _abortar_se_cancelado()
                 meta = extrair_meta_balanco_rel_anuais(pdf_path)
                 if meta is None:
                     print(
@@ -2662,6 +2680,9 @@ def publicar_filas_combinadas(
                 print("    - {}: {}".format(nome, motivo))
         print("=" * 50)
 
+    except Cancelado:
+        print("\n[AVISO] Fila cancelada pelo usuario.")
+        raise
     finally:
         if browser is not None:
             try:

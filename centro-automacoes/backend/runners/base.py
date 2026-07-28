@@ -5,10 +5,10 @@ from __future__ import annotations
 import importlib.util
 import io
 import sys
-import threading
-from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import ModuleType
+
+from backend.jobs import JobCancelled
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 AUTOMACOES = PROJECT_ROOT / "automacoes"
@@ -17,6 +17,7 @@ SCRIPTS = {
     "documentos": AUTOMACOES / "download-documentos" / "script.py",
     "categorias": AUTOMACOES / "download-categorias" / "script.py",
     "normas": AUTOMACOES / "download-normas" / "script.py",
+    "licitacoes": AUTOMACOES / "download-licitacoes" / "script.py",
     "publicacao": AUTOMACOES / "publicacao-cr2" / "script.py",
     "mapa": AUTOMACOES / "mapa-site" / "script.py",
 }
@@ -31,7 +32,14 @@ class _Tee(io.TextIOBase):
     def write(self, s: str) -> int:
         if not s:
             return 0
-        self._original.write(s)
+        try:
+            self._original.write(s)
+        except UnicodeEncodeError:
+            safe = s.encode("ascii", errors="replace").decode("ascii")
+            try:
+                self._original.write(safe)
+            except Exception:
+                pass
         self._buf += s
         while "\n" in self._buf:
             line, self._buf = self._buf.split("\n", 1)
@@ -40,7 +48,10 @@ class _Tee(io.TextIOBase):
         return len(s)
 
     def flush(self) -> None:
-        self._original.flush()
+        try:
+            self._original.flush()
+        except Exception:
+            pass
         if self._buf.strip():
             self._callback(self._buf.rstrip())
             self._buf = ""
@@ -61,10 +72,21 @@ def apply_globals(mod: ModuleType, mapping: dict) -> None:
             setattr(mod, key, val)
 
 
+def _is_cancel_exc(exc: BaseException) -> bool:
+    if isinstance(exc, JobCancelled):
+        return True
+    return type(exc).__name__ in ("Cancelado", "JobCancelled")
+
+
 def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
     fn = getattr(mod, fn_name, None)
     if not fn:
         raise AttributeError("Função {0} não encontrada".format(fn_name))
+
+    def pedido_cancelado() -> bool:
+        return bool(job.cancel_requested)
+
+    setattr(mod, "pedido_cancelado", pedido_cancelado)
 
     def on_line(line: str) -> None:
         low = line.lower()
@@ -72,8 +94,12 @@ def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
         if "erros:" in low and "erros: 0" in low:
             job.emit("info", line)
         elif "[erro]" in low or low.startswith("erro") or " error" in low:
-            job.emit("error", line)
-        elif "pulado" in low or "aviso" in low:
+            # Falso positivo do Windows charmap no log
+            if "charmap" in low and "codec" in low:
+                job.emit("warn", line)
+            else:
+                job.emit("error", line)
+        elif "pulado" in low or "aviso" in low or "cancelad" in low:
             job.emit("warn", line)
         elif "[ok]" in low or "conclu" in low:
             job.emit("ok", line)
@@ -82,7 +108,20 @@ def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
 
     tee_out = _Tee(sys.stdout, on_line)
     tee_err = _Tee(sys.stderr, on_line)
-    with redirect_stdout(tee_out), redirect_stderr(tee_err):
-        fn()
-    tee_out.flush()
-    tee_err.flush()
+    try:
+        old_out, old_err = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = tee_out, tee_err
+        try:
+            fn()
+        finally:
+            tee_out.flush()
+            tee_err.flush()
+            sys.stdout, sys.stderr = old_out, old_err
+    except Exception as exc:
+        if _is_cancel_exc(exc) or job.cancel_requested:
+            job.cancel_requested = True
+            return
+        raise
+
+    if job.cancel_requested:
+        return

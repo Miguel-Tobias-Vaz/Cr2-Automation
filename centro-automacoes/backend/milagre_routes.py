@@ -87,7 +87,11 @@ def milagre_cancelar():
     return {
         "ok": True,
         "estava_rodando": estava,
-        "msg": "Fila liberada. Pode publicar de novo.",
+        "msg": (
+            "Cancelamento solicitado — a fila deste processo sera interrompida."
+            if estava
+            else "Nenhuma fila ativa (estado liberado)."
+        ),
     }
 
 

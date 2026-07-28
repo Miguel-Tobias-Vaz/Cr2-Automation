@@ -5,6 +5,7 @@
     { href: "/documentos.html", label: "Documentos", key: "documentos" },
     { href: "/categorias.html", label: "Categorias", key: "categorias" },
     { href: "/normas.html", label: "Normas", key: "normas" },
+    { href: "/licitacoes.html", label: "Licitações", key: "licitacoes" },
     { href: "/publicacao.html", label: "Publicação", key: "publicacao" },
     { href: "/dic-est-ter.html", label: "Dic/Est/Ter", key: "dic_est_ter" },
     { href: "/mapa.html", label: "Mapa", key: "mapa" },
@@ -97,7 +98,9 @@
     const host = ensureNoticeHost();
     const note = document.createElement("div");
     note.className = `opto-notice opto-notice-${kind || "ok"}`;
-    note.innerHTML = `<strong>${kind === "error" ? "Erro" : "Concluído"}</strong><span>${message}</span>`;
+    const title =
+      kind === "error" ? "Erro" : kind === "warn" ? "Cancelado" : "Concluído";
+    note.innerHTML = `<strong>${title}</strong><span>${message}</span>`;
     host.appendChild(note);
     requestAnimationFrame(() => note.classList.add("is-in"));
     setTimeout(() => {
@@ -111,6 +114,7 @@
     documentos: "Download de Documentos",
     categorias: "Download por Categoria",
     normas: "Download de Normas",
+    licitacoes: "Licitações",
     publicacao: "Publicação CR2",
     mapa: "Mapa do Site",
     dic_est_ter: "Publicação Dic/Est/Ter",
@@ -119,6 +123,37 @@
   let es = null;
   let currentJobId = null;
   let noticeShownFor = null;
+
+  function ensureCancelButton() {
+    let btn = el("btn-cancel");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = "btn-cancel";
+      btn.className = "btn btn-stop";
+      btn.textContent = "Cancelar fila";
+      btn.hidden = true;
+      btn.title = "Interrompe a fila deste processo";
+      const row = document.querySelector(".acao-row");
+      const bar = document.querySelector(".job-bar");
+      const log = document.querySelector(".log-wrap .section-head");
+      if (row) row.appendChild(btn);
+      else if (bar) bar.appendChild(btn);
+      else if (log) log.appendChild(btn);
+      else document.body.appendChild(btn);
+    }
+    if (!btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", () => cancelCurrentJob());
+    }
+    return btn;
+  }
+
+  function setCancelVisible(visible) {
+    const btn = ensureCancelButton();
+    btn.hidden = !visible;
+    btn.disabled = !visible;
+  }
 
   function closeStream() {
     if (es) {
@@ -132,6 +167,9 @@
     currentJobId = jobId;
     noticeShownFor = null;
     setLogState("Executando");
+    setCancelVisible(true);
+    const runBtn = el("btn-run");
+    if (runBtn) runBtn.disabled = true;
     const box = el("log-console");
     if (box) box.innerHTML = "";
 
@@ -157,6 +195,31 @@
     };
   }
 
+  async function cancelCurrentJob() {
+    if (!currentJobId) return;
+    const btn = ensureCancelButton();
+    btn.disabled = true;
+    btn.textContent = "Cancelando…";
+    try {
+      const r = await fetch(`${API}/api/jobs/${currentJobId}/cancel`, {
+        method: "POST",
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || r.statusText);
+      }
+      appendLog(
+        { msg: "Cancelamento enviado — aguardando a fila parar…", level: "warn" },
+        "warn"
+      );
+      setLogState("Cancelando");
+    } catch (e) {
+      appendLog({ msg: String(e.message || e), level: "error" }, "error");
+      btn.disabled = false;
+      btn.textContent = "Cancelar fila";
+    }
+  }
+
   async function refreshStatus(jobId) {
     try {
       const r = await fetch(`${API}/api/jobs/${jobId}`);
@@ -171,6 +234,15 @@
 
       const label = SERVICE_LABELS[job.service_id] || job.service_id || "Automação";
       const already = noticeShownFor === jobId;
+      const finished = ["completed", "failed", "cancelled"].includes(job.status);
+
+      if (finished) {
+        setCancelVisible(false);
+        const cancelBtn = el("btn-cancel");
+        if (cancelBtn) cancelBtn.textContent = "Cancelar fila";
+        const runBtn = el("btn-run");
+        if (runBtn) runBtn.disabled = false;
+      }
 
       if (job.status === "failed") {
         setLogState("Erro");
@@ -182,6 +254,16 @@
           showNotice(job.error || `${label} terminou com erro.`, "error");
         }
       }
+      if (job.status === "cancelled") {
+        setLogState("Cancelado");
+        if (!already) {
+          noticeShownFor = jobId;
+          showNotice(
+            (job.result && job.result.mensagem) || `${label}: fila cancelada.`,
+            "warn"
+          );
+        }
+      }
       if (job.status === "completed") {
         setLogState("Concluído");
         const msg =
@@ -191,6 +273,9 @@
           noticeShownFor = jobId;
           showNotice(msg, "ok");
         }
+      }
+      if (job.status === "running" && job.cancel_requested) {
+        setLogState("Cancelando");
       }
     } catch (_) {}
   }
@@ -214,8 +299,8 @@
     } catch (e) {
       appendLog({ msg: String(e.message || e), level: "error" }, "error");
       setLogState("Erro");
+      setCancelVisible(false);
       showNotice(String(e.message || e), "error");
-    } finally {
       if (btn) btn.disabled = false;
     }
   }
@@ -223,6 +308,7 @@
   function bindRun(serviceId, formId, fieldIds, readConfig, skipSensitive) {
     const form = el(formId);
     if (!form) return;
+    ensureCancelButton();
     loadForm(serviceId, fieldIds);
     form.addEventListener("submit", (ev) => {
       ev.preventDefault();
@@ -248,6 +334,7 @@
     parallaxHero,
     appendLog,
     showNotice,
+    cancelCurrentJob,
   };
   window.CR2Centro = window.OptoAutomacoes;
 })();

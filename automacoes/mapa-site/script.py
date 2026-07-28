@@ -7,6 +7,21 @@ REQUEST_TIMEOUT = 90
 MAX_TENTATIVAS = 3
 PAUSA_ENTRE_PAGINAS_S = 0.5
 
+
+class Cancelado(Exception):
+	"""Fila interrompida pelo usuario (centro-automacoes)."""
+
+
+def pedido_cancelado():
+	return False
+
+
+def _abortar_se_cancelado():
+	if pedido_cancelado():
+		print("  [AVISO] Fila cancelada pelo usuario.")
+		raise Cancelado()
+
+
 # Headers de navegador — sites com Mod_Security (ex.: jacinto.mg.gov.br)
 # bloqueiam o User-Agent padrão do requests com HTTP 406.
 HEADERS = {
@@ -333,32 +348,40 @@ def main():
 	erros = 0
 	contador = 1
 	paginas_criadas = {}
+	cancelado = False
 
-	for categoria, itens in PAGINAS.items():
-		for titulo, url_cr2 in itens:
-			link_pagina = criar_pagina(titulo, url_cr2, id_mapa, contador, total)
+	try:
+		for categoria, itens in PAGINAS.items():
+			for titulo, url_cr2 in itens:
+				_abortar_se_cancelado()
+				link_pagina = criar_pagina(titulo, url_cr2, id_mapa, contador, total)
 
-			if link_pagina:
-				ok += 1
-				paginas_criadas[titulo] = link_pagina
-			else:
-				erros += 1
+				if link_pagina:
+					ok += 1
+					paginas_criadas[titulo] = link_pagina
+				else:
+					erros += 1
 
-			contador += 1
-			time.sleep(PAUSA_ENTRE_PAGINAS_S)
-			sys.stdout.flush()
+				contador += 1
+				time.sleep(PAUSA_ENTRE_PAGINAS_S)
+				sys.stdout.flush()
+	except Cancelado:
+		cancelado = True
 
-	conteudo_mapa = montar_html_mapa(paginas_criadas)
-	atualizar_mapa_do_site(id_mapa, conteudo_mapa)
+	if not cancelado:
+		conteudo_mapa = montar_html_mapa(paginas_criadas)
+		atualizar_mapa_do_site(id_mapa, conteudo_mapa)
 
 	print("")
 	print("=" * 65)
-	print("  CONCLUÍDO!")
+	print("  " + ("CANCELADO!" if cancelado else "CONCLUIDO!"))
 	print("  Criadas: " + str(ok) + " | Erros: " + str(erros) + " | Total: " + str(total))
 	print("=" * 65)
 	print("")
+	if cancelado:
+		raise Cancelado()
 	if erros:
-		raise RuntimeError("Mapa finalizado com {0} erro(s) de criação.".format(erros))
+		raise RuntimeError("Mapa finalizado com {0} erro(s) de criacao.".format(erros))
 
 
 if __name__ == "__main__":

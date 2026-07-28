@@ -7,6 +7,21 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
+
+class Cancelado(Exception):
+    """Fila interrompida pelo usuario (centro-automacoes)."""
+
+
+def pedido_cancelado():
+    return False
+
+
+def _abortar_se_cancelado():
+    if pedido_cancelado():
+        print("[AVISO] Fila cancelada pelo usuario.")
+        raise Cancelado()
+
+
 # =============================================================
 # CONFIGURAÇÕES PRINCIPAIS
 # =============================================================
@@ -16,6 +31,10 @@ PASTA_BASE = r"C:\Downloads"
 
 # Tipo do documento (texto livre ou PPA / LDO / LOA). Vazio = usa o título da página (h1).
 TIPO_DOCUMENTO = ""
+
+# Filtro de anos: lista de strings, ex. ["2023"] ou ["2022", "2023"].
+# Lista vazia = baixa TODOS os anos encontrados na página.
+ANOS_FILTRO = []
 
 # Uma ou várias páginas. Pode ser só a URL (str) ou dict com overrides:
 #   {"url": "https://...", "tipo": "Parecer TC"}
@@ -805,6 +824,15 @@ def processar_pagina(entrada):
         reverse=True,
     )
 
+    anos_filtro = [str(a).strip() for a in (ANOS_FILTRO or []) if str(a).strip()]
+    if anos_filtro:
+        antes = len(chaves)
+        chaves = [k for k in chaves if k[1] in anos_filtro or k[1] == "SEM_ANO"]
+        pulados_ano = antes - len(chaves)
+        print("Filtro de anos  : {}".format(", ".join(anos_filtro)))
+        if pulados_ano:
+            print("Grupos fora do filtro (pulados): {}".format(pulados_ano))
+
     subpastas_usadas = sorted({k[0] for k in chaves if k[0]})
     anos_usados = sorted({k[1] for k in chaves}, reverse=True)
 
@@ -814,9 +842,25 @@ def processar_pagina(entrada):
     print("============================================================")
     if subpastas_usadas:
         print("Subpastas: " + ", ".join(subpastas_usadas))
-    print("Anos encontrados: " + ", ".join(anos_usados))
-    print("Total de PDFs encontrados: {}".format(total_pdfs))
+    print("Anos a baixar: " + (", ".join(anos_usados) if anos_usados else "(nenhum)"))
+    print("Total de PDFs neste filtro: {}".format(
+        sum(len(pdfs_por_ano[k]) for k in chaves)
+    ))
     print()
+
+    if not chaves:
+        print("[AVISO] Nenhum PDF nos anos filtrados nesta página.")
+        return {
+            "ok": 0,
+            "pulados": 0,
+            "erros": 0,
+            "lista_pulados": [],
+            "lista_erros": [],
+            "pasta": pasta_principal,
+            "titulo": titulo_pagina,
+            "url": url_pagina,
+            "tipo_pasta": nome_pasta_raiz,
+        }
 
     total_ok = 0
     total_pulados = 0
@@ -825,6 +869,7 @@ def processar_pagina(entrada):
     lista_erros = []
 
     for subpasta, ano in chaves:
+        _abortar_se_cancelado()
         pdfs = pdfs_por_ano[(subpasta, ano)]
         if subpasta:
             pasta_ano = os.path.join(pasta_principal, subpasta, ano)
@@ -844,6 +889,7 @@ def processar_pagina(entrada):
         erros = 0
 
         for nome_arquivo, url_pdf in pdfs:
+            _abortar_se_cancelado()
             item = baixar_pdf(nome_arquivo, url_pdf, pasta_ano)
             status = item.get("status")
             if status == "ok":
@@ -1024,28 +1070,33 @@ def main():
     paginas_falha = []
     resultados_paginas = []
     pastas_salvas = []
+    cancelado = False
 
-    for entrada in entradas:
-        res = processar_pagina(entrada)
-        if res is None:
-            url_f = entrada.get("url") if isinstance(entrada, dict) else str(entrada)
-            paginas_falha.append({
-                "url": url_f,
-                "motivo": "não foi possível acessar ou ler a página",
-            })
-            continue
-        resultados_paginas.append(res)
-        geral_ok += res["ok"]
-        geral_pulados += res["pulados"]
-        geral_erros += res["erros"]
-        if res.get("pasta"):
-            pastas_salvas.append(res["pasta"])
+    try:
+        for entrada in entradas:
+            _abortar_se_cancelado()
+            res = processar_pagina(entrada)
+            if res is None:
+                url_f = entrada.get("url") if isinstance(entrada, dict) else str(entrada)
+                paginas_falha.append({
+                    "url": url_f,
+                    "motivo": "nao foi possivel acessar ou ler a pagina",
+                })
+                continue
+            resultados_paginas.append(res)
+            geral_ok += res["ok"]
+            geral_pulados += res["pulados"]
+            geral_erros += res["erros"]
+            if res.get("pasta"):
+                pastas_salvas.append(res["pasta"])
+    except Cancelado:
+        cancelado = True
 
     print("\n" + "=" * 60)
-    print("RESUMO GERAL (todas as páginas)")
+    print("RESUMO GERAL" + (" (CANCELADO)" if cancelado else ""))
     print("=" * 60)
-    print("Páginas na fila      : {}".format(len(entradas)))
-    print("Páginas com falha    : {}".format(len(paginas_falha)))
+    print("Paginas na fila      : {}".format(len(entradas)))
+    print("Paginas com falha    : {}".format(len(paginas_falha)))
     print("Total baixados       : {}".format(geral_ok))
     print("Total pulados        : {}".format(geral_pulados))
     print("Total erros (PDFs)   : {}".format(geral_erros))
@@ -1057,6 +1108,8 @@ def main():
     print("=" * 60)
 
     _exibir_mini_relatorio(resultados_paginas, paginas_falha)
+    if cancelado:
+        raise Cancelado()
 
 
 # =============================================================

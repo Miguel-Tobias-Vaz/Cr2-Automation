@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/assets/styles.css" />
@@ -43,9 +43,10 @@
             <span class="stream-index">06</span>
             <h3>Fontes (uma por linha)</h3>
             <ul>
-              <li><code>url | modo | pasta</code></li>
-              <li>modos: <code>categoria</code>, <code>hub_anos</code>, <code>pagina</code></li>
-              <li>Lê o texto do PDF quando o link é genérico</li>
+              <li>Formato: <code>url | modo | pasta</code></li>
+              <li><code>url</code> — link da página no WordPress</li>
+              <li><code>modo</code> — <code>categoria</code>, <code>hub_anos</code> ou <code>pagina</code></li>
+              <li><code>pasta</code> — nome da subpasta local (ex.: Leis, Decretos)</li>
             </ul>
           </article>
         </div>
@@ -66,14 +67,20 @@
             </label>
             <label class="field">
               <span class="field-label"><em>Fontes (url | modo | pasta)</em></span>
+              <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
+                Uma fonte por linha. Modos: categoria (lista posts), hub_anos (índice por ano), pagina (PDFs na própria URL).
+              </small>
               <textarea id="fontes" rows="8" spellcheck="false">https://inhangapi.pa.gov.br/c/publicacoes/leis/ | categoria | Leis
 https://inhangapi.pa.gov.br/decretos/ | hub_anos | Decretos
 https://inhangapi.pa.gov.br/c/publicacoes/portarias/ | categoria | Portarias
 https://inhangapi.pa.gov.br/c/publicacoes/demais/ | categoria | Demais</textarea>
             </label>
-            <label class="field field-check">
+            <label class="check-row" for="ler_pdf">
               <input type="checkbox" id="ler_pdf" checked />
-              <span>Ler texto do PDF para nomear (recomendado)</span>
+              <span class="check-copy">
+                <strong>Ler texto do PDF para nomear</strong>
+                <small>Recomendado — extrai número/título do documento</small>
+              </span>
             </label>
             <label class="field">
               <span class="field-label"><em>Limite de posts/páginas (0 = todos)</em></span>
@@ -82,6 +89,7 @@ https://inhangapi.pa.gov.br/c/publicacoes/demais/ | categoria | Demais</textarea
           </fieldset>
           <div class="acao-row">
             <button type="submit" class="btn btn-primary" id="btn-run">Iniciar download</button>
+            <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
             <a class="btn btn-ghost" href="#log">Ver log</a>
           </div>
         </form>

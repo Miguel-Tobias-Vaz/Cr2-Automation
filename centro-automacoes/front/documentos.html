@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/assets/styles.css" />
@@ -73,12 +73,20 @@
               </label>
             </div>
             <label class="field">
+              <span class="field-label"><em>Anos a baixar</em></span>
+              <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
+              </small>
+            </label>
+            <label class="field">
               <span class="field-label"><em>URLs das páginas *</em></span>
               <textarea id="urls" rows="8" placeholder="https://site.gov.br/portal/folha-de-pagamento/&#10;https://site.gov.br/portal/rgf/"></textarea>
             </label>
           </fieldset>
           <div class="acao-row">
             <button type="submit" class="btn btn-primary" id="btn-run">Iniciar download</button>
+            <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
             <a class="btn btn-ghost" href="#log">Ver log</a>
           </div>
         </form>
@@ -101,10 +109,11 @@
       CR2Centro.injectNav("documentos");
       CR2Centro.pingApi();
       CR2Centro.parallaxHero();
-      const fields = ["pasta_base", "tipo_documento", "urls"];
+      const fields = ["pasta_base", "tipo_documento", "anos", "urls"];
       CR2Centro.bindRun("documentos", "form-documentos", fields, () => ({
         pasta_base: document.getElementById("pasta_base").value.trim(),
         tipo_documento: document.getElementById("tipo_documento").value.trim(),
+        anos: document.getElementById("anos").value.trim(),
         urls: document.getElementById("urls").value,
       }), false);
     </script>

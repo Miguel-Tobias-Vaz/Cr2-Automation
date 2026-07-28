@@ -10,23 +10,28 @@ if not exist "front\brand-icon.png" (
   )
 )
 
-if not exist venv (
-  echo Criando venv...
-  python -m venv venv
-  call venv\Scripts\activate.bat
-  pip install -r requirements.txt
-) else (
-  call venv\Scripts\activate.bat
+if not exist "venv\Scripts\python.exe" (
+  echo [ERRO] venv nao encontrado.
+  echo        Volte uma pasta e execute INSTALAR.bat
+  pause
+  exit /b 1
 )
 
-rem Encerra instancia antiga (porta 8766) se ainda estiver rodando
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8766.*LISTENING"') do (
-  echo [AVISO] Encerrando servidor antigo na porta 8766...
+call venv\Scripts\activate.bat
+
+rem Encerra instancia antiga na porta 8765
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8765.*LISTENING"') do (
+  echo [AVISO] Encerrando servidor antigo na porta 8765...
   taskkill /PID %%a /F >nul 2>&1
 )
 
 echo.
-echo Opto Automações — http://127.0.0.1:8765
+echo ============================================================
+echo  Opto Automações
+echo  Abra no navegador: http://127.0.0.1:8765
+echo  Para parar: feche esta janela ^(Ctrl+C^)
+echo ============================================================
 echo.
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765 --reload
+
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 pause

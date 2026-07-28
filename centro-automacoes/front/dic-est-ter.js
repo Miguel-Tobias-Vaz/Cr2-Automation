@@ -757,13 +757,13 @@
       setLogState("parado");
       if (e.status === 409 || /andamento/i.test(e.message || "")) {
         setStatus(
-          "Já há uma publicação em andamento. Use Parar / Liberar e tente de novo.",
+          "Já há uma publicação em andamento. Use Cancelar fila e tente de novo.",
           true
         );
         showErros([
           {
             text:
-              "Publicação travada ou ainda rodando. Clique em Parar / Liberar (ou reinicie o servidor).",
+              "Publicação travada ou ainda rodando. Clique em Cancelar fila (ou reinicie o servidor).",
           },
         ]);
       } else if (e.data && e.data.validacao) {
@@ -786,6 +786,10 @@
       setStatus("API offline. Reinicie: centro-automacoes\\run.bat", true);
       return;
     }
+    const btn = el("btn-cancelar");
+    const btnLog = el("btn-cancelar-log");
+    if (btn) btn.disabled = true;
+    if (btnLog) btnLog.disabled = true;
     try {
       let r;
       try {
@@ -794,21 +798,22 @@
           body: JSON.stringify({}),
         });
       } catch (e1) {
-        // servidor antigo sem POST /api/cancelar — tenta GET
         r = await api("/api/cancelar");
       }
-      publishing = false;
-      el("btn-publicar").disabled = false;
-      setLogState("parado");
-      setStatus(r.msg || "Fila liberada. Pode publicar de novo.");
+      setLogState(r.estava_rodando ? "cancelando" : "parado");
+      setStatus(r.msg || "Cancelamento solicitado.");
       appendLog({
         t: new Date().toLocaleTimeString("pt-BR", { hour12: false }),
         level: "warn",
-        msg: r.msg || "Parar / Liberar",
+        msg: r.msg || "Cancelar fila",
       });
+      if (!r.estava_rodando) {
+        publishing = false;
+        el("btn-publicar").disabled = false;
+      }
     } catch (e) {
       setStatus(
-        "Parar falhou (" +
+        "Cancelar falhou (" +
           e.message +
           "). Reinicie o painel com centro-automacoes\\run.bat",
         true
@@ -819,6 +824,9 @@
             "O servidor parou de responder. Reinicie com centro-automacoes\\run.bat",
         },
       ]);
+    } finally {
+      if (btn) btn.disabled = false;
+      if (btnLog) btnLog.disabled = false;
     }
   }
 

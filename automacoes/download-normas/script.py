@@ -33,6 +33,22 @@ try:
 except ImportError:  # pragma: no cover
     PdfReader = None
 
+
+class Cancelado(Exception):
+    """Fila interrompida pelo usuario (centro-automacoes)."""
+
+
+def pedido_cancelado() -> bool:
+    """Sobrescrito pelo painel quando o job e cancelado."""
+    return False
+
+
+def _abortar_se_cancelado() -> None:
+    if pedido_cancelado():
+        print("  [AVISO] Fila cancelada pelo usuario.")
+        raise Cancelado()
+
+
 # --- Configuração ---
 PASTA_BASE = r"C:\Downloads\Inhangapi"
 SITE = "https://inhangapi.pa.gov.br"
@@ -165,12 +181,15 @@ _RE_TIPO_PRIORIDADE = [
     ("Decreto", re.compile(r"\bdecretos?\b", re.I)),
     ("Resolução", re.compile(r"\bresolu[cç][aã]o(?:es)?\b", re.I)),
     ("Edital", re.compile(r"\beditais?\b", re.I)),
+    ("Moção", re.compile(r"\bmo[cç][aã]o(?:es)?\b", re.I)),
+    ("Requerimento", re.compile(r"\brequerimentos?\b", re.I)),
     ("Lei", re.compile(r"\b(?:lei(?:s)?\s+municipal(?:is)?|projeto\s+de\s+lei|leis?)\b", re.I)),
 ]
 
 _LINK_GENERICO = re.compile(
-    r"^(clique\s+aqui|baixar|download|visualizar|pdf|arquivo|"
-    r"clique\s+aqui\s+para\s+visualizar|veja\s+aqui|acesse)[\s\.\!]*$",
+    r"^(clique\s+aqui(?:\s+para\s+(?:visualizar|baixar|download|ler|abrir))?|"
+    r"baixar|download|visualizar|pdf|arquivo|"
+    r"veja\s+aqui|acesse(?:\s+aqui)?)[\s\.\!]*$",
     re.I,
 )
 
@@ -214,6 +233,10 @@ def _detectar_tipo(*textos: str, pasta_hint: str = "") -> str | None:
         return "Portaria"
     if "decreto" in hint:
         return "Decreto"
+    if "moç" in hint or "moc" in hint:
+        return "Moção"
+    if "requerimento" in hint:
+        return "Requerimento"
     if "lei" in hint:
         return "Lei"
     return None
@@ -548,6 +571,8 @@ def baixar_e_salvar(
         texto_pdf = ""
         if ler_pdf and LER_PDF:
             texto_pdf = ler_texto_pdf_bytes(data)
+            if not texto_pdf:
+                print("    [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link")
 
         # Prefere texto do PDF + título/link; cai no nome prévio se nada útil.
         nome = montar_nome_documento(
@@ -583,10 +608,16 @@ def baixar_e_salvar(
         with open(caminho, "wb") as f:
             f.write(data)
         kb = len(data) / 1024
-        print(f"    [OK]      {arquivo} ({round(kb, 1)} KB) ← {nome}")
+        try:
+            print(f"    [OK]      {arquivo} ({round(kb, 1)} KB) <- {nome}")
+        except UnicodeEncodeError:
+            print(f"    [OK]      {arquivo} ({round(kb, 1)} KB)")
+        return "ok"
+    except UnicodeEncodeError:
+        # Log/console Windows (cp1252) — nao e falha de download
         return "ok"
     except Exception as e:
-        print(f"    [ERRO]    {url_pdf} — {e}")
+        print(f"    [ERRO]    {url_pdf} - {e}")
         return "erro"
 
 
@@ -610,6 +641,7 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
 
     total = len(posts)
     for i, url_post in enumerate(posts, 1):
+        _abortar_se_cancelado()
         prefix = f"[{str(i).zfill(3)}/{total}]"
         slug = url_post.rstrip("/").split("/")[-1][:60]
         print(f"{prefix} {slug}")
@@ -628,9 +660,10 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
 
         ano = extrair_ano(titulo, url_post)
         pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
-        print(f"    {len(pdfs)} PDF(s) | título: {titulo[:80]}")
+        print(f"    {len(pdfs)} PDF(s) | titulo: {titulo[:80]}")
 
         for texto_link, url_pdf in pdfs:
+            _abortar_se_cancelado()
             nome_previo = montar_nome_documento(
                 texto_link=texto_link,
                 titulo_post=titulo,
@@ -666,7 +699,8 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
         paginas = paginas[:LIMITE_POSTS]
 
     for i, (rotulo, url_ano) in enumerate(paginas, 1):
-        print(f"[{str(i).zfill(2)}/{len(paginas)}] {rotulo} → {url_ano}")
+        _abortar_se_cancelado()
+        print(f"[{str(i).zfill(2)}/{len(paginas)}] {rotulo} -> {url_ano}")
         try:
             resp = _get(url_ano)
             soup = BeautifulSoup(resp.content, "html.parser")
@@ -687,6 +721,7 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
         print(f"    {len(pdfs)} PDF(s)")
 
         for texto_link, url_pdf in pdfs:
+            _abortar_se_cancelado()
             nome_previo = montar_nome_documento(
                 texto_link=texto_link,
                 titulo_post=titulo,
@@ -728,6 +763,7 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
     pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
     print(f"  {len(pdfs)} PDF(s)")
     for texto_link, url_pdf in pdfs:
+        _abortar_se_cancelado()
         nome_previo = montar_nome_documento(
             texto_link=texto_link,
             titulo_post=titulo,
@@ -764,28 +800,35 @@ def main():
 
     criar_pasta(PASTA_BASE)
     contadores = {"ok": 0, "pulado": 0, "erro": 0, "erros": 0, "sem_pdf": 0}
+    cancelado = False
 
-    for fonte in FONTES:
-        modo = (fonte.get("modo") or "categoria").lower().strip()
-        if modo == "categoria":
-            processar_categoria(fonte, contadores)
-        elif modo == "hub_anos":
-            processar_hub_anos(fonte, contadores)
-        elif modo == "pagina":
-            processar_pagina(fonte, contadores)
-        else:
-            print(f"[AVISO] Modo desconhecido: {modo} ({fonte.get('url')})")
+    try:
+        for fonte in FONTES:
+            _abortar_se_cancelado()
+            modo = (fonte.get("modo") or "categoria").lower().strip()
+            if modo == "categoria":
+                processar_categoria(fonte, contadores)
+            elif modo == "hub_anos":
+                processar_hub_anos(fonte, contadores)
+            elif modo == "pagina":
+                processar_pagina(fonte, contadores)
+            else:
+                print(f"[AVISO] Modo desconhecido: {modo} ({fonte.get('url')})")
+    except Cancelado:
+        cancelado = True
 
     print("")
     print("=" * 60)
-    print("  RESUMO FINAL")
+    print("  RESUMO FINAL" + (" (CANCELADO)" if cancelado else ""))
     print("=" * 60)
     print(f"  PDFs OK                    : {contadores.get('ok', 0)}")
-    print(f"  PDFs pulados (já existiam) : {contadores.get('pulado', 0)}")
+    print(f"  PDFs pulados (ja existiam) : {contadores.get('pulado', 0)}")
     print(f"  Erros download             : {contadores.get('erro', 0) + contadores.get('erros', 0)}")
-    print(f"  Posts/páginas sem PDF      : {contadores.get('sem_pdf', 0)}")
+    print(f"  Posts/paginas sem PDF      : {contadores.get('sem_pdf', 0)}")
     print(f"  Pasta base                 : {PASTA_BASE}")
     print("=" * 60)
+    if cancelado:
+        raise Cancelado()
 
 
 if __name__ == "__main__":

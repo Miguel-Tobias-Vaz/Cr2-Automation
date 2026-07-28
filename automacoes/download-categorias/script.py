@@ -24,6 +24,20 @@ HEADERS = {
 }
 
 
+class Cancelado(Exception):
+    """Fila interrompida pelo usuario (centro-automacoes)."""
+
+
+def pedido_cancelado():
+    return False
+
+
+def _abortar_se_cancelado():
+    if pedido_cancelado():
+        print("  [AVISO] Fila cancelada pelo usuario.")
+        raise Cancelado()
+
+
 def criar_pasta(pasta):
     os.makedirs(pasta, exist_ok=True)
 
@@ -275,7 +289,7 @@ def baixar_pdf(nome, url_pdf, pasta):
         print(
             "    [PULADO]  "
             + nome
-            + " (ja existe nesta pasta — nao sobrescreve)"
+            + " (ja existe nesta pasta - nao sobrescreve)"
         )
         print("              -> " + caminho)
         return "pulado"
@@ -314,6 +328,7 @@ def main():
     pagina = 1
 
     while True:
+        _abortar_se_cancelado()
         if pagina == 1:
             url = URL_CATEGORIA
         else:
@@ -357,51 +372,57 @@ def main():
 
     ok = pulados = erros = sem_pdf = 0
     total = len(todos_posts)
+    cancelado = False
 
-    for i, (url_post, ano) in enumerate(todos_posts, 1):
-        prefix = "[" + str(i).zfill(3) + "/" + str(total) + "]"
-        pasta = os.path.join(PASTA_BASE, "categoria_" + str(ano))
-        criar_pasta(pasta)
+    try:
+        for i, (url_post, ano) in enumerate(todos_posts, 1):
+            _abortar_se_cancelado()
+            prefix = "[" + str(i).zfill(3) + "/" + str(total) + "]"
+            pasta = os.path.join(PASTA_BASE, "categoria_" + str(ano))
+            criar_pasta(pasta)
 
-        slug = url_post.rstrip("/").split("/")[-1][:50]
-        print(prefix + " " + str(ano) + " | " + slug)
+            slug = url_post.rstrip("/").split("/")[-1][:50]
+            print(prefix + " " + str(ano) + " | " + slug)
 
-        urls_pdf = obter_pdfs_do_post(url_post)
+            urls_pdf = obter_pdfs_do_post(url_post)
 
-        if not urls_pdf:
-            print("    [SEM PDF] Nenhum PDF encontrado no corpo do post.")
-            sem_pdf += 1
-            time.sleep(0.3)
-            continue
+            if not urls_pdf:
+                print("    [SEM PDF] Nenhum PDF encontrado no corpo do post.")
+                sem_pdf += 1
+                time.sleep(0.3)
+                continue
 
-        print("    " + str(len(urls_pdf)) + " PDF(s) no conteudo principal.")
+            print("    " + str(len(urls_pdf)) + " PDF(s) no conteudo principal.")
 
-        usados_local = set()
-        for j, url_pdf in enumerate(urls_pdf, 1):
-            nome = os.path.basename(urlparse(url_pdf).path.split("?")[0])
-            if not nome or not nome.lower().endswith(".pdf"):
-                nome = slug.replace("/", "_") + "_" + str(j).zfill(2) + ".pdf"
-            stem = nome[:-4] if nome.lower().endswith(".pdf") else nome
-            sufixo = 1
-            nome_final = nome
-            while nome_final.lower() in usados_local:
-                sufixo += 1
-                nome_final = stem + "_" + str(sufixo) + ".pdf"
-            usados_local.add(nome_final.lower())
+            usados_local = set()
+            for j, url_pdf in enumerate(urls_pdf, 1):
+                _abortar_se_cancelado()
+                nome = os.path.basename(urlparse(url_pdf).path.split("?")[0])
+                if not nome or not nome.lower().endswith(".pdf"):
+                    nome = slug.replace("/", "_") + "_" + str(j).zfill(2) + ".pdf"
+                stem = nome[:-4] if nome.lower().endswith(".pdf") else nome
+                sufixo = 1
+                nome_final = nome
+                while nome_final.lower() in usados_local:
+                    sufixo += 1
+                    nome_final = stem + "_" + str(sufixo) + ".pdf"
+                usados_local.add(nome_final.lower())
 
-            resultado = baixar_pdf(nome_final, url_pdf, pasta)
-            if resultado == "ok":
-                ok += 1
-            elif resultado == "pulado":
-                pulados += 1
-            else:
-                erros += 1
+                resultado = baixar_pdf(nome_final, url_pdf, pasta)
+                if resultado == "ok":
+                    ok += 1
+                elif resultado == "pulado":
+                    pulados += 1
+                else:
+                    erros += 1
 
-        time.sleep(0.5)
+            time.sleep(0.5)
+    except Cancelado:
+        cancelado = True
 
     print("")
     print("=" * 60)
-    print("  RESUMO FINAL")
+    print("  RESUMO FINAL" + (" (CANCELADO)" if cancelado else ""))
     print("=" * 60)
     print("  Posts processados          : " + str(total))
     print(
@@ -415,6 +436,8 @@ def main():
     print("  Posts sem PDF              : " + str(sem_pdf))
     print("  Pasta base                 : " + PASTA_BASE)
     print("=" * 60)
+    if cancelado:
+        raise Cancelado()
 
 
 if __name__ == "__main__":

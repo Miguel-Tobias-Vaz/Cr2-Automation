@@ -2579,7 +2579,7 @@ def publicar_filas(
         def processar(itens, url, kind, preencher_fn, etiqueta):
             nonlocal ok
             if not itens:
-                return
+                return True
             if not navegar_se_preciso(url, etiqueta):
                 print(
                     "[ERRO] URL vazia para {} — pulando {} item(ns).".format(
@@ -2590,7 +2590,7 @@ def publicar_filas(
                     nao_publicadas.append(
                         entrada_nao_publicada(it, "URL portal vazia")
                     )
-                return
+                return True
             for it in itens:
                 if on_item is not None:
                     try:
@@ -2603,9 +2603,18 @@ def publicar_filas(
                             fase="antes",
                         ) is False:
                             print("[INFO] Publicacao interrompida (cancelamento).")
-                            return
+                            return False
                     except Exception:
                         pass
+                # Cancela tambem se job_runtime pediu parada sem callback
+                try:
+                    import job_runtime as _jobrt
+
+                    if _jobrt.pedido_cancelado():
+                        print("[INFO] Publicacao interrompida (cancelamento).")
+                        return False
+                except Exception:
+                    pass
                 rotulo = it.get("nome") or "(sem nome)"
                 print(
                     "\n[-> {}] linha {} — {}".format(kind.upper(), it["linha"], rotulo)
@@ -2659,28 +2668,32 @@ def publicar_filas(
                             )
                         except Exception:
                             pass
+            return True
 
-        processar(
+        if not processar(
             fila_estagiario,
             URL_PORTAL_ESTAGIARIO,
             "estagiario",
             preencher_modal_estagiario,
             "Estagiarios — {}".format(URL_PORTAL_ESTAGIARIO),
-        )
-        processar(
+        ):
+            print("[INFO] Filas restantes canceladas.")
+        elif not processar(
             fila_terceirizado,
             URL_PORTAL_TERCEIRIZADO,
             "terceirizado",
             preencher_modal_terceirizado,
             "Terceirizados — {}".format(URL_PORTAL_TERCEIRIZADO),
-        )
-        processar(
+        ):
+            print("[INFO] Filas restantes canceladas.")
+        elif not processar(
             fila_divida,
             URL_PORTAL_DIVIDA,
             "divida",
             preencher_modal_divida,
             "Divida Ativa — {}".format(URL_PORTAL_DIVIDA),
-        )
+        ):
+            print("[INFO] Fila cancelada.")
 
         print("\n" + "=" * 50)
         print(
@@ -2698,7 +2711,7 @@ def publicar_filas(
                     )
                 )
             if len(nao_publicadas) > 30:
-                print("    … +{} ".format(len(nao_publicadas) - 30))
+                print("    ... +{} ".format(len(nao_publicadas) - 30))
         print("=" * 50)
         return ok, nao_publicadas
     finally:

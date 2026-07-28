@@ -536,6 +536,13 @@ class _StdoutTee:
         if self._original is not None:
             try:
                 self._original.write(s)
+            except UnicodeEncodeError:
+                try:
+                    self._original.write(
+                        s.encode("ascii", errors="replace").decode("ascii")
+                    )
+                except Exception:
+                    pass
             except Exception:
                 pass
         self._buf += s
@@ -779,6 +786,8 @@ def _executar_publicacao(body):
         on_item=on_item,
     )
 
+    cancelado = jobrt.pedido_cancelado()
+
     todas_nao = list(puladas_previas) + list(nao_publicadas or [])
     arquivo_np = None
     if todas_nao:
@@ -788,18 +797,19 @@ def _executar_publicacao(body):
                 jobrt.set_arquivo_nao_publicadas(arquivo_np)
                 jobrt.emit(
                     "warn",
-                    "{} linha(s) não publicada(s) — planilha de correção gerada.".format(
+                    "{} linha(s) nao publicada(s) - planilha de correcao gerada.".format(
                         len(todas_nao)
                     ),
                 )
         except Exception as e:
             jobrt.emit(
                 "error",
-                "Falha ao gerar planilha de não publicadas: {}".format(str(e)[:200]),
+                "Falha ao gerar planilha de nao publicadas: {}".format(str(e)[:200]),
             )
 
     resumo = {
-        "ok": True,
+        "ok": (not cancelado) and publicadas > 0,
+        "cancelado": cancelado,
         "publicadas": publicadas,
         "nao_publicadas": [
             {
@@ -817,13 +827,24 @@ def _executar_publicacao(body):
         "modo_teste": modo_teste,
     }
 
+    if cancelado:
+        jobrt.atualizar_progresso(
+            publicadas=publicadas,
+            erros=len(todas_nao),
+            fase="cancelado",
+            msg="Fila cancelada — {} publicada(s) antes de parar".format(publicadas),
+        )
+        jobrt.emit("warn", "CANCELADO — fila deste processo interrompida.")
+        jobrt.finalizar(resumo)
+        return
+
     jobrt.atualizar_progresso(
         publicadas=publicadas,
         erros=len(todas_nao),
         chunk_atual=total,
         chunk_total=total,
         fase="concluido",
-        msg="Concluído — {} publicada(s)".format(publicadas),
+        msg="Concluido — {} publicada(s)".format(publicadas),
     )
 
     if publicadas > 0 and not todas_nao:

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Licitações — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill">API …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero">
+        <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Licitações</h1>
+            <p class="lede">
+              Coleta licitações do portal CR2 (API ou HTML), baixa anexos,
+              extrai valores e preenche planilha com aba de auditoria.
+            </p>
+          </header>
+          <article class="stream is-in">
+            <span class="stream-index">04</span>
+            <h3>O que faz</h3>
+            <ul>
+              <li>Listagem WordPress <code>/c/licitacoes/</code></li>
+              <li>Download dos anexos por pasta</li>
+              <li>Extração de valor estimado / homologado</li>
+              <li>Planilha <code>Licitacoes_preenchida.xlsx</code></li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="painel">
+        <header class="section-head"><h2>Painel</h2></header>
+        <form class="painel-form" id="form-licitacoes">
+          <fieldset class="bloco">
+            <legend>Fonte e destino</legend>
+            <label class="field">
+              <span class="field-label"><em>URL da listagem *</em></span>
+              <input
+                type="url"
+                id="listagem"
+                value="https://cmbrasilnovo.pa.gov.br/c/licitacoes"
+                required
+              />
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Pasta de saída</em></span>
+              <input type="text" id="pasta_saida" value="C:\Downloads\Licitacoes" />
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Anos a extrair</em></span>
+              <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
+                O filtro vale antes do download — só processa licitações desses anos.
+              </small>
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Planilha modelo (opcional)</em></span>
+              <input type="text" id="planilha_modelo" placeholder="C:\caminho\Front.xlsx" />
+            </label>
+          </fieldset>
+
+          <fieldset class="bloco bloco-opcoes">
+            <legend>Modo de execução</legend>
+            <p class="opcoes-intro">Escolha <strong>um</strong> modo. O padrão baixa, extrai e gera a planilha.</p>
+            <div class="opcoes-grid opcoes-modo">
+              <label class="check-row" for="modo_completo">
+                <input type="radio" name="modo" id="modo_completo" value="completo" checked />
+                <span class="check-copy">
+                  <strong>Completo</strong>
+                  <small>Baixa anexos + extrai valores + gera Excel (recomendado)</small>
+                </span>
+              </label>
+              <label class="check-row" for="modo_so_baixar">
+                <input type="radio" name="modo" id="modo_so_baixar" value="so_baixar" />
+                <span class="check-copy">
+                  <strong>Só baixar</strong>
+                  <small>Só baixa anexos — sem extrair nem planilha</small>
+                </span>
+              </label>
+              <label class="check-row" for="modo_so_planilha">
+                <input type="radio" name="modo" id="modo_so_planilha" value="so_planilha" />
+                <span class="check-copy">
+                  <strong>Só planilha</strong>
+                  <small>Usa arquivos já baixados — só extrai e atualiza o Excel</small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="bloco bloco-opcoes">
+            <legend>Extras (opcional)</legend>
+            <div class="opcoes-grid">
+              <label class="check-row" for="ocr">
+                <input type="checkbox" id="ocr" />
+                <span class="check-copy">
+                  <strong>OCR em PDFs escaneados</strong>
+                  <small>Tesseract / EasyOCR — quando o PDF não tem texto</small>
+                </span>
+              </label>
+              <label class="check-row" for="incluir_subcategorias">
+                <input type="checkbox" id="incluir_subcategorias" />
+                <span class="check-copy">
+                  <strong>Incluir fracassadas / desertas</strong>
+                  <small>Também coleta essas subcategorias</small>
+                </span>
+              </label>
+              <label class="check-row" for="so_html">
+                <input type="checkbox" id="so_html" />
+                <span class="check-copy">
+                  <strong>Forçar coleta HTML</strong>
+                  <small>Ignora a API REST do WordPress</small>
+                </span>
+              </label>
+              <label class="check-row" for="ignorar_ssl">
+                <input type="checkbox" id="ignorar_ssl" />
+                <span class="check-copy">
+                  <strong>Ignorar erros de SSL</strong>
+                  <small>Só se o certificado do site estiver inválido</small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="acao-row">
+            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar</button>
+            <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
+            <a class="btn btn-ghost" href="#log">Ver log</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="log-wrap" id="log">
+        <header class="section-head">
+          <h2>Log</h2>
+          <p>Status: <strong id="log-state">Parado</strong> · Job: <span id="job-status">—</span></p>
+        </header>
+        <div class="log-console" id="log-console"></div>
+      </section>
+    </main>
+
+    <script src="/assets/shared.js"></script>
+    <script>
+      CR2Centro.injectNav("licitacoes");
+      CR2Centro.pingApi();
+      CR2Centro.parallaxHero();
+
+      const STORAGE_KEY = "cr2-centro-licitacoes";
+      const extraFields = [
+        "listagem",
+        "pasta_saida",
+        "anos",
+        "planilha_modelo",
+        "ocr",
+        "incluir_subcategorias",
+        "so_html",
+        "ignorar_ssl",
+      ];
+
+      function getModo() {
+        const r = document.querySelector('input[name="modo"]:checked');
+        return (r && r.value) || "completo";
+      }
+
+      function setModo(modo) {
+        const v = modo === "so_baixar" || modo === "so_planilha" ? modo : "completo";
+        const r = document.querySelector('input[name="modo"][value="' + v + '"]');
+        if (r) r.checked = true;
+      }
+
+      function migrarOpcoesSalvas() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          const data = JSON.parse(raw);
+          // Antes: checkboxes conflitantes podiam ficar todos ligados
+          if (data.modo) {
+            setModo(data.modo);
+          } else if (data.sem_extracao && !data.so_planilha) {
+            setModo("so_baixar");
+          } else if (data.so_planilha && !data.sem_extracao) {
+            setModo("so_planilha");
+          } else {
+            setModo("completo");
+          }
+          // Limpa flags antigas conflitantes no storage
+          delete data.so_planilha;
+          delete data.sem_extracao;
+          data.modo = getModo();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } catch (_) {
+          setModo("completo");
+        }
+      }
+
+      CR2Centro.bindRun("licitacoes", "form-licitacoes", extraFields, () => {
+        const modo = getModo();
+        return {
+          listagem: document.getElementById("listagem").value.trim(),
+          pasta_saida: document.getElementById("pasta_saida").value.trim(),
+          anos: document.getElementById("anos").value.trim(),
+          planilha_modelo: document.getElementById("planilha_modelo").value.trim(),
+          modo,
+          ocr: document.getElementById("ocr").checked,
+          incluir_subcategorias: document.getElementById("incluir_subcategorias").checked,
+          so_html: document.getElementById("so_html").checked,
+          ignorar_ssl: document.getElementById("ignorar_ssl").checked,
+          so_planilha: modo === "so_planilha",
+          sem_extracao: modo === "so_baixar",
+        };
+      }, false);
+
+      migrarOpcoesSalvas();
+
+      // Persiste o modo junto com o restante do formulário
+      document.getElementById("form-licitacoes").addEventListener("change", () => {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          const data = raw ? JSON.parse(raw) : {};
+          data.modo = getModo();
+          ["ocr", "incluir_subcategorias", "so_html", "ignorar_ssl"].forEach((id) => {
+            const n = document.getElementById(id);
+            if (n) data[id] = n.checked;
+          });
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } catch (_) {}
+      });
+    </script>
+  </body>
+</html>

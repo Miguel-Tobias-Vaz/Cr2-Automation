@@ -8,12 +8,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
-  <body>
+  <body class="theme-bw hub-page">
     <div class="noise" aria-hidden="true"></div>
     <div class="orb orb-a" aria-hidden="true"></div>
     <div class="orb orb-b" aria-hidden="true"></div>
@@ -28,7 +28,7 @@
     </header>
 
     <main class="page-shell">
-      <section class="hero page-hero">
+      <section class="hero page-hero hub-hero">
         <div class="hero-plane" aria-hidden="true">
           <div class="hero-grid"></div>
           <div class="hero-doc d1"></div>
@@ -36,13 +36,9 @@
           <div class="hero-doc d3"></div>
         </div>
         <div class="hero-main">
-          <header class="hero-copy">
-            <h1>Seis automações.<br />Um só painel.</h1>
-            <p class="lede">
-              Download de documentos, categorias, normas municipais, publicação
-              no portal CR2, Dic/Est/Ter e mapa do site — cada fluxo com página
-              própria, mesma atmosfera, navegação entre elas.
-            </p>
+          <header class="hero-copy hub-brand">
+            <h1>Opto Automações</h1>
+            <p class="lede hub-tagline">milagres acontecem sim!</p>
           </header>
           <div class="hub-grid" id="hub-grid"></div>
         </div>
@@ -61,8 +57,8 @@
           grid.innerHTML = list
             .map(
               (s) => `
-            <a class="hub-card stream is-in" href="${s.pagina}">
-              <span class="stream-index">${s.icone}</span>
+            <a class="hub-card" href="${s.pagina}">
+              <span class="hub-card-index">${s.icone}</span>
               <h3>${s.nome}</h3>
               <p>${s.descricao}</p>
             </a>`

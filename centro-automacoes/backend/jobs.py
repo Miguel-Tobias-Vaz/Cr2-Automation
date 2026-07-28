@@ -22,6 +22,11 @@ class JobStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class JobCancelled(Exception):
+    """Fila cancelada pelo usuario."""
 
 
 @dataclass
@@ -35,6 +40,7 @@ class Job:
     error: str | None = None
     result: dict[str, Any] = field(default_factory=dict)
     logs: list[dict[str, str]] = field(default_factory=list)
+    cancel_requested: bool = False
     _subscribers: list[queue.Queue] = field(default_factory=list, repr=False)
 
     @property
@@ -83,6 +89,7 @@ class Job:
             "error": self.error,
             "result": self.result,
             "has_download": bool(self.result.get("zip")),
+            "cancel_requested": self.cancel_requested,
         }
 
 
@@ -105,22 +112,50 @@ class JobManager:
             items = sorted(self._jobs.values(), key=lambda j: j.created_at, reverse=True)
         return [j.to_dict() for j in items[:40]]
 
+    def cancel(self, job_id: str) -> Job | None:
+        job = self.get(job_id)
+        if not job:
+            return None
+        if job.status not in (JobStatus.PENDING, JobStatus.RUNNING):
+            return job
+        job.cancel_requested = True
+        job.emit("warn", "Cancelamento solicitado — parando a fila deste processo...")
+        return job
+
     def start(self, job: Job, runner: Callable[[Job], None]) -> None:
         def _worker() -> None:
             job.status = JobStatus.RUNNING
             job.emit("info", "Job iniciado — {0}".format(job.service_id))
             try:
                 runner(job)
-                if job.status == JobStatus.RUNNING:
+                if job.cancel_requested:
+                    job.status = JobStatus.CANCELLED
+                    job.result.setdefault("mensagem", "Fila cancelada pelo usuario.")
+                    job.emit("warn", "CANCELADO — fila interrompida.")
+                    job.emit("info", "— fim —")
+                elif job.status == JobStatus.RUNNING:
                     job.status = JobStatus.COMPLETED
-                msg = (job.result or {}).get("mensagem") or "Automação concluída com sucesso."
-                job.emit("ok", "✓ CONCLUÍDO — {0}".format(msg))
+                    msg = (job.result or {}).get("mensagem") or "Automação concluída com sucesso."
+                    job.emit("ok", "CONCLUIDO — {0}".format(msg))
+                    job.emit("info", "— fim —")
+            except JobCancelled:
+                job.cancel_requested = True
+                job.status = JobStatus.CANCELLED
+                job.result.setdefault("mensagem", "Fila cancelada pelo usuario.")
+                job.emit("warn", "CANCELADO — fila interrompida.")
                 job.emit("info", "— fim —")
             except Exception as exc:
-                job.status = JobStatus.FAILED
-                job.error = str(exc)
-                job.emit("error", str(exc))
-                job.emit("info", "— fim —")
+                if job.cancel_requested or type(exc).__name__ == "Cancelado":
+                    job.cancel_requested = True
+                    job.status = JobStatus.CANCELLED
+                    job.result.setdefault("mensagem", "Fila cancelada pelo usuario.")
+                    job.emit("warn", "CANCELADO — fila interrompida.")
+                    job.emit("info", "— fim —")
+                else:
+                    job.status = JobStatus.FAILED
+                    job.error = str(exc)
+                    job.emit("error", str(exc))
+                    job.emit("info", "— fim —")
             finally:
                 job.finished_at = time.time()
 
