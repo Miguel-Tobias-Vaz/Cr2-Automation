@@ -67,6 +67,13 @@
               <span class="field-label"><em>Pasta base</em></span>
               <input type="text" id="pasta_base" value="C:\Downloads" />
             </label>
+            <label class="field">
+              <span class="field-label"><em>Anos a baixar</em></span>
+              <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
+              </small>
+            </label>
           </fieldset>
           <div class="acao-row">
             <button type="submit" class="btn btn-primary" id="btn-run">Iniciar download</button>
@@ -90,10 +97,11 @@
       CR2Centro.injectNav("categorias");
       CR2Centro.pingApi();
       CR2Centro.parallaxHero();
-      CR2Centro.bindRun("categorias", "form-categorias", ["site", "url_categoria", "pasta_base"], () => ({
+      CR2Centro.bindRun("categorias", "form-categorias", ["site", "url_categoria", "pasta_base", "anos"], () => ({
         site: document.getElementById("site").value.trim(),
         url_categoria: document.getElementById("url_categoria").value.trim(),
         pasta_base: document.getElementById("pasta_base").value.trim(),
+        anos: document.getElementById("anos").value.trim(),
       }), false);
     </script>
   </body>

@@ -10,6 +10,8 @@ def run(job) -> None:
     fontes_raw = (cfg.get("fontes") or "").strip()
     ler_pdf = bool(cfg.get("ler_pdf", True))
     limite = int(cfg.get("limite_posts") or 0)
+    anos_raw = (cfg.get("anos") or "").strip()
+    anos_filtro = [a.strip() for a in anos_raw.split(",") if a.strip()] if anos_raw else []
 
     fontes = None
     if fontes_raw:
@@ -39,12 +41,17 @@ def run(job) -> None:
         "PASTA_BASE": pasta,
         "LER_PDF": ler_pdf,
         "LIMITE_POSTS": limite,
+        "ANOS_FILTRO": anos_filtro,
     }
     if site:
         mapping["SITE"] = site.rstrip("/")
     if fontes is not None:
         mapping["FONTES"] = fontes
     apply_globals(mod, mapping)
+    if anos_filtro:
+        job.emit("info", "Filtro de anos: {0}".format(", ".join(anos_filtro)))
+    else:
+        job.emit("info", "Filtro de anos: todos")
     run_main_with_logs(job, mod)
     job.result["pasta"] = pasta
     job.result["mensagem"] = "Download de normas concluído."

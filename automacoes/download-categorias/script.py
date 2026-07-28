@@ -18,6 +18,9 @@ from urllib.parse import urlparse, urljoin
 PASTA_BASE = r"C:\Downloads"
 URL_CATEGORIA = "https://camaraparagominas.pa.gov.br/portal-da-transparencia/legislacao-de-pessoal-do-municipio/"
 SITE = "https://camaraparagominas.pa.gov.br"
+# Filtro de anos: lista de strings, ex. ["2023"] ou ["2022", "2023"].
+# Lista vazia = baixa TODOS os anos.
+ANOS_FILTRO = []
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
@@ -50,6 +53,19 @@ def extrair_ano_da_url(url):
     if match:
         return int(match.group(1))
     return "desconhecido"
+
+
+def _anos_filtro_norm():
+    return [str(a).strip() for a in (ANOS_FILTRO or []) if str(a).strip()]
+
+
+def ano_permitido(ano):
+    filtro = _anos_filtro_norm()
+    if not filtro:
+        return True
+    if ano is None or str(ano) in ("", "desconhecido", "sem_ano"):
+        return False
+    return str(ano) in filtro
 
 
 def _mesmo_dominio(url_a, url_b):
@@ -317,6 +333,8 @@ def main():
     print("=" * 60)
     print("  DOWNLOAD POR CATEGORIA (listagem WordPress)")
     print("  Site: " + urlparse(SITE).netloc)
+    filtro = _anos_filtro_norm()
+    print("  Anos: " + (", ".join(filtro) if filtro else "todos"))
     print("=" * 60)
     print("")
 
@@ -365,6 +383,18 @@ def main():
 
     print("")
     print("Total de posts unicos coletados: " + str(len(todos_posts)))
+    if filtro:
+        antes = len(todos_posts)
+        todos_posts = [(u, a) for u, a in todos_posts if ano_permitido(a)]
+        print(
+            "Filtro de anos ("
+            + ", ".join(filtro)
+            + "): "
+            + str(len(todos_posts))
+            + "/"
+            + str(antes)
+            + " posts."
+        )
     print("")
 
     print("PASSO 2: Baixando PDFs...")

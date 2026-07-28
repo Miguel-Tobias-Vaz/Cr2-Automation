@@ -66,6 +66,13 @@
               <input type="text" id="pasta_base" value="C:\Downloads\Inhangapi" />
             </label>
             <label class="field">
+              <span class="field-label"><em>Anos a baixar</em></span>
+              <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
+              </small>
+            </label>
+            <label class="field">
               <span class="field-label"><em>Fontes (url | modo | pasta)</em></span>
               <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
                 Uma fonte por linha. Modos: categoria (lista posts), hub_anos (índice por ano), pagina (PDFs na própria URL).
@@ -109,10 +116,11 @@ https://inhangapi.pa.gov.br/c/publicacoes/demais/ | categoria | Demais</textarea
       CR2Centro.injectNav("normas");
       CR2Centro.pingApi();
       CR2Centro.parallaxHero();
-      const fields = ["site", "pasta_base", "fontes", "ler_pdf", "limite_posts"];
+      const fields = ["site", "pasta_base", "anos", "fontes", "ler_pdf", "limite_posts"];
       CR2Centro.bindRun("normas", "form-normas", fields, () => ({
         site: document.getElementById("site").value.trim(),
         pasta_base: document.getElementById("pasta_base").value.trim(),
+        anos: document.getElementById("anos").value.trim(),
         fontes: document.getElementById("fontes").value,
         ler_pdf: document.getElementById("ler_pdf").checked,
         limite_posts: Number(document.getElementById("limite_posts").value || 0),

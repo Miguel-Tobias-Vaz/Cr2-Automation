@@ -82,6 +82,9 @@ LER_PDF = True
 MAX_PAGINAS_PDF = 2
 # Limite opcional de posts por fonte (0 = todos). Útil para teste.
 LIMITE_POSTS = 0
+# Filtro de anos: lista de strings, ex. ["2023"] ou ["2022", "2023"].
+# Lista vazia = processa TODOS os anos.
+ANOS_FILTRO = []
 
 HEADERS = {
     "User-Agent": (
@@ -537,6 +540,20 @@ def extrair_ano(*textos: str, fallback: int | None = None) -> int | None:
     return fallback
 
 
+def _anos_filtro_norm() -> list[str]:
+    return [str(a).strip() for a in (ANOS_FILTRO or []) if str(a).strip()]
+
+
+def ano_permitido(ano) -> bool:
+    """True se o ano passa no filtro (vazio = todos). Sem ano conhecido → pula com filtro ativo."""
+    filtro = _anos_filtro_norm()
+    if not filtro:
+        return True
+    if ano is None or str(ano) in ("", "sem_ano", "desconhecido"):
+        return False
+    return str(ano) in filtro
+
+
 # =============================================================
 # Download
 # =============================================================
@@ -659,6 +676,10 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
             continue
 
         ano = extrair_ano(titulo, url_post)
+        if not ano_permitido(ano):
+            print(f"    [PULADO]  Ano {ano or 'desconhecido'} fora do filtro.")
+            contadores["pulado_ano"] = contadores.get("pulado_ano", 0) + 1
+            continue
         pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
         print(f"    {len(pdfs)} PDF(s) | titulo: {titulo[:80]}")
 
@@ -695,6 +716,15 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
 
     paginas = coletar_paginas_hub_anos(url)
     print(f"  {len(paginas)} página(s) anual(is) encontrada(s).")
+    filtro = _anos_filtro_norm()
+    if filtro:
+        antes = len(paginas)
+        paginas = [
+            (rotulo, url_ano)
+            for rotulo, url_ano in paginas
+            if ano_permitido(extrair_ano(rotulo, url_ano))
+        ]
+        print(f"  Filtro de anos ({', '.join(filtro)}): {len(paginas)}/{antes} página(s).")
     if LIMITE_POSTS and LIMITE_POSTS > 0:
         paginas = paginas[:LIMITE_POSTS]
 
@@ -717,6 +747,10 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
             continue
 
         ano = extrair_ano(rotulo, titulo, url_ano)
+        if not ano_permitido(ano):
+            print(f"    [PULADO]  Ano {ano or 'desconhecido'} fora do filtro.")
+            contadores["pulado_ano"] = contadores.get("pulado_ano", 0) + 1
+            continue
         pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
         print(f"    {len(pdfs)} PDF(s)")
 
@@ -760,6 +794,10 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
         return
 
     ano = extrair_ano(titulo, url)
+    if not ano_permitido(ano):
+        print(f"  [PULADO] Ano {ano or 'desconhecido'} fora do filtro.")
+        contadores["pulado_ano"] = contadores.get("pulado_ano", 0) + 1
+        return
     pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
     print(f"  {len(pdfs)} PDF(s)")
     for texto_link, url_pdf in pdfs:
@@ -793,13 +831,15 @@ def main():
     print(f"  Site: {urlparse(SITE).netloc}")
     print(f"  Destino: {PASTA_BASE}")
     print(f"  Leitura PDF: {'sim' if LER_PDF and PdfReader else 'não'}")
+    filtro = _anos_filtro_norm()
+    print(f"  Anos: {', '.join(filtro) if filtro else 'todos'}")
     if LER_PDF and not PdfReader:
         print("  [AVISO] pypdf não instalado — nomes só pelo HTML.")
         print("          pip install pypdf")
     print("=" * 60)
 
     criar_pasta(PASTA_BASE)
-    contadores = {"ok": 0, "pulado": 0, "erro": 0, "erros": 0, "sem_pdf": 0}
+    contadores = {"ok": 0, "pulado": 0, "erro": 0, "erros": 0, "sem_pdf": 0, "pulado_ano": 0}
     cancelado = False
 
     try:
@@ -823,6 +863,7 @@ def main():
     print("=" * 60)
     print(f"  PDFs OK                    : {contadores.get('ok', 0)}")
     print(f"  PDFs pulados (ja existiam) : {contadores.get('pulado', 0)}")
+    print(f"  Posts fora do filtro ano   : {contadores.get('pulado_ano', 0)}")
     print(f"  Erros download             : {contadores.get('erro', 0) + contadores.get('erros', 0)}")
     print(f"  Posts/paginas sem PDF      : {contadores.get('sem_pdf', 0)}")
     print(f"  Pasta base                 : {PASTA_BASE}")

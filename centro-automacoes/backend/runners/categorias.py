@@ -11,12 +11,19 @@ def run(job) -> None:
         raise ValueError("URL da categoria e Site são obrigatórios.")
 
     pasta = cfg.get("pasta_base") or r"C:\Downloads"
+    anos_raw = (cfg.get("anos") or "").strip()
+    anos_filtro = [a.strip() for a in anos_raw.split(",") if a.strip()] if anos_raw else []
     mod = load_module("download_categorias", SCRIPTS["categorias"])
     apply_globals(mod, {
         "PASTA_BASE": pasta,
         "URL_CATEGORIA": url,
         "SITE": site,
+        "ANOS_FILTRO": anos_filtro,
     })
+    if anos_filtro:
+        job.emit("info", "Filtro de anos: {0}".format(", ".join(anos_filtro)))
+    else:
+        job.emit("info", "Filtro de anos: todos")
     run_main_with_logs(job, mod)
     job.result["pasta"] = pasta
     job.result["mensagem"] = "Downloads por categoria concluídos."

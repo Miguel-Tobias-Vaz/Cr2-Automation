@@ -83,7 +83,13 @@
             <label class="check-row"><input type="checkbox" id="modo_teste" checked /> Modo teste (1 PDF por fila)</label>
             <label class="check-row"><input type="checkbox" id="auto_confirm" checked /> Pular confirmações (--yes)</label>
             <label class="check-row"><input type="checkbox" id="headless" /> Navegador invisível</label>
-            <label class="field"><span class="field-label"><em>Filtrar ano (opcional)</em></span><input type="text" id="ano" placeholder="2024" /></label>
+            <label class="field">
+              <span class="field-label"><em>Ano a publicar</em></span>
+              <input type="text" id="ano" placeholder="Ex.: 2023  ·  vazio = todos" />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Filtra pastas RGF/RREO por um ano. Vazio = todos.
+              </small>
+            </label>
           </fieldset>
           <div class="acao-row">
             <button type="submit" class="btn btn-primary" id="btn-run">Publicar</button>
