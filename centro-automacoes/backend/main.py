@@ -193,6 +193,16 @@ def index():
     return _page("index.html")
 
 
+@app.get("/extrair.html")
+def page_extrair():
+    return _page("extrair.html")
+
+
+@app.get("/publicar.html")
+def page_publicar():
+    return _page("publicar.html")
+
+
 @app.get("/documentos.html")
 def page_documentos():
     return _page("documentos.html")

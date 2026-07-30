@@ -4,21 +4,34 @@ Coleta baseada em download-normas (modo categoria):
   1) AJAX Bunyad (Carregar Mais / infinite scroll) via bunyad_block
   2) Paginação clássica /page/2/, /page/3/...
 
-Só considera links PDF no corpo do artigo; corta blocos tipo CONTEÚDO RELACIONADO.
+Nomeia arquivos no mesmo padrão de normas:
+  Portaria Nº010/2025.pdf  →  Portaria Nº010-2025.pdf no disco
+  Lei Nº738/2023.pdf
+  Ata Nº064/2023.pdf
 
-Requisito: pip install requests beautifulsoup4
+Quando o link é genérico ("Clique aqui"), lê o texto do PDF (pypdf)
+e/ou o título do post para classificar e numerar.
+
+Requisito: pip install requests beautifulsoup4 pypdf
 """
 from __future__ import annotations
 
 import html as html_module
+import io
 import json
 import os
 import re
 import time
+import unicodedata
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
+
+try:
+    from pypdf import PdfReader
+except ImportError:  # pragma: no cover
+    PdfReader = None
 
 # --- O que você deve mudar ---
 # PASTA_BASE: onde salvar (cria subpastas categoria_2023, categoria_2024...)
@@ -32,6 +45,9 @@ SITE = "https://camaraparagominas.pa.gov.br"
 ANOS_FILTRO = []
 # Limite opcional de posts (0 = todos). Útil para teste.
 LIMITE_POSTS = 0
+# Lê as primeiras páginas do PDF para refinar o nome (recomendado).
+LER_PDF = True
+MAX_PAGINAS_PDF = 2
 
 HEADERS = {
     "User-Agent": (
@@ -109,6 +125,181 @@ def _get(url, timeout=45):
     resp = _SESSION.get(url, timeout=timeout)
     resp.raise_for_status()
     return resp
+
+
+def limpar_nome_arquivo(nome: str) -> str:
+    for c in '<>:"/\\|?*':
+        nome = nome.replace(c, "-")
+    nome = re.sub(r"\s+", " ", nome).strip()
+    return nome
+
+
+def nome_arquivo_final(nome_logico: str) -> str:
+    """
+    Nome lógico: 'Lei Nº738/2023'
+    Arquivo no disco: 'Lei Nº738-2023.pdf' (barra inválida no Windows)
+    """
+    base = limpar_nome_arquivo(nome_logico.replace("/", "-"))
+    if not base.lower().endswith(".pdf"):
+        base += ".pdf"
+    return base
+
+
+def _normalizar_texto(texto: str) -> str:
+    if not texto:
+        return ""
+    texto = unicodedata.normalize("NFKC", texto)
+    texto = texto.replace("\xa0", " ")
+    texto = re.sub(r"\s+", " ", texto)
+    return texto.strip()
+
+
+# =============================================================
+# Classificação / nomenclatura (igual download-normas)
+# =============================================================
+
+_RE_NUM_ANO = re.compile(
+    r"(?:"
+    r"n[º°o\.º]*\s*[º°]?\s*"
+    r"|n[uú]mero\s*"
+    r")?"
+    r"(\d{1,4})\s*[/\.\-]\s*(20\d{2}|19\d{2})",
+    re.I,
+)
+
+_RE_TIPO_PRIORIDADE = [
+    ("LDO", re.compile(r"\bLDO\b", re.I)),
+    ("LOA", re.compile(r"\bLOA\b", re.I)),
+    ("Portaria", re.compile(r"\bportarias?\b", re.I)),
+    ("Decreto", re.compile(r"\bdecretos?\b", re.I)),
+    ("Resolução", re.compile(r"\bresolu[cç][aã]o(?:es)?\b", re.I)),
+    ("Edital", re.compile(r"\beditais?\b", re.I)),
+    ("Moção", re.compile(r"\bmo[cç][aã]o(?:es)?\b", re.I)),
+    ("Requerimento", re.compile(r"\brequerimentos?\b", re.I)),
+    ("Pauta", re.compile(r"\bpautas?\b", re.I)),
+    ("Ata", re.compile(r"\batas?\b", re.I)),
+    ("Lei", re.compile(r"\b(?:lei(?:s)?\s+municipal(?:is)?|projeto\s+de\s+lei|leis?)\b", re.I)),
+]
+
+_LINK_GENERICO = re.compile(
+    r"^(clique\s+aqui(?:\s+para\s+(?:visualizar|baixar|download|ler|abrir))?|"
+    r"baixar|download|visualizar|pdf|arquivo|"
+    r"veja\s+aqui|acesse(?:\s+aqui)?)[\s\.\!]*$",
+    re.I,
+)
+
+
+def _extrair_numero_ano(*textos: str):
+    for texto in textos:
+        if not texto:
+            continue
+        m = _RE_NUM_ANO.search(_normalizar_texto(texto))
+        if m:
+            return int(m.group(1)), int(m.group(2))
+    for texto in textos:
+        t = _normalizar_texto(texto)
+        m = re.search(
+            r"n[º°o\.]*\s*(\d{1,4}).{0,40}?(20\d{2}|19\d{2})",
+            t,
+            re.I,
+        )
+        if m:
+            return int(m.group(1)), int(m.group(2))
+        m = re.search(r"(?<!\d)(\d{1,4})[.\-](20\d{2}|19\d{2})(?!\d)", t)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+        # Ex.: "64ª SESSÃO ... 2023" / "10a sessão extraordinaria ... 2023"
+        m = re.search(
+            r"(?<!\d)(\d{1,4})\s*[ªa]\b.{0,100}?(20\d{2}|19\d{2})",
+            t,
+            re.I,
+        )
+        if m:
+            return int(m.group(1)), int(m.group(2))
+    return None, None
+
+
+def _detectar_tipo(*textos: str, pasta_hint: str = "") -> str | None:
+    for texto in textos:
+        blob = _normalizar_texto(texto)
+        if not blob:
+            continue
+        cabeca = blob[:280]
+        for tipo, rx in _RE_TIPO_PRIORIDADE:
+            if rx.search(cabeca):
+                return tipo
+    hint = (pasta_hint or "").lower()
+    if "portaria" in hint:
+        return "Portaria"
+    if "decreto" in hint:
+        return "Decreto"
+    if "moç" in hint or "moc" in hint:
+        return "Moção"
+    if "requerimento" in hint:
+        return "Requerimento"
+    if "pauta" in hint:
+        return "Pauta"
+    if "ata" in hint:
+        return "Ata"
+    if "lei" in hint:
+        return "Lei"
+    return None
+
+
+def montar_nome_documento(
+    *,
+    texto_link: str = "",
+    titulo_post: str = "",
+    texto_pdf: str = "",
+    url_pdf: str = "",
+    pasta_hint: str = "",
+    ano_fallback: int | None = None,
+) -> str:
+    """Retorna nome lógico sem extensão, ex.: 'Portaria Nº010/2025'."""
+    basename = os.path.basename(urlparse(url_pdf).path) if url_pdf else ""
+    link_util = ""
+    if texto_link and not _LINK_GENERICO.match(texto_link.strip()):
+        link_util = texto_link
+
+    tipo = _detectar_tipo(
+        link_util,
+        titulo_post,
+        (texto_pdf or "")[:400],
+        basename,
+        pasta_hint=pasta_hint,
+    )
+    num, ano = _extrair_numero_ano(link_util, titulo_post, texto_pdf, basename)
+
+    if tipo and num is not None and ano is not None:
+        return f"{tipo} Nº{str(num).zfill(3)}/{ano}"
+
+    if tipo and num is not None and ano_fallback:
+        return f"{tipo} Nº{str(num).zfill(3)}/{ano_fallback}"
+
+    candidato = link_util
+    if not candidato:
+        candidato = titulo_post or basename or "Documento"
+    candidato = _normalizar_texto(candidato)
+    candidato = re.sub(r"\s*\(.*?\)\s*$", "", candidato)
+    candidato = candidato[:120].strip(" .-_")
+    if not candidato:
+        candidato = "Documento"
+    if ano_fallback and not re.search(r"20\d{2}|19\d{2}", candidato):
+        candidato = f"{candidato} {ano_fallback}"
+    return candidato
+
+
+def ler_texto_pdf_bytes(data: bytes, max_paginas: int = MAX_PAGINAS_PDF) -> str:
+    if not data or not PdfReader or data[:4] != b"%PDF":
+        return ""
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        partes = []
+        for page in reader.pages[: max(1, max_paginas)]:
+            partes.append(page.extract_text() or "")
+        return _normalizar_texto("\n".join(partes))
+    except Exception:
+        return ""
 
 
 # =============================================================
@@ -440,7 +631,14 @@ def _podar_conteudo_relacionado(root):
 
 def _corpo_principal_post(soup):
     scope = None
-    for sel in ("article .entry-content", ".entry-content", "article", "main"):
+    for sel in (
+        "article .post-content",
+        ".post-content",
+        "article .entry-content",
+        ".entry-content",
+        "article",
+        "main",
+    ):
         scope = soup.select_one(sel)
         if scope:
             break
@@ -461,57 +659,124 @@ def _eh_pdf_href(href):
     return low.endswith(".pdf") or ("wp-content/uploads" in low and ".pdf" in low)
 
 
+def titulo_da_pagina(soup) -> str:
+    for sel in ("h1.post-title", "h1.entry-title", "h1", ".post-title"):
+        node = soup.select_one(sel)
+        if node:
+            return _normalizar_texto(node.get_text(" ", strip=True))
+    if soup.title:
+        t = soup.title.get_text(" ", strip=True)
+        t = re.split(r"\s*[-|–]\s*", t, maxsplit=1)[0]
+        return _normalizar_texto(t)
+    return ""
+
+
 def obter_pdfs_do_post(url_post):
-    """Retorna todos os links PDF do corpo do post (lista ordenada, sem repetir)."""
+    """Retorna (titulo, [(texto_link, url_pdf), ...])."""
+    resp = _get(url_post, timeout=30)
+    soup = BeautifulSoup(resp.content, "html.parser")
+    titulo = titulo_da_pagina(soup)
+    scope = _corpo_principal_post(soup)
+    vistos = set()
+    ordenados = []
+    for tag in scope.find_all("a", href=True):
+        href = tag["href"].strip()
+        if not href or href.startswith("#"):
+            continue
+        if not _eh_pdf_href(href):
+            continue
+        abs_url = _absolutizar(resp.url, href)
+        if not _mesmo_dominio(abs_url, SITE):
+            continue
+        if abs_url in vistos:
+            continue
+        vistos.add(abs_url)
+        texto = _normalizar_texto(tag.get_text(" ", strip=True))
+        ordenados.append((texto, abs_url))
+    return titulo, ordenados
+
+
+def baixar_e_salvar(
+    url_pdf: str,
+    pasta: str,
+    nome_logico: str,
+    *,
+    ler_pdf: bool,
+    textos_extras: list,
+    pasta_hint: str,
+    ano_fallback,
+) -> str:
+    """Baixa o PDF, opcionalmente relê o texto para renomear, salva.
+    Retorna: ok | pulado | erro
+    """
+    criar_pasta(pasta)
     try:
-        resp = _get(url_post, timeout=30)
-        soup = BeautifulSoup(resp.content, "html.parser")
-        scope = _corpo_principal_post(soup)
-        vistos = set()
-        ordenados = []
-        for tag in scope.find_all("a", href=True):
-            href = tag["href"].strip()
-            if not href or href.startswith("#"):
-                continue
-            if not _eh_pdf_href(href):
-                continue
-            abs_url = _absolutizar(resp.url, href)
-            if not _mesmo_dominio(abs_url, SITE):
-                continue
-            if abs_url in vistos:
-                continue
-            vistos.add(abs_url)
-            ordenados.append(abs_url)
-        return ordenados
-    except Exception:
-        return []
-
-
-def baixar_pdf(nome, url_pdf, pasta):
-    caminho = os.path.join(pasta, nome)
-
-    if os.path.exists(caminho):
-        print(
-            "    [PULADO]  "
-            + nome
-            + " (ja existe nesta pasta - nao sobrescreve)"
-        )
-        print("              -> " + caminho)
-        return "pulado"
-
-    try:
-        resp = _SESSION.get(url_pdf, timeout=45, stream=True)
+        resp = _SESSION.get(url_pdf, timeout=60, stream=True)
         resp.raise_for_status()
+        chunks = []
+        for chunk in resp.iter_content(8192):
+            if chunk:
+                chunks.append(chunk)
+        data = b"".join(chunks)
+        if data[:4] != b"%PDF":
+            print("    [ERRO]    Resposta nao e PDF: " + url_pdf)
+            return "erro"
+
+        texto_pdf = ""
+        if ler_pdf and LER_PDF:
+            texto_pdf = ler_texto_pdf_bytes(data)
+            if not texto_pdf:
+                print(
+                    "    [AVISO]    PDF sem texto extraivel "
+                    "(escaneado/imagem) — nome pelo titulo/link"
+                )
+
+        nome = montar_nome_documento(
+            texto_link=textos_extras[0] if textos_extras else "",
+            titulo_post=textos_extras[1] if len(textos_extras) > 1 else "",
+            texto_pdf=texto_pdf,
+            url_pdf=url_pdf,
+            pasta_hint=pasta_hint,
+            ano_fallback=ano_fallback if isinstance(ano_fallback, int) else None,
+        )
+        if nome == "Documento" and nome_logico:
+            nome = nome_logico
+
+        arquivo = nome_arquivo_final(nome)
+        caminho = os.path.join(pasta, arquivo)
+
+        if os.path.exists(caminho):
+            if os.path.getsize(caminho) == len(data):
+                print("    [PULADO]  " + arquivo + " (ja existe)")
+                return "pulado"
+            stem = arquivo[:-4]
+            n = 2
+            while True:
+                alt = stem + " (" + str(n) + ").pdf"
+                alt_path = os.path.join(pasta, alt)
+                if not os.path.exists(alt_path):
+                    arquivo = alt
+                    caminho = alt_path
+                    break
+                n += 1
+
         with open(caminho, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=8192):
-                f.write(chunk)
-        tamanho_kb = os.path.getsize(caminho) / 1024
-        print("    [OK]      " + nome + " (" + str(round(tamanho_kb, 1)) + " KB)")
+            f.write(data)
+        kb = len(data) / 1024
+        try:
+            print(
+                "    [OK]      "
+                + arquivo
+                + " ("
+                + str(round(kb, 1))
+                + " KB) <- "
+                + nome
+            )
+        except UnicodeEncodeError:
+            print("    [OK]      " + arquivo + " (" + str(round(kb, 1)) + " KB)")
         return "ok"
     except Exception as e:
-        print("    [ERRO]    " + nome + " - " + str(e))
-        if os.path.exists(caminho):
-            os.remove(caminho)
+        print("    [ERRO]    " + url_pdf + " - " + str(e))
         return "erro"
 
 
@@ -526,8 +791,16 @@ def main():
     print("  URL:  " + URL_CATEGORIA)
     filtro = _anos_filtro_norm()
     print("  Anos: " + (", ".join(filtro) if filtro else "todos"))
+    print(
+        "  Leitura PDF: "
+        + ("sim" if LER_PDF and PdfReader else "nao")
+    )
     print("=" * 60)
     print("")
+
+    if LER_PDF and not PdfReader:
+        print("  [AVISO] pypdf nao instalado — nomes sem leitura do PDF.")
+        print("")
 
     print("PASSO 1: Coletando posts de todas as paginas...")
     print("-" * 60)
@@ -560,6 +833,7 @@ def main():
     ok = pulados = erros = sem_pdf = 0
     total = len(todos_posts)
     cancelado = False
+    pasta_hint = "categoria"
 
     try:
         for i, (url_post, ano) in enumerate(todos_posts, 1):
@@ -571,31 +845,45 @@ def main():
             slug = url_post.rstrip("/").split("/")[-1][:50]
             print(prefix + " " + str(ano) + " | " + slug)
 
-            urls_pdf = obter_pdfs_do_post(url_post)
+            try:
+                titulo, pdfs = obter_pdfs_do_post(url_post)
+            except Exception as e:
+                print("    [ERRO]    abrir post: " + str(e))
+                erros += 1
+                continue
 
-            if not urls_pdf:
+            if not pdfs:
                 print("    [SEM PDF] Nenhum PDF encontrado no corpo do post.")
                 sem_pdf += 1
                 time.sleep(0.3)
                 continue
 
-            print("    " + str(len(urls_pdf)) + " PDF(s) no conteudo principal.")
+            print(
+                "    "
+                + str(len(pdfs))
+                + " PDF(s) | titulo: "
+                + (titulo[:80] if titulo else "(sem titulo)")
+            )
 
-            usados_local = set()
-            for j, url_pdf in enumerate(urls_pdf, 1):
+            ano_fb = ano if isinstance(ano, int) else None
+            for texto_link, url_pdf in pdfs:
                 _abortar_se_cancelado()
-                nome = os.path.basename(urlparse(url_pdf).path.split("?")[0])
-                if not nome or not nome.lower().endswith(".pdf"):
-                    nome = slug.replace("/", "_") + "_" + str(j).zfill(2) + ".pdf"
-                stem = nome[:-4] if nome.lower().endswith(".pdf") else nome
-                sufixo = 1
-                nome_final = nome
-                while nome_final.lower() in usados_local:
-                    sufixo += 1
-                    nome_final = stem + "_" + str(sufixo) + ".pdf"
-                usados_local.add(nome_final.lower())
-
-                resultado = baixar_pdf(nome_final, url_pdf, pasta)
+                nome_previo = montar_nome_documento(
+                    texto_link=texto_link,
+                    titulo_post=titulo,
+                    url_pdf=url_pdf,
+                    pasta_hint=pasta_hint,
+                    ano_fallback=ano_fb,
+                )
+                resultado = baixar_e_salvar(
+                    url_pdf,
+                    pasta,
+                    nome_previo,
+                    ler_pdf=True,
+                    textos_extras=[texto_link, titulo],
+                    pasta_hint=pasta_hint,
+                    ano_fallback=ano_fb,
+                )
                 if resultado == "ok":
                     ok += 1
                 elif resultado == "pulado":

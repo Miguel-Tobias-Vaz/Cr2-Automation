@@ -1,26 +1,284 @@
 (() => {
   const API = "";
+
+  /** Ferramentas por id (páginas de automação). */
+  const TOOLS = {
+    documentos: {
+      id: "documentos",
+      nome: "Documentos",
+      descricao: "Baixa PDFs de páginas de transparência e organiza por tipo e ano.",
+      pagina: "/documentos.html",
+      icon: "file",
+      cta: "Abrir",
+    },
+    categorias: {
+      id: "categorias",
+      nome: "Categorias",
+      descricao: "Varre categorias WordPress e baixa PDFs de cada post.",
+      pagina: "/categorias.html",
+      icon: "folder",
+      cta: "Abrir",
+    },
+    normas: {
+      id: "normas",
+      nome: "Normas",
+      descricao: "Leis, decretos e portarias com nome padrão e leitura do PDF.",
+      pagina: "/normas.html",
+      icon: "book",
+      cta: "Abrir",
+    },
+    licitacoes: {
+      id: "licitacoes",
+      nome: "Licitações",
+      descricao: "Baixa anexos de licitações CR2, extrai valores e preenche planilha.",
+      pagina: "/licitacoes.html",
+      icon: "building",
+      cta: "Abrir",
+    },
+    publicacao: {
+      id: "publicacao",
+      nome: "RGF / RREO / Balancete",
+      descricao: "Publicação financeira no portal Bubble (Playwright).",
+      pagina: "/publicacao.html",
+      icon: "upload",
+      cta: "Abrir",
+    },
+    sessao: {
+      id: "sessao",
+      nome: "Sessão",
+      descricao: "Pauta, Ata, Presença e Votações no portal CR2.",
+      pagina: "/sessao.html",
+      icon: "users",
+      cta: "Abrir",
+    },
+    dic_est_ter: {
+      id: "dic_est_ter",
+      nome: "Dic / Est / Ter",
+      descricao: "Dívida ativa, estagiários e terceirizados no portal CR2.",
+      pagina: "/dic-est-ter.html",
+      icon: "table",
+      cta: "Abrir",
+    },
+    mapa: {
+      id: "mapa",
+      nome: "Mapa do Site",
+      descricao: "Cria páginas WordPress e atualiza o mapa do site.",
+      pagina: "/mapa.html",
+      icon: "map",
+      cta: "Abrir",
+    },
+  };
+
+  const ICONS = {
+    download:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>',
+    publish:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9"/><path d="m7 13 5-5 5 5"/><path d="M5 3h14"/></svg>',
+    map:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg>',
+    file:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/></svg>',
+    folder:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+    book:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+    building:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M9 14h.01"/><path d="M15 14h.01"/></svg>',
+    upload:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>',
+    users:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    table:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3z"/><path d="M3 10h18"/><path d="M3 15h18"/><path d="M9 5v14"/><path d="M15 5v14"/></svg>',
+  };
+
+  /** Hubs de alto nível: Extração | Publicação | Mapa */
+  const HUBS = [
+    {
+      key: "extrair",
+      label: "Extração",
+      href: "/extrair.html",
+      titulo: "Extração",
+      descricao:
+        "Downloads do portal: documentos, categorias, normas e licitações.",
+      icon: "download",
+      cta: "Ver ferramentas",
+      tools: ["documentos", "categorias", "normas", "licitacoes"],
+    },
+    {
+      key: "publicar",
+      label: "Publicação",
+      href: "/publicar.html",
+      titulo: "Publicação",
+      descricao: "Envie dados e arquivos ao portal CR2 com poucos cliques.",
+      icon: "publish",
+      cta: "Ver ferramentas",
+      tools: ["publicacao", "sessao", "dic_est_ter"],
+    },
+    {
+      key: "mapa",
+      label: "Mapa",
+      href: "/mapa.html",
+      titulo: "Mapa do Site",
+      descricao: "Crie páginas WordPress e atualize o mapa do site.",
+      icon: "map",
+      cta: "Abrir",
+      tools: ["mapa"],
+    },
+  ];
+
   const NAV = [
     { href: "/", label: "Início", key: "hub" },
-    { href: "/documentos.html", label: "Documentos", key: "documentos" },
-    { href: "/categorias.html", label: "Categorias", key: "categorias" },
-    { href: "/normas.html", label: "Normas", key: "normas" },
-    { href: "/licitacoes.html", label: "Licitações", key: "licitacoes" },
-    { href: "/publicacao.html", label: "Publicação", key: "publicacao" },
-    { href: "/sessao.html", label: "Sessão", key: "sessao" },
-    { href: "/dic-est-ter.html", label: "Dic/Est/Ter", key: "dic_est_ter" },
-    { href: "/mapa.html", label: "Mapa", key: "mapa" },
+    ...HUBS.map((h) => ({ href: h.href, label: h.label, key: h.key })),
   ];
 
   const el = (id) => document.getElementById(id);
 
+  function iconSvg(name) {
+    return ICONS[name] || ICONS.file;
+  }
+
+  function findHub(key) {
+    return HUBS.find((h) => h.key === key) || null;
+  }
+
+  function hubKeyFor(toolOrHub) {
+    if (!toolOrHub || toolOrHub === "hub") return "hub";
+    if (findHub(toolOrHub)) return toolOrHub;
+    const hub = HUBS.find((h) => h.tools.includes(toolOrHub));
+    return hub ? hub.key : "hub";
+  }
+
+  function injectSubnav(activeKey) {
+    let bar = document.getElementById("hub-subnav");
+    const hubKey = hubKeyFor(activeKey);
+    const hub = findHub(hubKey);
+
+    // Só mostra subnav em páginas de ferramenta com 2+ itens no hub
+    const isToolPage = Boolean(TOOLS[activeKey]);
+    if (!isToolPage || !hub || hub.tools.length < 2) {
+      if (bar) bar.remove();
+      document.body.classList.remove("has-subnav");
+      return;
+    }
+
+    if (!bar) {
+      bar = document.createElement("nav");
+      bar.id = "hub-subnav";
+      bar.className = "hub-subnav";
+      bar.setAttribute("aria-label", "Ferramentas do hub");
+      const top = document.querySelector("header.top");
+      if (top && top.parentNode) {
+        top.insertAdjacentElement("afterend", bar);
+      } else {
+        document.body.prepend(bar);
+      }
+    }
+
+    document.body.classList.add("has-subnav");
+    const back = `<a class="hub-subnav-back" href="${hub.href}">← ${hub.label}</a>`;
+    const links = hub.tools
+      .map((tid) => {
+        const t = TOOLS[tid];
+        if (!t) return "";
+        const active = tid === activeKey ? " is-active" : "";
+        return `<a class="hub-subnav-link${active}" href="${t.pagina}">${t.nome}</a>`;
+      })
+      .join("");
+    bar.innerHTML = `<div class="hub-subnav-inner">${back}<div class="hub-subnav-links">${links}</div></div>`;
+  }
+
   function injectNav(activeKey) {
     const nav = el("site-nav");
-    if (!nav) return;
-    nav.innerHTML = NAV.map(
-      (n) =>
-        `<a href="${n.href}" class="${n.key === activeKey ? "is-active" : ""}">${n.label}</a>`
-    ).join("");
+    const hubActive = hubKeyFor(activeKey);
+    if (nav) {
+      nav.innerHTML = NAV.map((n) => {
+        const on =
+          n.key === hubActive || (n.key === "hub" && activeKey === "hub");
+        return `<a href="${n.href}" class="${on ? "is-active" : ""}">${n.label}</a>`;
+      }).join("");
+    }
+    injectSubnav(activeKey);
+  }
+
+  function renderHubCards(targetId, items) {
+    const grid = el(targetId);
+    if (!grid) return;
+    grid.innerHTML = items
+      .map((s) => {
+        const href = s.pagina || s.href || "#";
+        const title = s.nome || s.titulo || s.label || "";
+        const desc = s.descricao || "";
+        const cta = s.cta || "Abrir";
+        const icon = iconSvg(s.icon || "file");
+        return `
+      <a class="hub-card" href="${href}" data-glow>
+        <span class="hub-card-glow" data-glow aria-hidden="true"></span>
+        <span class="hub-card-icon">${icon}</span>
+        <h3>${title}</h3>
+        <p>${desc}</p>
+        <div class="hub-card-foot">
+          <span>${cta}</span>
+          <span aria-hidden="true">→</span>
+        </div>
+      </a>`;
+      })
+      .join("");
+    enableSpotlightCards();
+  }
+
+  let spotlightBound = false;
+
+  function enableSpotlightCards() {
+    const cards = document.querySelectorAll(".hub-card[data-glow]");
+    if (!cards.length) return;
+
+    if (!spotlightBound) {
+      spotlightBound = true;
+      document.addEventListener(
+        "pointermove",
+        (e) => {
+          const x = e.clientX;
+          const y = e.clientY;
+          const xp = (x / window.innerWidth).toFixed(2);
+          const yp = (y / window.innerHeight).toFixed(2);
+          document.querySelectorAll(".hub-card[data-glow]").forEach((card) => {
+            card.style.setProperty("--x", x.toFixed(2));
+            card.style.setProperty("--y", y.toFixed(2));
+            card.style.setProperty("--xp", xp);
+            card.style.setProperty("--yp", yp);
+          });
+        },
+        { passive: true }
+      );
+    }
+  }
+
+  function renderHomeHubs() {
+    renderHubCards(
+      "hub-grid",
+      HUBS.map((h) => ({
+        href: h.href,
+        pagina: h.href,
+        icon: h.icon,
+        nome: h.titulo,
+        descricao: h.descricao,
+        cta: h.cta,
+      }))
+    );
+  }
+
+  function renderHubTools(hubKey) {
+    const hub = findHub(hubKey);
+    if (!hub) return;
+    const title = el("hub-title");
+    const lede = el("hub-lede");
+    if (title) title.textContent = hub.titulo;
+    if (lede) lede.textContent = hub.descricao;
+    renderHubCards(
+      "hub-grid",
+      hub.tools.map((tid) => TOOLS[tid]).filter(Boolean)
+    );
   }
 
   async function pingApi() {
@@ -29,12 +287,12 @@
     try {
       const r = await fetch(`${API}/api/health`);
       if (r.ok) {
-        pill.textContent = "API online";
+        pill.textContent = "Online";
         pill.classList.add("online");
         pill.classList.remove("offline");
       } else throw new Error();
     } catch {
-      pill.textContent = "API offline";
+      pill.textContent = "Offline";
       pill.classList.add("offline");
       pill.classList.remove("online");
     }
@@ -208,13 +466,9 @@
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
-        throw new Error(err.detail || r.statusText);
+        throw new Error(err.detail || "Falha ao cancelar");
       }
-      appendLog(
-        { msg: "Cancelamento enviado — aguardando a fila parar…", level: "warn" },
-        "warn"
-      );
-      setLogState("Cancelando");
+      appendLog({ msg: "Cancelamento solicitado…", level: "warn" }, "warn");
     } catch (e) {
       appendLog({ msg: String(e.message || e), level: "error" }, "error");
       btn.disabled = false;
@@ -226,8 +480,11 @@
     try {
       const r = await fetch(`${API}/api/jobs/${jobId}`);
       const job = await r.json();
-      const st = el("job-status");
-      if (st) st.textContent = job.status;
+      const runBtn = el("btn-run");
+      if (runBtn) runBtn.disabled = false;
+      const cancelBtn = el("btn-cancel");
+      if (cancelBtn) cancelBtn.textContent = "Cancelar fila";
+
       const dl = el("btn-download");
       if (dl) {
         dl.hidden = !job.has_download;
@@ -240,10 +497,6 @@
 
       if (finished) {
         setCancelVisible(false);
-        const cancelBtn = el("btn-cancel");
-        if (cancelBtn) cancelBtn.textContent = "Cancelar fila";
-        const runBtn = el("btn-run");
-        if (runBtn) runBtn.disabled = false;
       }
 
       if (job.status === "failed") {
@@ -255,8 +508,7 @@
           noticeShownFor = jobId;
           showNotice(job.error || `${label} terminou com erro.`, "error");
         }
-      }
-      if (job.status === "cancelled") {
+      } else if (job.status === "cancelled") {
         setLogState("Cancelado");
         if (!already) {
           noticeShownFor = jobId;
@@ -265,38 +517,43 @@
             "warn"
           );
         }
-      }
-      if (job.status === "completed") {
+      } else if (job.status === "completed") {
         setLogState("Concluído");
-        const msg =
-          (job.result && job.result.mensagem) ||
-          `${label} finalizado com sucesso.`;
         if (!already) {
           noticeShownFor = jobId;
-          showNotice(msg, "ok");
+          showNotice(
+            (job.result && job.result.mensagem) ||
+              `${label} finalizado com sucesso.`,
+            "ok"
+          );
         }
-      }
-      if (job.status === "running" && job.cancel_requested) {
+      } else if (job.status === "running" && job.cancel_requested) {
         setLogState("Cancelando");
+        setCancelVisible(true);
+      } else {
+        setLogState("Executando");
+        setCancelVisible(true);
+        if (runBtn) runBtn.disabled = true;
       }
-    } catch (_) {}
+    } catch (_) {
+      setLogState("Parado");
+      setCancelVisible(false);
+      const runBtn = el("btn-run");
+      if (runBtn) runBtn.disabled = false;
+    }
   }
 
   async function startJob(serviceId, config) {
     const btn = el("btn-run");
     if (btn) btn.disabled = true;
-    setLogState("Iniciando");
     try {
       const r = await fetch(`${API}/api/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ service_id: serviceId, config }),
       });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.detail || r.statusText);
-      }
       const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || "Falha ao iniciar");
       watchJob(data.job_id);
     } catch (e) {
       appendLog({ msg: String(e.message || e), level: "error" }, "error");
@@ -320,13 +577,7 @@
   }
 
   function parallaxHero() {
-    const plane = document.querySelector(".hero-plane");
-    if (!plane) return;
-    document.addEventListener("pointermove", (e) => {
-      const x = (e.clientX / window.innerWidth - 0.5) * 12;
-      const y = (e.clientY / window.innerHeight - 0.5) * 8;
-      plane.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-    });
+    /* no-op: o parallax no hero-plane competia com o layout da 1ª viewport */
   }
 
   window.OptoAutomacoes = {
@@ -337,6 +588,21 @@
     appendLog,
     showNotice,
     cancelCurrentJob,
+    renderHomeHubs,
+    renderHubTools,
+    enableSpotlightCards,
+    HUBS,
+    TOOLS,
   };
   window.CR2Centro = window.OptoAutomacoes;
+
+  // Garante fundo de partículas mesmo se a página esquecer o <script>
+  if (!window.OptoFluidBackground) {
+    const s = document.createElement("script");
+    s.src = "/assets/fluid-particles.js";
+    s.async = true;
+    document.head.appendChild(s);
+  } else if (window.OptoFluidBackground.init) {
+    window.OptoFluidBackground.init();
+  }
 })();

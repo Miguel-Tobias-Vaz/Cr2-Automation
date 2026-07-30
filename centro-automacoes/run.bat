@@ -3,7 +3,9 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 if not exist "front\brand-icon.png" (
-  if exist "..\automacoes\Logo verde icon.png" (
+  if exist "icon.png" (
+    copy /Y "icon.png" "front\brand-icon.png" >nul
+  ) else if exist "..\automacoes\Logo verde icon.png" (
     copy /Y "..\automacoes\Logo verde icon.png" "front\brand-icon.png" >nul
   ) else if exist "..\automacoes\brand-icon.png" (
     copy /Y "..\automacoes\brand-icon.png" "front\brand-icon.png" >nul

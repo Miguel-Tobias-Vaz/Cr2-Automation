@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -8,10 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home6" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -74,6 +74,10 @@
                 Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
               </small>
             </label>
+            <label class="check-row" for="ler_pdf">
+              <input type="checkbox" id="ler_pdf" checked />
+              <span>Ler texto do PDF para normalizar o nome (ex.: Lei Nº738-2023.pdf)</span>
+            </label>
           </fieldset>
           <div class="acao-row">
             <button type="submit" class="btn btn-primary" id="btn-run">Iniciar download</button>
@@ -92,16 +96,17 @@
       </section>
     </main>
 
-    <script src="/assets/shared.js"></script>
+    <script src="/assets/fluid-particles.js?v=home6"></script>
+    <script src="/assets/shared.js?v=home6"></script>
     <script>
       CR2Centro.injectNav("categorias");
       CR2Centro.pingApi();
-      CR2Centro.parallaxHero();
-      CR2Centro.bindRun("categorias", "form-categorias", ["site", "url_categoria", "pasta_base", "anos"], () => ({
+      CR2Centro.bindRun("categorias", "form-categorias", ["site", "url_categoria", "pasta_base", "anos", "ler_pdf"], () => ({
         site: document.getElementById("site").value.trim(),
         url_categoria: document.getElementById("url_categoria").value.trim(),
         pasta_base: document.getElementById("pasta_base").value.trim(),
         anos: document.getElementById("anos").value.trim(),
+        ler_pdf: document.getElementById("ler_pdf").checked,
       }), false);
     </script>
   </body>

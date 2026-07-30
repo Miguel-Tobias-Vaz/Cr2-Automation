@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -8,10 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Newsreader:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home6" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -111,11 +111,11 @@ https://inhangapi.pa.gov.br/c/publicacoes/demais/ | categoria | Demais</textarea
       </section>
     </main>
 
-    <script src="/assets/shared.js"></script>
+    <script src="/assets/fluid-particles.js?v=home6"></script>
+    <script src="/assets/shared.js?v=home6"></script>
     <script>
       CR2Centro.injectNav("normas");
       CR2Centro.pingApi();
-      CR2Centro.parallaxHero();
       const fields = ["site", "pasta_base", "anos", "fontes", "ler_pdf", "limite_posts"];
       CR2Centro.bindRun("normas", "form-normas", fields, () => ({
         site: document.getElementById("site").value.trim(),
