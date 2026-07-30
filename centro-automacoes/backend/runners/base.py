@@ -19,6 +19,7 @@ SCRIPTS = {
     "normas": AUTOMACOES / "download-normas" / "script.py",
     "licitacoes": AUTOMACOES / "download-licitacoes" / "script.py",
     "publicacao": AUTOMACOES / "publicacao-cr2" / "script.py",
+    "sessao": AUTOMACOES / "publicacao-sessao" / "script.py",
     "mapa": AUTOMACOES / "mapa-site" / "script.py",
 }
 

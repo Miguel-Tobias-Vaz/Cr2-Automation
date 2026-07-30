@@ -1,4 +1,4 @@
-from backend.runners import categorias, documentos, licitacoes, mapa, normas, publicacao
+from backend.runners import categorias, documentos, licitacoes, mapa, normas, publicacao, sessao
 
 RUNNERS = {
     "documentos": documentos.run,
@@ -6,6 +6,7 @@ RUNNERS = {
     "normas": normas.run,
     "licitacoes": licitacoes.run,
     "publicacao": publicacao.run,
+    "sessao": sessao.run,
     "mapa": mapa.run,
 }
 

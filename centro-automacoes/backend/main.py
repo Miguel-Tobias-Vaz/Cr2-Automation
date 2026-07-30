@@ -67,19 +67,26 @@ SERVICES = {
         "pagina": "/publicacao.html",
         "icone": "05",
     },
+    "sessao": {
+        "id": "sessao",
+        "nome": "Publicação Sessão",
+        "descricao": "Tipo, Data, Número, Pauta, Ata, Presença e Votações no portal CR2.",
+        "pagina": "/sessao.html",
+        "icone": "06",
+    },
     "mapa": {
         "id": "mapa",
         "nome": "Mapa do Site",
         "descricao": "Cria páginas WordPress e atualiza o mapa do site.",
         "pagina": "/mapa.html",
-        "icone": "06",
+        "icone": "07",
     },
     "dic_est_ter": {
         "id": "dic_est_ter",
         "nome": "Publicação Dic/Est/Ter",
         "descricao": "Dívida ativa, estagiários e terceirizados — planilhas Drive no portal CR2.",
         "pagina": "/dic-est-ter.html",
-        "icone": "07",
+        "icone": "08",
     },
 }
 
@@ -209,6 +216,11 @@ def page_licitacoes():
 @app.get("/publicacao.html")
 def page_publicacao():
     return _page("publicacao.html")
+
+
+@app.get("/sessao.html")
+def page_sessao():
+    return _page("sessao.html")
 
 
 @app.get("/mapa.html")

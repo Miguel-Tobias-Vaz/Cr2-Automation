@@ -10,6 +10,7 @@ Scripts Python organizados — **uma pasta por automação**. O painel web fica 
 | `download-categorias/` | Download por categoria WordPress |
 | `download-normas/` | Leis, decretos, portarias (nome padrão + leitura PDF) |
 | `publicacao-cr2/` | RGF, RREO, Balanço e Balancete (portal Bubble) |
+| `publicacao-sessao/` | Sessões (Tipo, Data, Número, Pauta, Ata, Presença, Votações) |
 | `dic-est-ter/` | **Publicação Dic/Est/Ter** (dívida, estagiários, terceirizados) |
 | `mapa-site/` | Mapa do site WordPress |
 

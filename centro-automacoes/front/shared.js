@@ -7,6 +7,7 @@
     { href: "/normas.html", label: "Normas", key: "normas" },
     { href: "/licitacoes.html", label: "Licitações", key: "licitacoes" },
     { href: "/publicacao.html", label: "Publicação", key: "publicacao" },
+    { href: "/sessao.html", label: "Sessão", key: "sessao" },
     { href: "/dic-est-ter.html", label: "Dic/Est/Ter", key: "dic_est_ter" },
     { href: "/mapa.html", label: "Mapa", key: "mapa" },
   ];
@@ -116,6 +117,7 @@
     normas: "Download de Normas",
     licitacoes: "Licitações",
     publicacao: "Publicação CR2",
+    sessao: "Publicação Sessão",
     mapa: "Mapa do Site",
     dic_est_ter: "Publicação Dic/Est/Ter",
   };

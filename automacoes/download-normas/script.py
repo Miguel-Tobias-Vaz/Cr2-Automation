@@ -18,7 +18,9 @@ e/ou o título do post para classificar e numerar corretamente.
 """
 from __future__ import annotations
 
+import html as html_module
 import io
+import json
 import os
 import re
 import time
@@ -433,7 +435,7 @@ def _parece_item_listagem(texto: str, href: str) -> bool:
         return True
     if re.search(
         r"(lei|portaria|decreto|resolu|edital|ata|relat[oó]rio|convoca|"
-        r"chamada|projeto-de-lei|demais)",
+        r"chamada|projeto-de-lei|demais|pauta|sessao|sessão)",
         path,
         re.I,
     ):
@@ -443,55 +445,168 @@ def _parece_item_listagem(texto: str, href: str) -> bool:
     return False
 
 
+def _flatten_form(valor, prefix: str = ""):
+    itens = []
+    if isinstance(valor, dict):
+        for chave, filho in valor.items():
+            chave_form = f"{prefix}[{chave}]" if prefix else str(chave)
+            itens.extend(_flatten_form(filho, chave_form))
+    elif isinstance(valor, (list, tuple)):
+        if not valor:
+            itens.append((f"{prefix}[]", ""))
+        else:
+            for i, filho in enumerate(valor):
+                itens.extend(_flatten_form(filho, f"{prefix}[{i}]"))
+    elif isinstance(valor, bool):
+        itens.append((prefix, "1" if valor else "0"))
+    elif valor is None:
+        itens.append((prefix, ""))
+    else:
+        itens.append((prefix, str(valor)))
+    return itens
+
+
+def _extrair_bloco_bunyad(soup: BeautifulSoup) -> dict | None:
+    for el in soup.select("[data-block]"):
+        bruto = el.get("data-block")
+        if not bruto:
+            continue
+        try:
+            bloco = json.loads(html_module.unescape(bruto))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if isinstance(bloco, dict) and bloco.get("id"):
+            return bloco
+    return None
+
+
+def _tem_carregar_mais(soup: BeautifulSoup) -> bool:
+    return bool(
+        soup.select_one(
+            ".pagination-more, a.load-button, "
+            ".main-pagination[data-type='infinite'], "
+            ".main-pagination[data-type='load-more']"
+        )
+    )
+
+
+def _ajax_url_wordpress(base_url: str) -> str:
+    p = urlparse(base_url)
+    return f"{p.scheme}://{p.netloc}/wp-admin/admin-ajax.php"
+
+
+def _posts_de_soup_categoria(
+    soup: BeautifulSoup, base_url: str, url_categoria: str, vistos: set[str]
+) -> list[str]:
+    novos: list[str] = []
+    candidatos: list[tuple[str, str]] = []
+    for art in soup.select("article"):
+        if art.find_parent("footer") or art.find_parent("nav"):
+            continue
+        a = art.select_one("a[href]")
+        if a:
+            candidatos.append((art.get_text(" ", strip=True), a["href"]))
+    if not candidatos:
+        for li in soup.select("li"):
+            if li.find_parent("nav") or li.find_parent("footer"):
+                continue
+            a = li.find("a", href=True)
+            if a:
+                candidatos.append((li.get_text(" ", strip=True), a["href"]))
+
+    for texto, href in candidatos:
+        abs_url = _absolutizar(base_url, href)
+        if not _mesmo_dominio(abs_url, SITE):
+            continue
+        if abs_url.rstrip("/") == url_categoria.rstrip("/"):
+            continue
+        if not _parece_item_listagem(texto, abs_url):
+            continue
+        if abs_url in vistos:
+            continue
+        vistos.add(abs_url)
+        novos.append(abs_url)
+    return novos
+
+
 def coletar_posts_categoria(url_categoria: str) -> list[str]:
-    """Coleta URLs únicas de posts; para se /page/N/ não trouxer novos."""
-    posts = []
-    vistos = set()
+    """Coleta URLs únicas de posts.
+
+    Preferência:
+      1) AJAX Bunyad (Carregar Mais / infinite) — /page/N/ nesses temas
+         costuma repetir os mesmos posts.
+      2) Paginação clássica /page/2/, /page/3/...
+    """
+    posts: list[str] = []
+    vistos: set[str] = set()
+
+    try:
+        resp0 = _get(url_categoria)
+    except Exception as e:
+        print(f"  [ERRO] {e}")
+        return posts
+
+    soup0 = BeautifulSoup(resp0.content, "html.parser")
+    bloco = _extrair_bloco_bunyad(soup0)
+
+    if bloco and _tem_carregar_mais(soup0):
+        print("  Detectado 'Carregar Mais' / infinite scroll (Bunyad).")
+        print("  Coletando via AJAX bunyad_block...")
+        ajax_url = _ajax_url_wordpress(resp0.url or SITE)
+        pagina = 1
+        while pagina <= 200:
+            _abortar_se_cancelado()
+            print(f"  Lote AJAX {pagina}: {ajax_url}")
+            try:
+                payload = _flatten_form(
+                    {"action": "bunyad_block", "block": bloco, "paged": pagina}
+                )
+                headers = dict(HEADERS)
+                headers["X-Requested-With"] = "XMLHttpRequest"
+                resp = _SESSION.post(ajax_url, data=payload, headers=headers, timeout=45)
+            except Exception as e:
+                print(f"  [ERRO] {e}")
+                break
+            corpo = (resp.text or "").strip()
+            if resp.status_code != 200 or corpo in ("", "0", "-1"):
+                print("  Fim do infinite scroll.")
+                break
+            soup = BeautifulSoup(resp.text, "html.parser")
+            novos = _posts_de_soup_categoria(soup, resp0.url, url_categoria, vistos)
+            posts.extend(novos)
+            print(f"  {len(novos)} posts novos. Total: {len(vistos)}")
+            if not novos:
+                print("  Nenhum post novo. Fim.")
+                break
+            pagina += 1
+            time.sleep(0.6)
+        return posts
+
     pagina = 1
     while True:
+        _abortar_se_cancelado()
         if pagina == 1:
             url = url_categoria
+            soup = soup0
+            base = resp0.url
         else:
             url = url_categoria.rstrip("/") + "/page/" + str(pagina) + "/"
-        print(f"  Página {pagina}: {url}")
-        try:
-            resp = _get(url)
-        except Exception as e:
-            print(f"  [ERRO] {e}")
-            break
-        if resp.status_code == 404:
-            print("  Fim das páginas.")
-            break
-        soup = BeautifulSoup(resp.content, "html.parser")
-        novos = []
-        candidatos = []
-        for art in soup.select("article"):
-            if art.find_parent("footer") or art.find_parent("nav"):
-                continue
-            a = art.select_one("a[href]")
-            if a:
-                candidatos.append((art.get_text(" ", strip=True), a["href"]))
-        if not candidatos:
-            for li in soup.select("li"):
-                if li.find_parent("nav") or li.find_parent("footer"):
-                    continue
-                a = li.find("a", href=True)
-                if a:
-                    candidatos.append((li.get_text(" ", strip=True), a["href"]))
+            print(f"  Página {pagina}: {url}")
+            try:
+                resp = _get(url)
+            except Exception as e:
+                print(f"  [ERRO] {e}")
+                break
+            if resp.status_code == 404:
+                print("  Fim das páginas.")
+                break
+            soup = BeautifulSoup(resp.content, "html.parser")
+            base = resp.url
 
-        for texto, href in candidatos:
-            abs_url = _absolutizar(resp.url, href)
-            if not _mesmo_dominio(abs_url, SITE):
-                continue
-            if abs_url.rstrip("/") == url_categoria.rstrip("/"):
-                continue
-            if not _parece_item_listagem(texto, abs_url):
-                continue
-            if abs_url in vistos:
-                continue
-            vistos.add(abs_url)
-            novos.append(abs_url)
+        if pagina == 1:
+            print(f"  Página {pagina}: {url}")
 
+        novos = _posts_de_soup_categoria(soup, base, url_categoria, vistos)
         print(f"  {len(novos)} posts novos. Total: {len(vistos)}")
         posts.extend(novos)
         if not novos:
