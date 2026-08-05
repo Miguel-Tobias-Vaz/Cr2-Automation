@@ -1,0 +1,35 @@
+19:51:20 [info] Processo iniciado — normas
+19:51:20 [info] Fontes categoria: 1
+19:51:22 [info] Filtro de anos: todos
+19:51:22 [info] IA local: Ollama / llama3.2:3b @ http://127.0.0.1:11434 (nome + confirmação de Diárias)
+19:51:22 [info] Diárias: regra automática quando a URL/pasta/PDF for de diárias (+ IA confirma)
+19:51:22 [info] Sessões: Pautas/Atas/Presença/Votações → pasta por sessão (ex. 17ª Sessão Ordinária)
+19:51:22 [info] ============================================================
+19:51:22 [info]   DOWNLOAD DE NORMAS MUNICIPAIS
+19:51:22 [info]   Site: camarademontealegre.pa.gov.br
+19:51:22 [info]   Destino: C:\Downloads\MonteAlegre
+19:51:22 [info]   Leitura PDF: sim
+19:51:22 [info]   Diárias → planilha: sim
+19:51:22 [info]   IA local: sim (llama3.2:3b)
+19:51:22 [info]   Anos: todos
+19:51:22 [info] ============================================================
+19:51:27 [info] ============================================================
+19:51:27 [info]   FONTE (categoria): https://camaranovatimboteua.pa.gov.br/c/atividades-legislativas/pautas-e-atas-das-sessoes/
+19:51:27 [info]   Pasta: Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua (de: Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua)
+19:51:27 [info] ============================================================
+19:51:27 [info]   Página 1: https://camaranovatimboteua.pa.gov.br/c/atividades-legislativas/pautas-e-atas-das-sessoes/
+19:51:27 [info]   0 posts novos. Total: 0
+19:51:27 [info]   Nenhum post novo. Fim.
+19:51:27 [info] ============================================================
+19:51:27 [info]   RESUMO FINAL
+19:51:27 [info] ============================================================
+19:51:27 [info]   PDFs OK                    : 0
+19:51:27 [warn]   PDFs pulados (ja existiam) : 0
+19:51:27 [info]   Posts fora do filtro ano   : 0
+19:51:27 [info]   Erros download             : 0
+19:51:27 [info]   Posts/paginas sem PDF      : 0
+19:51:27 [info]   Diárias extraídas          : 0
+19:51:27 [info]   Pasta base                 : C:\Downloads\MonteAlegre
+19:51:27 [info] ============================================================
+19:51:27 [ok] CONCLUIDO — Extração Pro concluída em C:\Downloads\MonteAlegre
+19:51:27 [info] — fim —

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import sys
+from pathlib import Path
 
 from backend.runners.base import SCRIPTS, apply_globals, load_module, run_main_with_logs
 
@@ -44,6 +46,16 @@ def run(job) -> None:
     ignorar_ssl = bool(cfg.get("ignorar_ssl", False))
     sem_renomear = bool(cfg.get("sem_renomear", False))
     motor_ocr = (cfg.get("motor_ocr") or "").strip()
+    link_pasta_base = (cfg.get("link_pasta_base") or "").strip()
+    refinar_ia = bool(cfg.get("refinar_ia", False))
+    modelo_ia = (cfg.get("modelo_ia") or "llama3.2:3b").strip() or "llama3.2:3b"
+    ollama_url = (cfg.get("ollama_url") or "http://127.0.0.1:11434").strip()
+    ia_sempre = bool(cfg.get("ia_sempre", False))
+    limite = cfg.get("limite")
+    try:
+        limite = int(limite) if limite not in (None, "") else 0
+    except (TypeError, ValueError):
+        limite = 0
 
     modo, so_planilha, sem_extracao = _resolver_modo(cfg)
     labels = {
@@ -56,6 +68,15 @@ def run(job) -> None:
         job.emit("info", "OCR: ligado")
     if incluir_sub:
         job.emit("info", "Subcategorias fracassadas/desertas: ligadas")
+    if link_pasta_base:
+        job.emit("info", "LinkDaPasta base: {0}".format(link_pasta_base))
+    if refinar_ia:
+        job.emit(
+            "info",
+            "IA local (Ollama): {0} @ {1}".format(modelo_ia, ollama_url),
+        )
+    else:
+        job.emit("info", "IA local: desligada")
 
     argv = [
         "download_licitacoes",
@@ -88,6 +109,25 @@ def run(job) -> None:
         argv.append("--ignorar-ssl")
     if sem_renomear:
         argv.append("--sem-renomear")
+    if link_pasta_base:
+        argv += ["--link-pasta-base", link_pasta_base]
+    if refinar_ia:
+        argv.append("--refinar-ia")
+        argv += ["--modelo-ia", modelo_ia]
+        argv += ["--ollama-url", ollama_url]
+        if ia_sempre:
+            argv.append("--ia-sempre")
+    if limite and limite > 0:
+        argv += ["--limite", str(limite)]
+
+    # Garante import de gestor_regras/ e evita cache velho de ia_local/
+    scripts_dir = str(Path(SCRIPTS["licitacoes"]).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    # Recarrega pacotes locais a cada job (senão TIPOS_*/funções novas não entram)
+    for key in list(sys.modules):
+        if key == "ia_local" or key.startswith("ia_local.") or key == "gestor_regras" or key.startswith("gestor_regras."):
+            sys.modules.pop(key, None)
 
     mod = load_module("download_licitacoes", SCRIPTS["licitacoes"])
     mapping = {}
@@ -95,6 +135,8 @@ def run(job) -> None:
     if not anos:
         mapping["ANOS_FILTRO"] = []
     apply_globals(mod, mapping)
+    if hasattr(mod, "ULTIMO_RESULTADO_UPLOAD"):
+        setattr(mod, "ULTIMO_RESULTADO_UPLOAD", None)
 
     old_argv = sys.argv
     sys.argv = argv
@@ -104,8 +146,64 @@ def run(job) -> None:
         sys.argv = old_argv
 
     job.result["pasta"] = saida
+    job.result["ia"] = "ollama" if refinar_ia else "off"
+    upload = getattr(mod, "ULTIMO_RESULTADO_UPLOAD", None) or {}
+    if upload.get("planilha_licitacoes"):
+        job.result["planilha_licitacoes"] = upload["planilha_licitacoes"]
+    if upload.get("planilha_documentos"):
+        job.result["planilha_documentos"] = upload["planilha_documentos"]
+    if upload.get("planilha_preenchida"):
+        job.result["planilha_preenchida"] = upload["planilha_preenchida"]
+        job.emit(
+            "info",
+            "Auditoria (origem dos dados): aba 'Auditoria' em {0}".format(
+                upload["planilha_preenchida"]
+            ),
+        )
+    if upload.get("pendentes_relatorio"):
+        job.result["pendentes_relatorio"] = upload["pendentes_relatorio"]
+    if upload.get("pasta_contratos"):
+        job.result["pasta_contratos"] = upload["pasta_contratos"]
+    if upload.get("contratos_movidos"):
+        job.result["contratos_movidos"] = upload["contratos_movidos"]
+    if upload.get("planilha_contratos"):
+        job.result["planilha_contratos"] = upload["planilha_contratos"]
+        job.emit(
+            "info",
+            "Planilha de contratos: {0} ({1} linha(s))".format(
+                upload["planilha_contratos"],
+                upload.get("contratos_extraidos", "?"),
+            ),
+        )
+        if upload.get("planilha_contratos_xlsx"):
+            job.emit(
+                "info",
+                "Auditoria dos contratos: aba 'Auditoria' em {0}".format(
+                    upload["planilha_contratos_xlsx"]
+                ),
+            )
+    if upload.get("contratos_extraidos"):
+        job.result["contratos_extraidos"] = upload["contratos_extraidos"]
+
+    # Fallback: procura na pasta de saída mesmo se o módulo não expôs o dict
+    if not job.result.get("planilha_licitacoes"):
+        p1 = os.path.join(saida, "subirLicitacoes.xlsx")
+        p2 = os.path.join(saida, "subirDocumentosLicitacoes.xlsx")
+        if os.path.isfile(p1):
+            job.result["planilha_licitacoes"] = p1
+        if os.path.isfile(p2):
+            job.result["planilha_documentos"] = p2
+
     if modo == "so_baixar":
         job.result["mensagem"] = "Anexos baixados em {0} (sem planilha).".format(saida)
+    elif upload:
+        job.result["mensagem"] = (
+            "Licitações: {0} prontas, {1} pendentes — {2}".format(
+                upload.get("prontas", "?"),
+                upload.get("pendentes", "?"),
+                saida,
+            )
+        )
     elif modo == "so_planilha":
         job.result["mensagem"] = "Planilha atualizada a partir de {0}.".format(saida)
     else:

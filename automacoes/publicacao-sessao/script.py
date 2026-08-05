@@ -2,14 +2,20 @@
 #  Publicação de Sessão — portal CR2 (Playwright / Bubble)
 # =====================================================================
 #
+# Ritmo (igual RGF):
+#   botão "Criar Publicação" → modal "Cadastrar Sessão"
+#   → Tipo / Data / Número → uploads → Publicar → próximo
+#
 # Campos do modal:
 #   Tipo *, Data *, Número *, Pauta, Ata, Lista de Presença,
-#   Votações Nominais (arquivo), Votações Nominais (Link)
+#   Votações Nominais (arquivo), Votações Nominais (Link),
+#   checkbox "Não houve publicações", Transmissão (opcional)
 #
 # Entrada (prioridade):
 #   1) REGISTRO_UNICO (painel — 1 sessao)
-#   2) PASTA_SESSOES — pastas filhas: "33ª Ordinária - 14-10-2021" com Pauta.pdf / Ata.pdf
-#   3) CSV_FILA
+#   2) Planilha Sessoes.xlsx / Sessoes.csv (gerada no download)
+#   3) PASTA_SESSOES — pastas "18ª Sessão Ordinária - 16-11-2023"
+#   4) CSV_FILA
 #
 # Flags: --test  --yes  --headless  --pasta CAMINHO  --csv CAMINHO
 
@@ -73,23 +79,31 @@ REGISTRO_UNICO = None
 OPERA_EXE = None
 PASTA_SCREENSHOTS = Path(__file__).resolve().parent / "screenshots_pub"
 
-PAUSA_APOS_ANEXAR = 0.55
+PAUSA_APOS_ANEXAR = 0.48
+PAUSA_POLL_UPLOAD_UI = 0.24
+MAX_TENTATIVAS_POLL_UPLOAD = 18
+PAUSA_APOS_CONFIRMAR_UPLOAD = 0.7
 TIMEOUT_PUBLICAR_HABILITADO_S = 75
 TIMEOUT_RESULTADO_PUBLICACAO_S = 55
 TIMEOUT_LOADER_TOPO_S = 120
 PAUSA_APOS_CLICAR_PUBLICAR = 1.5
 
-MODAL_TITULO_REGEX = r"Criar.*Sess[aã]o"
+# Portal: botão "Criar Publicação" → modal "Cadastrar Sessão"
+MODAL_TITULO_REGEX = r"(Criar|Cadastrar).*Sess[aã]o"
 
 LABELS_TIPO = ("Tipo",)
 LABELS_DATA = ("Data", "Data da sessão", "Data da Sessão", "Data da sessao")
 LABELS_NUMERO = ("Número", "Numero", "Nº", "N°", "Sessão", "Sessao")
+LABELS_NAO_HOUVE = (
+    "Não houve publicações",
+    "Nao houve publicacoes",
+    "Não houve publicação",
+)
 LABELS_LINK_VOTACOES = (
     "Votações Nominais (Link)",
     "Votacoes Nominais (Link)",
     "Votações Nominais Link",
     "Link Votações Nominais",
-    "Link",
 )
 
 UPLOADS = (
@@ -278,6 +292,19 @@ CSV_COLS = (
     "presenca",
     "votacoes_arquivo",
     "votacoes_link",
+    "nao_houve_publicacoes",
+)
+
+PLANILHA_COLS_UI = (
+    "Tipo",
+    "Data",
+    "Número",
+    "Pauta",
+    "Ata",
+    "Lista de Presença",
+    "Votações Nominais (arquivo)",
+    "Votações Nominais (Link)",
+    "Não houve publicações",
 )
 
 
@@ -285,34 +312,156 @@ def _registro_vazio():
     return {k: "" for k in CSV_COLS}
 
 
-_RE_PASTA_SESSAO = re.compile(
-    r"^(?:(\d+\s*[ªºa°]?)\s+)?(.+?)\s*[-–—]\s*(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\s*$",
+_RE_DATA_FIM = re.compile(
+    r"^(.*?)\s*[-–—]\s*(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\s*$",
     re.I,
 )
+
+# Tipos exatos do select "Tipo" no modal Cadastrar Sessão (portal CR2)
+_TIPOS_PORTAL_SELECT = (
+    "Audiência Pública",
+    "Especial",
+    "Extraordinária",
+    "Itinerante",
+    "Ordinária",
+    "Preparatória",
+    "Solene",
+    "Tribuna Popular",
+    "Declaração: não houve sessão",
+)
+
+# Tipos do portal / download-normas (ordem: compostos primeiro)
+_TIPOS_PUB = (
+    ("Audiência Pública", re.compile(r"^audi[eê]ncia\s+p[uú]blica$", re.I)),
+    ("Tribuna Popular", re.compile(r"^tribuna\s+popular$", re.I)),
+    ("Extraordinária", re.compile(r"^extra\s*ordin[aá]ria$", re.I)),
+    ("Preparatória", re.compile(r"^preparat[oó]ria$", re.I)),
+    ("Itinerante", re.compile(r"^itinerante$", re.I)),
+    ("Especial", re.compile(r"^especial$", re.I)),
+    ("Solene", re.compile(r"^solene$", re.I)),
+    ("Ordinária", re.compile(r"^ordin[aá]ria$", re.I)),
+)
+
+_TIPOS_SEM_SESSAO = frozenset({"Audiência Pública", "Tribuna Popular"})
+_TIPO_DECLARACAO = "Declaração: não houve sessão"
+
+
+def _normalizar_tipo_select(tipo: str) -> str:
+    """Converte 'Sessão Ordinária' / 'Ordinária' → rótulo exato do select."""
+    t = re.sub(r"\s+", " ", (tipo or "").strip())
+    if not t:
+        return ""
+    if normalizar(t).startswith("declaracao"):
+        return _TIPO_DECLARACAO
+    # Remove prefixo Sessão
+    t2 = re.sub(r"^sess[aã]o\s+", "", t, flags=re.I).strip()
+    for nome, rx in _TIPOS_PUB:
+        if nome.lower() == t.lower() or nome.lower() == t2.lower() or rx.match(t2) or rx.match(t):
+            return nome
+    for nome in _TIPOS_PORTAL_SELECT:
+        if normalizar(nome) == normalizar(t) or normalizar(nome) == normalizar(t2):
+            return nome
+    return t2 or t
+
+
+def _classificar_tipo_bruto(bruto: str) -> tuple[str, str]:
+    """
+    Retorna (tipo_select, evento).
+    tipo_select: rótulo EXATO do dropdown (ex. 'Ordinária', 'Especial').
+    """
+    bruto = re.sub(r"\s+", " ", (bruto or "").strip(" -–—,"))
+    if not bruto:
+        return "", ""
+
+    resto = re.sub(r"^sess[aã]o\s+", "", bruto, flags=re.I).strip()
+    evento = ""
+
+    m = re.match(r"^(.+?)\s*[-–—,:]\s*(.+)$", resto)
+    if m:
+        cand_tipo, cand_evt = m.group(1).strip(), m.group(2).strip()
+    else:
+        cand_tipo, cand_evt = resto, ""
+
+    tipo_curto = ""
+    for nome, rx in _TIPOS_PUB:
+        if rx.match(cand_tipo):
+            tipo_curto = nome
+            evento = cand_evt
+            break
+        if rx.match(resto):
+            tipo_curto = nome
+            break
+
+    if not tipo_curto:
+        tipo_curto = _normalizar_tipo_select(cand_tipo or resto)
+        if cand_evt and tipo_curto in dict(_TIPOS_PUB):
+            evento = cand_evt
+
+    return tipo_curto, evento
+
+
+def _formatar_numero(num_raw: str, tipo_select: str, evento: str = "") -> str:
+    """
+    Campo Número do portal, ex.:
+      '1ª Sessão Ordinária'
+      'Sessão Especial - Dia dos Pais'
+      '4ª Audiência Pública'
+    """
+    num_raw = (num_raw or "").strip()
+    if num_raw:
+        m = re.match(r"^(\d+)\s*[ªºa°]?\s*$", num_raw, re.I)
+        if m:
+            num_raw = "{}ª".format(int(m.group(1)))
+
+    tipo_select = _normalizar_tipo_select(tipo_select)
+    if tipo_select == _TIPO_DECLARACAO:
+        base = "Declaração: não houve sessão"
+    elif tipo_select in _TIPOS_SEM_SESSAO:
+        base = "{} {}".format(num_raw, tipo_select).strip() if num_raw else tipo_select
+    else:
+        rotulo = "Sessão {}".format(tipo_select) if tipo_select else "Sessão"
+        base = "{} {}".format(num_raw, rotulo).strip() if num_raw else rotulo
+
+    evento = re.sub(r"\s+", " ", (evento or "").strip(" -–—,"))
+    if evento and evento.lower() not in base.lower():
+        return "{} - {}".format(base, evento)
+    return base
 
 
 def parse_nome_pasta_sessao(nome_pasta: str) -> dict:
     """
-    '33ª Ordinária - 14-10-2021' -> tipo=Ordinária, data=14/10/2021, numero=33ª Sessão Ordinária
-    'Ordinária - 11-05-2021'     -> tipo=Ordinária, data=11/05/2021, numero=Sessão Ordinária
+    Pastas do download-normas / legado → campos do modal CR2:
+
+      '18ª Sessão Ordinária - 16-11-2023'
+        → Tipo=Ordinária  Data=16/11/2023  Número=18ª Sessão Ordinária
+
+      'Sessão Especial - Dia dos Pais - 12-08-2023'
+        → Tipo=Especial   Data=12/08/2023  Número=Sessão Especial - Dia dos Pais
     """
     nome = (nome_pasta or "").strip()
     item = _registro_vazio()
-    m = _RE_PASTA_SESSAO.match(nome)
-    if m:
-        num_raw = (m.group(1) or "").strip()
-        tipo = (m.group(2) or "").strip()
-        d, mo, y = m.group(3), m.group(4), m.group(5)
-        item["tipo"] = tipo
+
+    resto = nome
+    m_data = _RE_DATA_FIM.match(nome)
+    if m_data:
+        resto = (m_data.group(1) or "").strip()
+        d, mo, y = m_data.group(2), m_data.group(3), m_data.group(4)
         item["data"] = "{:02d}/{:02d}/{}".format(int(d), int(mo), y)
-        if num_raw:
-            item["numero"] = "{} Sessão {}".format(num_raw, tipo).strip()
-        else:
-            item["numero"] = "Sessão {}".format(tipo).strip()
+
+    num_raw = ""
+    m_num = re.match(r"^(\d+\s*[ªºa°]?)\s+(.+)$", resto, re.I)
+    if m_num:
+        num_raw = m_num.group(1).strip()
+        resto = m_num.group(2).strip()
+
+    tipo_select, evento = _classificar_tipo_bruto(resto)
+    if not tipo_select:
+        item["tipo"] = nome
+        item["numero"] = nome
         return item
-    # Fallback: usa o nome da pasta como numero/tipo
-    item["tipo"] = nome
-    item["numero"] = nome
+
+    item["tipo"] = tipo_select
+    item["numero"] = _formatar_numero(num_raw, tipo_select, evento)
     return item
 
 
@@ -350,34 +499,362 @@ def arquivos_da_pasta_sessao(pasta: Path) -> dict:
     }
 
 
+def _eh_pasta_ano(nome: str) -> bool:
+    return bool(re.fullmatch(r"\d{4}", (nome or "").strip()))
+
+
+def _tipo_portal_valido(tipo: str) -> bool:
+    t = _normalizar_tipo_select(tipo)
+    if not t:
+        return False
+    return t in _TIPOS_PORTAL_SELECT or any(
+        t == nome or rx.match(t) for nome, rx in _TIPOS_PUB
+    )
+
+def _eh_pasta_declaracoes(nome: str) -> bool:
+    return normalizar(nome) in ("declaracoes", "declaracao")
+
+
+def _pastas_sessao_recursivas(root: Path) -> list[Path]:
+    """
+    Aceita:
+      pasta/18ª Sessão Ordinária - 16-11-2023/
+      pasta/2023/18ª Sessão Ordinária - 16-11-2023/
+    Ignora pastas só de ano (2019) mesmo com PDF solto.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    achadas = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        p = Path(dirpath)
+        if _eh_pasta_declaracoes(p.name) or _eh_pasta_ano(p.name):
+            # ano: continua descendo nas subpastas de sessão
+            if _eh_pasta_ano(p.name):
+                continue
+            dirnames.clear()
+            continue
+        pdfs = [f for f in filenames if f.lower().endswith(".pdf")]
+        if not pdfs:
+            continue
+        meta = parse_nome_pasta_sessao(p.name)
+        if not _tipo_portal_valido(meta.get("tipo") or ""):
+            continue
+        if meta.get("data") or meta.get("numero"):
+            achadas.append(p)
+            dirnames.clear()
+    achadas.sort(key=lambda x: x.as_posix().lower())
+    return achadas
+
+
+def _chave_sessao(item: dict) -> str:
+    return "|".join(
+        [
+            normalizar(item.get("tipo") or ""),
+            normalizar(item.get("numero") or ""),
+            (item.get("data") or "").strip(),
+        ]
+    )
+
+
+def _itens_pdfs_soltos(root: Path, ja_cobertos: set[str], itens_existentes: list | None = None) -> list:
+    """
+    PDFs soltos em pastas de ano → preenche Pauta/Ata faltantes nas sessões
+    já detectadas, ou cria linha nova.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    por_chave: dict[str, dict] = {}
+    if itens_existentes:
+        for it in itens_existentes:
+            por_chave[_chave_sessao(it)] = it
+
+    novos: list = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        p = Path(dirpath)
+        if _eh_pasta_declaracoes(p.name):
+            continue
+        if not (_eh_pasta_ano(p.name) or p.resolve() == root.resolve()):
+            continue
+        for f in filenames:
+            if not f.lower().endswith(".pdf"):
+                continue
+            pdf = p / f
+            meta = parse_nome_pasta_sessao(pdf.stem)
+            if not _tipo_portal_valido(meta.get("tipo") or ""):
+                continue
+            if not (meta.get("data") or meta.get("numero")):
+                continue
+            item = _registro_vazio()
+            item.update(meta)
+            item["nao_houve_publicacoes"] = ""
+            item["pasta"] = str(p)
+            n = normalizar(pdf.stem)
+            if re.search(r"(^|[^a-z])ata([^a-z]|$)", n) and "pauta" not in n:
+                slot = "ata"
+            elif "presen" in n:
+                slot = "presenca"
+            elif "votac" in n:
+                slot = "votacoes_arquivo"
+            else:
+                slot = "pauta"
+            item[slot] = str(pdf)
+            chave = _chave_sessao(item)
+            if chave in por_chave:
+                dest = por_chave[chave]
+                if not dest.get(slot):
+                    dest[slot] = str(pdf)
+                continue
+            por_chave[chave] = item
+            novos.append(item)
+    return novos
+
+
+def _itens_declaracoes(root: Path) -> list:
+    """PDFs em .../Declarações/ → tipo 'Declaração: não houve sessão'."""
+    itens = []
+    root = Path(root)
+    if not root.is_dir():
+        return itens
+    for dirpath, _dirnames, filenames in os.walk(root):
+        p = Path(dirpath)
+        if not _eh_pasta_declaracoes(p.name):
+            continue
+        for f in sorted(filenames):
+            if not f.lower().endswith(".pdf"):
+                continue
+            pdf = p / f
+            item = _registro_vazio()
+            meta = parse_nome_pasta_sessao(pdf.stem)
+            item["data"] = meta.get("data") or ""
+            item["tipo"] = _TIPO_DECLARACAO
+            item["numero"] = meta.get("numero") or pdf.stem
+            if "declar" in normalizar(item["numero"]):
+                item["numero"] = pdf.stem
+            item["nao_houve_publicacoes"] = "sim"
+            item["pasta"] = str(p)
+            item["pauta"] = str(pdf)
+            itens.append(item)
+    return itens
+
+
 def ler_pasta_sessoes(pasta_base) -> list:
-    """
-    Cada subpasta = 1 sessao.
-    Esperado: Pauta.pdf, Ata.pdf, eventualmente Presenca/Votacoes.
-    """
+    """Varre pastas de sessão (com ou sem ano) + PDFs soltos + Declarações."""
     root = Path(pasta_base)
     if not root.is_dir():
         print("[AVISO] Pasta de sessoes nao encontrada: {}".format(root))
         return []
     itens = []
-    subdirs = sorted(
-        [p for p in root.iterdir() if p.is_dir()],
-        key=lambda p: p.name.lower(),
-    )
-    for i, sub in enumerate(subdirs, start=1):
+    cobertos: set[str] = set()
+    for i, sub in enumerate(_pastas_sessao_recursivas(root), start=1):
         item = parse_nome_pasta_sessao(sub.name)
+        if not _tipo_portal_valido(item.get("tipo") or ""):
+            print("[AVISO] Ignorando pasta com tipo invalido: {}".format(sub.name))
+            continue
         arquivos = arquivos_da_pasta_sessao(sub)
         item.update(arquivos)
+        item["nao_houve_publicacoes"] = ""
         item["linha"] = i
         item["pasta"] = str(sub)
-        if not item.get("data") and not item.get("tipo"):
+        if not item.get("data") and not item.get("numero"):
             print("[AVISO] Ignorando pasta sem meta: {}".format(sub.name))
             continue
         if not any(arquivos.values()):
             print("[AVISO] Pasta sem PDF (Pauta/Ata/...): {}".format(sub.name))
         itens.append(item)
+        cobertos.add(_chave_sessao(item))
+
+    for item in _itens_pdfs_soltos(root, cobertos, itens_existentes=itens):
+        item["linha"] = len(itens) + 1
+        itens.append(item)
+        cobertos.add(_chave_sessao(item))
+
+    for item in _itens_declaracoes(root):
+        item["linha"] = len(itens) + 1
+        itens.append(item)
+
+    # Preferir sessões com data; depois as que têm Pauta+Ata (melhor p/ modo teste)
+    def _sort_key(it):
+        d = it.get("data") or ""
+        m = re.match(r"(\d{2})/(\d{2})/(\d{4})", d)
+        if m:
+            data_k = "0{2}{1}{0}".format(m.group(1), m.group(2), m.group(3))
+        else:
+            data_k = "9" + "99999999"
+        tem_ambos = 0 if (it.get("pauta") and it.get("ata")) else 1
+        return (tem_ambos, data_k, normalizar(it.get("numero") or ""))
+
+    itens.sort(key=_sort_key)
+    for i, it in enumerate(itens, start=1):
+        it["linha"] = i
+
     print("[INFO] {} sessao(oes) na pasta {}".format(len(itens), root))
     return itens
+
+
+def salvar_planilha_sessoes(itens: list, pasta: str | Path) -> Path | None:
+    """Grava Sessoes.csv + Sessoes.xlsx com os campos do modal CR2."""
+    if not itens:
+        return None
+    pasta = Path(pasta)
+    pasta.mkdir(parents=True, exist_ok=True)
+    csv_path = pasta / "Sessoes.csv"
+    xlsx_path = pasta / "Sessoes.xlsx"
+
+    rows = []
+    for it in itens:
+        rows.append(
+            [
+                it.get("tipo", ""),
+                it.get("data", ""),
+                it.get("numero", ""),
+                it.get("pauta", ""),
+                it.get("ata", ""),
+                it.get("presenca", ""),
+                it.get("votacoes_arquivo", ""),
+                it.get("votacoes_link", ""),
+                it.get("nao_houve_publicacoes", ""),
+            ]
+        )
+
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as fh:
+        w = csv.writer(fh, delimiter=";")
+        w.writerow(PLANILHA_COLS_UI)
+        w.writerows(rows)
+
+    try:
+        from openpyxl import Workbook
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sessões"
+        ws.append(list(PLANILHA_COLS_UI))
+        for row in rows:
+            ws.append(row)
+        for col in ws.columns:
+            maxlen = 14
+            letter = col[0].column_letter
+            for cell in col:
+                maxlen = max(maxlen, min(56, len(str(cell.value or ""))))
+            ws.column_dimensions[letter].width = maxlen + 2
+        wb.save(xlsx_path)
+        print("[INFO] Planilha: {} ({} linhas)".format(xlsx_path, len(rows)))
+        return xlsx_path
+    except Exception:
+        print("[INFO] Planilha CSV: {} ({} linhas)".format(csv_path, len(rows)))
+        return csv_path
+
+
+def gerar_planilha_da_pasta(pasta_base) -> Path | None:
+    """
+    Varre pasta e grava Sessoes.xlsx dentro da pasta de Pautas/Atas
+    (não só na raiz), para a publicação ler no mesmo caminho.
+    """
+    base = Path(pasta_base)
+    itens = ler_pasta_sessoes(base)
+    if not itens:
+        return None
+
+    por_destino: dict[Path, list] = {}
+    for it in itens:
+        pasta = Path(it.get("pasta") or "")
+        dest = base
+        try:
+            rel = pasta.relative_to(base)
+            if rel.parts:
+                topo = rel.parts[0]
+                # Ano ou Declarações direto sob a base → planilha na base
+                if re.fullmatch(r"\d{4}", topo) or _eh_pasta_declaracoes(topo):
+                    dest = base
+                else:
+                    # Ex.: .../Pautas e Atas.../2023/18ª... → planilha em Pautas e Atas...
+                    dest = base / topo
+        except ValueError:
+            dest = base
+        por_destino.setdefault(dest, []).append(it)
+
+    saida = None
+    for dest, grupo in sorted(por_destino.items(), key=lambda kv: str(kv[0]).lower()):
+        out = salvar_planilha_sessoes(grupo, dest)
+        if out and saida is None:
+            saida = out
+    return saida
+
+
+def _item_de_mapa(mapa: dict, linha: int) -> dict | None:
+    item = _registro_vazio()
+    aliases = {
+        "tipo": ("tipo",),
+        "data": ("data", "data da sessao"),
+        "numero": ("numero", "nº", "n", "sessao"),
+        "pauta": ("pauta",),
+        "ata": ("ata",),
+        "presenca": ("presenca", "lista de presenca", "lista_presenca"),
+        "votacoes_arquivo": (
+            "votacoes_arquivo",
+            "votacoes nominais arquivo",
+            "votacoes",
+        ),
+        "votacoes_link": (
+            "votacoes_link",
+            "votacoes nominais link",
+            "link",
+        ),
+        "nao_houve_publicacoes": (
+            "nao houve publicacoes",
+            "nao_houve_publicacoes",
+            "sem publicacoes",
+        ),
+    }
+    for dest, keys in aliases.items():
+        for k in keys:
+            if k in mapa and mapa[k] is not None and str(mapa[k]).strip():
+                item[dest] = str(mapa[k]).strip()
+                break
+    if item.get("tipo"):
+        item["tipo"] = _normalizar_tipo_select(item["tipo"])
+    if not (item["tipo"] or item["data"] or item["numero"]):
+        return None
+    if item.get("tipo") and not _tipo_portal_valido(item["tipo"]):
+        return None
+    item["linha"] = linha
+    return item
+
+
+def ler_planilha_fila(caminho) -> list:
+    """Lê Sessoes.xlsx ou .csv gerada na extração."""
+    path = Path(caminho)
+    if not path.is_file():
+        return []
+    if path.suffix.lower() in (".xlsx", ".xlsm"):
+        try:
+            from openpyxl import load_workbook
+
+            wb = load_workbook(path, read_only=True, data_only=True)
+            ws = wb.active
+            rows = list(ws.iter_rows(values_only=True))
+            wb.close()
+            if not rows:
+                return []
+            headers = [normalizar(str(h or "")) for h in rows[0]]
+            itens = []
+            for i, row in enumerate(rows[1:], start=2):
+                if not row or all(c is None or str(c).strip() == "" for c in row):
+                    continue
+                mapa = {
+                    headers[j]: ("" if row[j] is None else str(row[j]).strip())
+                    for j in range(min(len(headers), len(row)))
+                }
+                item = _item_de_mapa(mapa, i)
+                if item:
+                    itens.append(item)
+            print("[INFO] {} sessao(oes) na planilha {}".format(len(itens), path))
+            return itens
+        except Exception as e:
+            print("[AVISO] Falha ao ler xlsx ({}): {}".format(path, str(e)[:80]))
+            return []
+    return ler_csv_fila(path)
 
 
 def ler_csv_fila(caminho):
@@ -394,39 +871,21 @@ def ler_csv_fila(caminho):
         for i, row in enumerate(reader, start=2):
             if not row:
                 continue
-            item = _registro_vazio()
             mapa = {normalizar(k): v for k, v in row.items() if k}
-            aliases = {
-                "tipo": ("tipo",),
-                "data": ("data", "data da sessao"),
-                "numero": ("numero", "nº", "n", "sessao"),
-                "pauta": ("pauta",),
-                "ata": ("ata",),
-                "presenca": ("presenca", "lista de presenca", "lista_presenca"),
-                "votacoes_arquivo": (
-                    "votacoes_arquivo",
-                    "votacoes nominais arquivo",
-                    "votacoes",
-                ),
-                "votacoes_link": (
-                    "votacoes_link",
-                    "votacoes nominais link",
-                    "link",
-                ),
-            }
-            for dest, keys in aliases.items():
-                for k in keys:
-                    if k in mapa and mapa[k] is not None:
-                        item[dest] = str(mapa[k]).strip()
-                        break
-            if not (item["tipo"] or item["data"] or item["numero"]):
-                continue
-            item["linha"] = i
-            itens.append(item)
+            item = _item_de_mapa(mapa, i)
+            if item:
+                itens.append(item)
+    print("[INFO] {} sessao(oes) no CSV {}".format(len(itens), path))
     return itens
 
 
 def montar_fila():
+    """
+    Prioridade (ritmo RGF: lote → publicar um a um via Criar Publicação):
+      1) REGISTRO_UNICO
+      2) Planilha Sessoes.xlsx/csv
+      3) Varredura de pastas (+ regenera planilha)
+    """
     if isinstance(REGISTRO_UNICO, dict) and any(
         str(REGISTRO_UNICO.get(k) or "").strip() for k in ("tipo", "data", "numero")
     ):
@@ -434,15 +893,36 @@ def montar_fila():
         for k in CSV_COLS:
             item[k] = str(REGISTRO_UNICO.get(k) or "").strip()
         item["linha"] = 1
+        print("[INFO] Fila: 1 sessao (registro unico).")
         return [item]
 
     pasta = Path(PASTA_SESSOES) if PASTA_SESSOES else None
+
+    # Sempre regenera a planilha a partir das pastas (fonte da verdade)
     if pasta and pasta.is_dir():
         itens = ler_pasta_sessoes(pasta)
         if itens:
+            salvar_planilha_sessoes(itens, pasta)
             return itens
 
-    return ler_csv_fila(CSV_FILA)
+    candidatos = []
+    if CSV_FILA:
+        candidatos.append(Path(CSV_FILA))
+    if pasta and pasta.is_dir():
+        candidatos.extend(
+            [
+                pasta / "Sessoes.xlsx",
+                pasta / "Sessoes.csv",
+                pasta / "fila_sessoes.csv",
+            ]
+        )
+
+    for cand in candidatos:
+        if cand and cand.is_file():
+            itens = ler_planilha_fila(cand)
+            if itens:
+                return itens
+    return []
 
 
 # ---------------------------------------------------------------------
@@ -659,20 +1139,20 @@ def _loc_modal_titulo(page):
 
 
 def abrir_modal(page):
-    btn = page.locator("button:has-text('Criar Publicação')").first
-    btn.wait_for(state="visible", timeout=15000)
-    btn.scroll_into_view_if_needed()
-    time.sleep(0.08)
-    btn.click()
-    time.sleep(0.3)
+    """Mesmo ritmo do RGF: botão Criar Publicação → modal Cadastrar Sessão."""
+    criar_btn = page.locator("button:has-text('Criar Publicação')").first
+    criar_btn.wait_for(state="visible", timeout=15000)
+    criar_btn.scroll_into_view_if_needed()
+    time.sleep(0.06)
+    criar_btn.click()
+    time.sleep(0.26)
     try:
         _loc_modal_titulo(page).wait_for(state="visible", timeout=10000)
     except Exception:
-        # Fallback: alguns temas so mostram "Criar Publicação" no botao / titulo generico
         page.locator("button:has-text('Publicar')").first.wait_for(
             state="visible", timeout=10000
         )
-    time.sleep(0.15)
+    time.sleep(0.11)
 
 
 def _modal_bubble_sessao(page):
@@ -698,7 +1178,10 @@ def _modal_bubble_sessao(page):
                         if (!node || !node.querySelectorAll) continue;
                         var txt = (node.innerText || '').slice(0, 6000);
                         var files = node.querySelectorAll('input[type=file]');
-                        var temSessao = /Sess[aã]o/i.test(txt) || /Pauta/i.test(txt);
+                        var temSessao =
+                            /Cadastrar\s+Sess/i.test(txt) ||
+                            /Sess[aã]o/i.test(txt) ||
+                            /Pauta/i.test(txt);
                         if (!temSessao) continue;
                         if (!files.length) continue;
                         if (txt.indexOf('Publicar') < 0) continue;
@@ -736,79 +1219,232 @@ def fechar_modal(page):
         if root is not None:
             root.locator("button:has-text('Fechar')").first.click(timeout=4000)
             time.sleep(0.25)
-            return
     except Exception:
-        pass
+        try:
+            page.keyboard.press("Escape")
+            time.sleep(0.22)
+        except Exception:
+            pass
     try:
-        page.keyboard.press("Escape")
-        time.sleep(0.22)
+        _loc_modal_titulo(page).wait_for(state="hidden", timeout=8000)
     except Exception:
         pass
+
+
+def _truthy_flag(valor) -> bool:
+    v = normalizar(str(valor or ""))
+    return v in ("1", "sim", "s", "true", "yes", "x", "nao houve", "nao_houve")
+
+
+def _marcar_nao_houve_publicacoes(page, modal_root, marcar: bool):
+    if not marcar:
+        return
+    scope = modal_root if modal_root is not None else page
+    for lb in LABELS_NAO_HOUVE:
+        try:
+            loc = scope.get_by_label(lb, exact=False).first
+            loc.wait_for(state="visible", timeout=2500)
+            if not loc.is_checked():
+                loc.check(force=True)
+            print("    Checkbox: Não houve publicações")
+            return
+        except Exception:
+            pass
+        try:
+            loc = scope.get_by_text(lb, exact=False).first
+            loc.click(timeout=2500)
+            print("    Checkbox (texto): Não houve publicações")
+            return
+        except Exception:
+            continue
+    print("    [AVISO] Checkbox 'Não houve publicações' nao encontrado.")
+
+
+def _aguardar_confirmacao_upload(page, modal_root, path: Path):
+    nome_pdf_lower = path.name.lower()
+    print("    Aguardando confirmacao do upload ({})...".format(path.name))
+    for _ in range(MAX_TENTATIVAS_POLL_UPLOAD):
+        try:
+            if modal_root is not None:
+                areas = modal_root.locator(".file-input-text")
+            else:
+                areas = page.locator(".file-input-text")
+            n = areas.count()
+            for i in range(n):
+                txt = areas.nth(i).inner_text().strip()
+                tl = txt.lower()
+                if nome_pdf_lower and nome_pdf_lower in tl:
+                    print("    Upload confirmado (arquivo na UI).")
+                    time.sleep(PAUSA_APOS_CONFIRMAR_UPLOAD)
+                    return
+                if len(txt) > 5 and "clique aqui" not in tl and path.stem.lower()[:20] in tl:
+                    print("    Upload confirmado: '{}'".format(txt[:50]))
+                    time.sleep(PAUSA_APOS_CONFIRMAR_UPLOAD)
+                    return
+        except Exception:
+            pass
+        time.sleep(PAUSA_POLL_UPLOAD_UI)
+    time.sleep(PAUSA_APOS_CONFIRMAR_UPLOAD)
 
 
 def _preencher_tipo(page, modal_root, tipo_ui):
     if not (tipo_ui or "").strip():
         raise ValueError("Tipo e obrigatorio.")
-    tipo_ui = tipo_ui.strip()
+    # Preferir rótulo EXATO do select do portal
+    tipo_ui = _normalizar_tipo_select(tipo_ui.strip())
+    candidatos = [tipo_ui]
+    # Legado / fallback
+    if tipo_ui not in _TIPOS_SEM_SESSAO and tipo_ui != _TIPO_DECLARACAO:
+        if not tipo_ui.lower().startswith("sess"):
+            candidatos.append("Sessão {}".format(tipo_ui))
+    m = re.match(r"^sess[aã]o\s+(.+)$", tipo_ui, re.I)
+    if m:
+        candidatos.insert(0, m.group(1).strip())
+
     scope = modal_root if modal_root is not None else page
-    if modal_root is not None:
-        try:
-            selects = modal_root.locator("select")
-            for i in range(selects.count()):
-                sel = selects.nth(i)
-                try:
-                    sel.select_option(label=tipo_ui, timeout=3500)
-                    print("    Tipo (select): {}".format(tipo_ui))
-                    return
-                except Exception:
+    for cand in candidatos:
+        if modal_root is not None:
+            try:
+                selects = modal_root.locator("select")
+                for i in range(selects.count()):
+                    sel = selects.nth(i)
                     try:
-                        sel.select_option(
-                            label=re.compile(re.escape(tipo_ui), re.I), timeout=3000
-                        )
-                        print("    Tipo (select regex): {}".format(tipo_ui))
+                        sel.select_option(label=cand, timeout=3500)
+                        print("    Tipo (select): {}".format(cand))
                         return
                     except Exception:
-                        continue
-        except Exception:
-            pass
-    for lb in LABELS_TIPO:
-        try:
-            loc = scope.get_by_label(lb, exact=False).first
-            loc.wait_for(state="visible", timeout=4000)
-            tag = loc.evaluate("el => el.tagName")
-            if tag == "SELECT":
-                loc.select_option(label=tipo_ui, timeout=4000)
-            else:
-                loc.click()
-                time.sleep(0.28)
-                page.get_by_text(tipo_ui, exact=False).last.click(timeout=5000)
-            print("    Tipo: {}".format(tipo_ui))
-            return
-        except Exception:
-            continue
-    raise RuntimeError("Campo Tipo nao encontrado (valor={!r})".format(tipo_ui))
+                        try:
+                            sel.select_option(
+                                label=re.compile(
+                                    r"^\s*{}\s*$".format(re.escape(cand)), re.I
+                                ),
+                                timeout=3000,
+                            )
+                            print("    Tipo (select regex): {}".format(cand))
+                            return
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+        for lb in LABELS_TIPO:
+            try:
+                loc = scope.get_by_label(lb, exact=False).first
+                loc.wait_for(state="visible", timeout=4000)
+                tag = loc.evaluate("el => el.tagName")
+                if tag == "SELECT":
+                    loc.select_option(label=cand, timeout=4000)
+                else:
+                    loc.click()
+                    time.sleep(0.28)
+                    page.get_by_text(cand, exact=True).last.click(timeout=5000)
+                print("    Tipo: {}".format(cand))
+                return
+            except Exception:
+                continue
+    raise RuntimeError(
+        "Campo Tipo nao encontrado (valor={!r}). Opcoes do portal: {}".format(
+            tipo_ui, ", ".join(_TIPOS_PORTAL_SELECT)
+        )
+    )
 
 
 def _preencher_data(page, modal_root, data_ui):
     if not (data_ui or "").strip():
         raise ValueError("Data e obrigatoria.")
     data_ui = data_ui.strip()
-    scope = modal_root if modal_root is not None else page
-    if _fill_by_label_candidates(scope, LABELS_DATA, data_ui, page):
-        print("    Data: {}".format(data_ui))
-        return
-    for ph in (
-        re.compile(r"01/01/2024|dd/mm|data", re.I),
-        re.compile(r"\d{2}/\d{2}/\d{4}"),
-    ):
+    # Aceita DD-MM-YYYY da pasta → DD/MM/YYYY do portal
+    m = re.match(r"^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$", data_ui)
+    if m:
+        data_ui = "{:02d}/{:02d}/{}".format(int(m.group(1)), int(m.group(2)), m.group(3))
+
+    scopes = []
+    if modal_root is not None:
+        scopes.append(modal_root)
+    scopes.append(page)
+
+    css_data = (
+        "input.bubble-element.Input[placeholder*='01/01'], "
+        "input.bubble-element.Input[placeholder*='01/01/2024'], "
+        "input[type='input'][placeholder*='01/01'], "
+        "input[placeholder*='01/01/2024'], "
+        "input[placeholder*='Ex.: 01'], "
+        "input[placeholder*='dd/mm'], "
+        "input[placeholder*='DD/MM']"
+    )
+
+    for scope in scopes:
+        # 1) CSS Bubble (type=input / bubble-element) — mesmo padrão do RGF
         try:
-            loc = scope.get_by_placeholder(ph).first
-            loc.wait_for(state="visible", timeout=2500)
+            loc = scope.locator(css_data).first
+            loc.wait_for(state="visible", timeout=4000)
             preencher_campo(page, loc, data_ui)
-            print("    Data (placeholder): {}".format(data_ui))
+            print("    Data (CSS placeholder): {}".format(data_ui))
             return
         except Exception:
-            continue
+            pass
+
+        # 2) get_by_placeholder
+        for ph in (
+            re.compile(r"01/01/2024", re.I),
+            re.compile(r"ex\.?\s*:\s*01", re.I),
+            re.compile(r"\d{2}/\d{2}/\d{4}"),
+            re.compile(r"dd\s*/\s*mm", re.I),
+        ):
+            try:
+                loc = scope.get_by_placeholder(ph).first
+                loc.wait_for(state="visible", timeout=2500)
+                preencher_campo(page, loc, data_ui)
+                print("    Data (placeholder): {}".format(data_ui))
+                return
+            except Exception:
+                continue
+
+        # 3) label
+        if _fill_by_label_candidates(scope, LABELS_DATA, data_ui, page):
+            print("    Data (label): {}".format(data_ui))
+            return
+
+        # 4) texto "Data" → próximo input
+        try:
+            loc = scope.locator(
+                "xpath=(//*[contains(translate(normalize-space(.),"
+                "'ÁÀÃÂáàãâ','AAAAaaaa'),'Data') "
+                "or contains(translate(normalize-space(.),"
+                "'ÁÀÃÂáàãâ','AAAAaaaa'),'DATA')]"
+                "[not(self::script)][not(self::style)])[1]"
+                "/following::input[not(@type='file') and not(@type='hidden')"
+                " and not(@type='checkbox') and not(@type='radio')][1]"
+            ).first
+            loc.wait_for(state="visible", timeout=3000)
+            preencher_campo(page, loc, data_ui)
+            print("    Data (xpath apos rotulo): {}".format(data_ui))
+            return
+        except Exception:
+            pass
+
+        # 5) 1º input de texto do modal cujo placeholder parece data
+        try:
+            inputs = scope.locator(
+                "input.bubble-element.Input, input[type='input'], "
+                "input[type='text'], input:not([type])"
+            )
+            n = min(inputs.count(), 12)
+            for i in range(n):
+                inp = inputs.nth(i)
+                try:
+                    ph = (inp.get_attribute("placeholder") or "").lower()
+                except Exception:
+                    continue
+                if "01/01" in ph or "/202" in ph or "dd/mm" in ph or (
+                    "ex" in ph and "/" in ph
+                ):
+                    preencher_campo(page, inp, data_ui)
+                    print("    Data (scan input): {}".format(data_ui))
+                    return
+        except Exception:
+            pass
+
+    salvar_screenshot(page, "ERRO_CAMPO_DATA")
     raise RuntimeError("Campo Data nao encontrado")
 
 
@@ -816,39 +1452,133 @@ def _preencher_numero(page, modal_root, numero_ui):
     if not (numero_ui or "").strip():
         raise ValueError("Numero e obrigatorio.")
     numero_ui = numero_ui.strip()
-    scope = modal_root if modal_root is not None else page
-    if _fill_by_label_candidates(scope, LABELS_NUMERO, numero_ui, page):
-        print("    Numero: {}".format(numero_ui))
-        return
-    for ph in (
-        re.compile(r"1[ªa]\s*Sess", re.I),
-        re.compile(r"Sess[aã]o\s+Ordin", re.I),
-        re.compile(r"Ex\.:", re.I),
-    ):
+    scopes = []
+    if modal_root is not None:
+        scopes.append(modal_root)
+    scopes.append(page)
+
+    css_num = (
+        "input.bubble-element.Input[placeholder*='Sess'], "
+        "input.bubble-element.Input[placeholder*='1ª'], "
+        "input[type='input'][placeholder*='Sess'], "
+        "input[placeholder*='1ª Sessão'], "
+        "input[placeholder*='1a Sess'], "
+        "input[placeholder*='Ordinária']"
+    )
+
+    for scope in scopes:
         try:
-            loc = scope.get_by_placeholder(ph).first
-            loc.wait_for(state="visible", timeout=2500)
+            loc = scope.locator(css_num).first
+            loc.wait_for(state="visible", timeout=4000)
             preencher_campo(page, loc, numero_ui)
-            print("    Numero (placeholder): {}".format(numero_ui))
+            print("    Numero (CSS placeholder): {}".format(numero_ui))
             return
         except Exception:
-            continue
+            pass
+
+        if _fill_by_label_candidates(scope, LABELS_NUMERO, numero_ui, page):
+            print("    Numero (label): {}".format(numero_ui))
+            return
+
+        for ph in (
+            re.compile(r"1[ªa]\s*Sess", re.I),
+            re.compile(r"Sess[aã]o\s+Ordin", re.I),
+            re.compile(r"Ex\.:\s*1", re.I),
+        ):
+            try:
+                loc = scope.get_by_placeholder(ph).first
+                loc.wait_for(state="visible", timeout=2500)
+                preencher_campo(page, loc, numero_ui)
+                print("    Numero (placeholder): {}".format(numero_ui))
+                return
+            except Exception:
+                continue
+
+        try:
+            loc = scope.locator(
+                "xpath=(//*[contains(translate(normalize-space(.),"
+                "'Úú','Uu'),'Numero') or contains(normalize-space(.),'Número')"
+                " or contains(normalize-space(.),'Nº')])[1]"
+                "/following::input[not(@type='file') and not(@type='hidden')"
+                " and not(@type='checkbox')][1]"
+            ).first
+            loc.wait_for(state="visible", timeout=3000)
+            preencher_campo(page, loc, numero_ui)
+            print("    Numero (xpath): {}".format(numero_ui))
+            return
+        except Exception:
+            pass
+
+    salvar_screenshot(page, "ERRO_CAMPO_NUMERO")
     raise RuntimeError("Campo Numero nao encontrado")
 
 
-def _revelar_inputs_file(page):
+def _revelar_input_file(page, alvo) -> None:
+    """Revela só o input que vamos usar (não empilha todos em cima do Publicar)."""
+    try:
+        if hasattr(alvo, "evaluate"):
+            alvo.evaluate(
+                """
+                (el) => {
+                    if (!el || el.tagName !== 'INPUT') return;
+                    if (!el.getAttribute('data-cr2-file-style')) {
+                        el.setAttribute('data-cr2-file-style', JSON.stringify({
+                            display: el.style.display,
+                            opacity: el.style.opacity,
+                            visibility: el.style.visibility,
+                            position: el.style.position,
+                            top: el.style.top,
+                            left: el.style.left,
+                            zIndex: el.style.zIndex
+                        }));
+                    }
+                    el.style.display = 'block';
+                    el.style.opacity = '0.01';
+                    el.style.visibility = 'visible';
+                    el.style.position = 'fixed';
+                    el.style.top = '4px';
+                    el.style.left = '4px';
+                    el.style.width = '2px';
+                    el.style.height = '2px';
+                    el.style.zIndex = '1';
+                }
+                """
+            )
+    except Exception:
+        pass
+
+
+def _restaurar_inputs_file(page) -> None:
+    """Remove overlays de file input para o clique em Publicar não cair neles."""
     try:
         page.evaluate(
             """
             () => {
                 document.querySelectorAll('input[type=file]').forEach(function (el) {
-                    el.style.display = 'block';
-                    el.style.opacity = '1';
-                    el.style.visibility = 'visible';
-                    el.style.position = 'fixed';
-                    el.style.top = '0';
-                    el.style.left = '0';
-                    el.style.zIndex = '99999';
+                    var raw = el.getAttribute('data-cr2-file-style');
+                    if (raw) {
+                        try {
+                            var s = JSON.parse(raw);
+                            el.style.display = s.display || '';
+                            el.style.opacity = s.opacity || '';
+                            el.style.visibility = s.visibility || '';
+                            el.style.position = s.position || '';
+                            el.style.top = s.top || '';
+                            el.style.left = s.left || '';
+                            el.style.zIndex = s.zIndex || '';
+                            el.style.width = '';
+                            el.style.height = '';
+                        } catch (e) {}
+                        el.removeAttribute('data-cr2-file-style');
+                    } else {
+                        el.style.position = '';
+                        el.style.top = '';
+                        el.style.left = '';
+                        el.style.zIndex = '';
+                        el.style.opacity = '';
+                        el.style.width = '';
+                        el.style.height = '';
+                    }
                 });
             }
             """
@@ -857,77 +1587,178 @@ def _revelar_inputs_file(page):
         pass
 
 
-def _input_file_por_rotulo(scope, page, labels):
-    """Localiza input[type=file] associado ao rotulo (label / texto proximo)."""
-    for lb in labels:
-        # 1) get_by_label -> ancestral com file
-        try:
-            loc = scope.get_by_label(lb, exact=False).first
-            loc.wait_for(state="attached", timeout=2500)
-            handle = loc.element_handle(timeout=2000)
-            if handle:
-                file_handle = handle.evaluate_handle(
-                    """
-                    (el) => {
-                        if (el.tagName === 'INPUT' && el.type === 'file') return el;
-                        var near = el.querySelector && el.querySelector('input[type=file]');
-                        if (near) return near;
-                        var p = el.parentElement;
-                        for (var i = 0; i < 8 && p; i++) {
-                            near = p.querySelector('input[type=file]');
-                            if (near) return near;
-                            p = p.parentElement;
-                        }
-                        var n = el.nextElementSibling;
-                        for (var j = 0; j < 10 && n; j++) {
-                            if (n.matches && n.matches('input[type=file]')) return n;
-                            near = n.querySelector && n.querySelector('input[type=file]');
-                            if (near) return near;
-                            n = n.nextElementSibling;
-                        }
-                        return null;
-                    }
-                    """
-                )
-                el = file_handle.as_element() if file_handle else None
-                if el:
-                    return el
-        except Exception:
-            pass
+def _revelar_inputs_file(page):
+    """Legado — preferir _revelar_input_file no alvo específico."""
+    _restaurar_inputs_file(page)
 
-        # 2) XPath pelo texto do rotulo
+
+def _mapear_inputs_file_por_rotulo(page, modal_root) -> dict[str, Any]:
+    """
+    Associa cada input[type=file] do modal ao rótulo (Pauta, Ata, …).
+    Evita o bug de 'Ata' casar com 'Data' via contains().
+    """
+    try:
+        marcados = page.evaluate(
+            """
+            () => {
+                function norm(s) {
+                    return (s || '')
+                        .normalize('NFD')
+                        .replace(/[\\u0300-\\u036f]/g, '')
+                        .toLowerCase()
+                        .replace(/\\s+/g, ' ')
+                        .trim();
+                }
+                function rotuloDe(inp) {
+                    var n = inp;
+                    for (var d = 0; d < 10 && n; d++) {
+                        var txt = norm(n.innerText || n.textContent || '');
+                        if (txt.indexOf('pauta') >= 0 && txt.indexOf('ata') < 0)
+                            return 'pauta';
+                        // 'ata' sozinho — nao confundir com 'data' / 'cadastrar'
+                        if (/(^|[^a-z])ata([^a-z]|$)/.test(txt) &&
+                            txt.indexOf('data') < 0 &&
+                            txt.indexOf('pauta') < 0 &&
+                            txt.indexOf('cadastr') < 0)
+                            return 'ata';
+                        if (txt.indexOf('lista de presenca') >= 0 ||
+                            (txt.indexOf('presenca') >= 0 && txt.indexOf('votac') < 0))
+                            return 'presenca';
+                        if (txt.indexOf('votacoes nominais (arquivo)') >= 0 ||
+                            (txt.indexOf('votac') >= 0 && txt.indexOf('arquivo') >= 0) ||
+                            (txt.indexOf('votacoes nominais') >= 0 &&
+                             txt.indexOf('link') < 0 && txt.length < 80))
+                            return 'votacoes_arquivo';
+                        n = n.parentElement;
+                    }
+                    // texto imediatamente anterior no DOM
+                    var prev = inp.previousElementSibling;
+                    for (var k = 0; k < 6 && prev; k++) {
+                        var t2 = norm(prev.innerText || prev.textContent || '');
+                        if (t2 === 'pauta' || t2.indexOf('pauta') === 0) return 'pauta';
+                        if (t2 === 'ata') return 'ata';
+                        if (t2.indexOf('lista de presenca') >= 0) return 'presenca';
+                        if (t2.indexOf('votacoes nominais') >= 0 && t2.indexOf('link') < 0)
+                            return 'votacoes_arquivo';
+                        prev = prev.previousElementSibling;
+                    }
+                    return '';
+                }
+                var root = document.querySelector('[data-cr2-pub-modal-marker="1"]') || document.body;
+                var files = Array.from(root.querySelectorAll('input[type=file]'));
+                var out = [];
+                files.forEach(function (inp, idx) {
+                    out.push({ idx: idx, key: rotuloDe(inp) });
+                });
+                // Se algum ficou sem key, preenche na ordem Pauta/Ata/Presenca/Votacoes
+                var ordem = ['pauta', 'ata', 'presenca', 'votacoes_arquivo'];
+                var usados = {};
+                out.forEach(function (o) { if (o.key) usados[o.key] = true; });
+                out.forEach(function (o) {
+                    if (o.key) return;
+                    for (var i = 0; i < ordem.length; i++) {
+                        if (!usados[ordem[i]]) {
+                            o.key = ordem[i];
+                            usados[ordem[i]] = true;
+                            break;
+                        }
+                    }
+                });
+                return out;
+            }
+            """
+        )
+    except Exception:
+        marcados = []
+
+    mapa: dict[str, Any] = {}
+    scope = modal_root if modal_root is not None else page
+    files = scope.locator("input[type=file]")
+    for item in marcados or []:
+        key = (item or {}).get("key") or ""
+        idx = (item or {}).get("idx")
+        if not key or idx is None:
+            continue
         try:
-            needle = normalizar(lb)
-            xp = (
-                "xpath=.//*[contains(translate(normalize-space(.),"
-                "'ÁÀÃÂÄáàãâäÉÈÊËéèêëÍÌÎÏíìîïÓÒÕÔÖóòõôöÚÙÛÜúùûüçÇ',"
-                "'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuucC'), '{0}')]"
-                "/following::input[@type='file'][1]"
-            ).format(needle.replace("'", ""))
-            loc = scope.locator(xp).first
+            loc = files.nth(int(idx))
             loc.wait_for(state="attached", timeout=2000)
-            return loc
+            mapa[key] = loc
+        except Exception:
+            continue
+    return mapa
+
+
+def _input_file_por_rotulo(scope, page, labels, mapa_cache: dict | None = None):
+    """Localiza input[type=file] pelo rotulo — preferindo mapa JS (preciso)."""
+    key_alias = {
+        "pauta": "pauta",
+        "ata": "ata",
+        "lista de presenca": "presenca",
+        "lista de presença": "presenca",
+        "presenca": "presenca",
+        "presença": "presenca",
+        "votacoes nominais (arquivo)": "votacoes_arquivo",
+        "votações nominais (arquivo)": "votacoes_arquivo",
+        "votacoes nominais": "votacoes_arquivo",
+        "votações nominais": "votacoes_arquivo",
+    }
+    mapa = mapa_cache if mapa_cache is not None else {}
+    for lb in labels:
+        k = key_alias.get(normalizar(lb))
+        if k and k in mapa:
+            return mapa[k]
+
+    # Fallback: texto EXATO do rotulo (nunca contains 'ata' em 'data')
+    for lb in labels:
+        try:
+            loc = scope.get_by_text(re.compile(r"^\s*{}\s*$".format(re.escape(lb)), re.I)).first
+            loc.wait_for(state="visible", timeout=2000)
+            handle = loc.element_handle(timeout=1500)
+            if not handle:
+                continue
+            file_handle = handle.evaluate_handle(
+                """
+                (el) => {
+                    var p = el.parentElement;
+                    for (var i = 0; i < 10 && p; i++) {
+                        var near = p.querySelector('input[type=file]');
+                        if (near) return near;
+                        p = p.parentElement;
+                    }
+                    var n = el.nextElementSibling;
+                    for (var j = 0; j < 12 && n; j++) {
+                        if (n.matches && n.matches('input[type=file]')) return n;
+                        var q = n.querySelector && n.querySelector('input[type=file]');
+                        if (q) return q;
+                        n = n.nextElementSibling;
+                    }
+                    return null;
+                }
+                """
+            )
+            el = file_handle.as_element() if file_handle else None
+            if el:
+                return el
         except Exception:
             continue
     return None
 
 
-def fazer_upload_por_rotulo(page, modal_root, labels, caminho):
+def fazer_upload_por_rotulo(page, modal_root, labels, caminho, mapa_cache=None):
     path = _caminho_arquivo(caminho)
     if path is None:
-        print("    [INFO] Arquivo omitido ({})".format(labels[0]))
         return False
     scope = modal_root if modal_root is not None else page
-    _revelar_inputs_file(page)
-    time.sleep(0.08)
 
-    alvo = _input_file_por_rotulo(scope, page, labels)
+    if mapa_cache is None:
+        mapa_cache = _mapear_inputs_file_por_rotulo(page, modal_root)
+
+    alvo = _input_file_por_rotulo(scope, page, labels, mapa_cache=mapa_cache)
     if alvo is None:
-        # Fallback por indice: ordem Pauta, Ata, Presenca, Votacoes
         ordem = [u[0] for u in UPLOADS]
         key = None
         for k, lbs in UPLOADS:
-            if tuple(lbs) == tuple(labels) or labels[0] in lbs:
+            if labels[0] in lbs or any(normalizar(labels[0]) == normalizar(x) for x in lbs):
                 key = k
                 break
         idx = ordem.index(key) if key in ordem else -1
@@ -935,6 +1766,7 @@ def fazer_upload_por_rotulo(page, modal_root, labels, caminho):
             try:
                 alvo = scope.locator("input[type=file]").nth(idx)
                 alvo.wait_for(state="attached", timeout=3000)
+                print("    Upload '{}' via indice {}".format(labels[0], idx))
             except Exception:
                 alvo = None
 
@@ -943,18 +1775,22 @@ def fazer_upload_por_rotulo(page, modal_root, labels, caminho):
         return False
 
     try:
+        _revelar_input_file(page, alvo)
+        time.sleep(0.05)
         alvo.set_input_files(str(path))
         time.sleep(PAUSA_APOS_ANEXAR)
         print("    Upload {}: {}".format(labels[0], path.name))
+        _aguardar_confirmacao_upload(page, modal_root, path)
+        _restaurar_inputs_file(page)
         return True
     except Exception as e:
+        _restaurar_inputs_file(page)
         print("    [Upload] Falhou {}: {}".format(labels[0], str(e)[:80]))
         return False
 
 
 def _preencher_link_votacoes(page, modal_root, link):
     if not (link or "").strip():
-        print("    [INFO] Link de votacoes omitido.")
         return
     link = link.strip()
     scope = modal_root if modal_root is not None else page
@@ -962,9 +1798,9 @@ def _preencher_link_votacoes(page, modal_root, link):
         print("    Link votacoes preenchido.")
         return
     for ph in (
+        re.compile(r"votacaonominal", re.I),
+        re.compile(r"www\.votacao", re.I),
         re.compile(r"https?://", re.I),
-        re.compile(r"link", re.I),
-        re.compile(r"url", re.I),
     ):
         try:
             loc = scope.get_by_placeholder(ph).first
@@ -978,49 +1814,113 @@ def _preencher_link_votacoes(page, modal_root, link):
 
 
 def preencher_modal_sessao(page, item):
+    """
+    Preenche só o que existe na linha:
+      Tipo + Data + Número (obrigatórios)
+      uploads apenas se houver arquivo
+      link só se houver URL
+      checkbox 'Não houve' só se marcado
+    Depois → Publicar (sem ficar batendo em campos vazios).
+    """
     modal_root = _modal_bubble_sessao(page)
+    nao_houve = _truthy_flag(item.get("nao_houve_publicacoes"))
+
     _preencher_tipo(page, modal_root, item.get("tipo", ""))
-    time.sleep(0.08)
+    time.sleep(0.12)
+
+    if nao_houve:
+        _marcar_nao_houve_publicacoes(page, modal_root, True)
+        time.sleep(0.06)
+
     _preencher_data(page, modal_root, item.get("data", ""))
-    time.sleep(0.08)
+    time.sleep(0.06)
     _preencher_numero(page, modal_root, item.get("numero", ""))
+    time.sleep(0.06)
+
+    # Só os anexos que existem nesta sessão
+    uploads_pendentes = []
+    if nao_houve:
+        if _caminho_arquivo(item.get("pauta")):
+            uploads_pendentes.append(("pauta", ("Pauta",), item.get("pauta")))
+    else:
+        for key, labels in UPLOADS:
+            if _caminho_arquivo(item.get(key)):
+                uploads_pendentes.append((key, labels, item.get(key)))
+
+    if uploads_pendentes:
+        mapa_files = _mapear_inputs_file_por_rotulo(page, modal_root)
+        print(
+            "    Anexos a subir: {}".format(
+                ", ".join(u[1][0] for u in uploads_pendentes)
+            )
+        )
+        for _key, labels, caminho in uploads_pendentes:
+            fazer_upload_por_rotulo(
+                page, modal_root, labels, caminho, mapa_cache=mapa_files
+            )
+            time.sleep(0.06)
+    else:
+        print("    Nenhum anexo nesta linha — seguindo para Publicar.")
+
+    if (item.get("votacoes_link") or "").strip():
+        _preencher_link_votacoes(page, modal_root, item.get("votacoes_link", ""))
+
+    # Nao dar Tab (foca Presença/Transmissão) — ir direto ao Publicar
+    _restaurar_inputs_file(page)
     time.sleep(0.1)
-    for key, labels in UPLOADS:
-        fazer_upload_por_rotulo(page, modal_root, labels, item.get(key, ""))
-        time.sleep(0.12)
-    _preencher_link_votacoes(page, modal_root, item.get("votacoes_link", ""))
-    try:
-        page.keyboard.press("Tab")
-    except Exception:
-        pass
-    time.sleep(0.15)
     return modal_root
 
 
 def aguardar_resultado_apos_publicar(page, modal_root):
-    limite = time.monotonic() + TIMEOUT_RESULTADO_PUBLICACAO_S
-    while time.monotonic() < limite:
+    """Igual ao RGF: some o título do modal ou aparece sucesso/erro."""
+    titulo_loc = _loc_modal_titulo(page)
+    fim = time.monotonic() + TIMEOUT_RESULTADO_PUBLICACAO_S
+    ultimo = ""
+    while time.monotonic() < fim:
         try:
-            txt = ""
-            if modal_root is not None:
-                txt = modal_root.inner_text(timeout=1500)
-            else:
-                txt = page.locator("body").inner_text(timeout=1500)
-            if _TEXTO_ERRO_APOS_PUBLICAR_RX.search(txt or ""):
-                raise RuntimeError("Portal indicou erro apos Publicar.")
-            if _TEXTO_SUCESSO_MODAL_RX.search(txt or ""):
-                return
-            # Modal sumiu = sucesso tipico
-            if not page.locator("button:has-text('Publicar')").first.is_visible():
-                return
-        except RuntimeError:
-            raise
+            visivel = titulo_loc.is_visible(timeout=400)
         except Exception:
-            pass
-        time.sleep(0.35)
+            visivel = False
+        if not visivel:
+            time.sleep(0.28)
+            try:
+                if titulo_loc.is_visible(timeout=400):
+                    continue
+            except Exception:
+                pass
+            print("    Modal fechou — assumindo publicacao aceita pelo Bubble.")
+            return
+
+        try:
+            if modal_root is not None:
+                ultimo = modal_root.inner_text(timeout=1500)
+            else:
+                ultimo = page.locator("body").inner_text(timeout=1500)
+        except Exception:
+            ultimo = ""
+
+        if _TEXTO_ERRO_APOS_PUBLICAR_RX.search(ultimo or ""):
+            raise RuntimeError(
+                "Resposta no modal apos Publicar: {}".format(
+                    (ultimo or "").replace("\n", " ").strip()[:260]
+                )
+            )
+        if _TEXTO_SUCESSO_MODAL_RX.search(ultimo or ""):
+            print("    Mensagem de sucesso detectada no modal.")
+            return
+        time.sleep(0.42)
+
+    raise TimeoutError(
+        "Sem confirmacao apos Publicar ({}s). Ultimo texto: {}".format(
+            TIMEOUT_RESULTADO_PUBLICACAO_S,
+            (ultimo or "").replace("\n", " ").strip()[:200],
+        )
+    )
 
 
 def clicar_publicar(page):
+    _restaurar_inputs_file(page)
+    time.sleep(0.12)
     modal_root = _modal_bubble_sessao(page)
     if modal_root is not None:
         btn = modal_root.locator("button:has-text('Publicar')").first
@@ -1040,11 +1940,22 @@ def clicar_publicar(page):
         salvar_screenshot(page, "TIMEOUT_PUBLICAR_SESSAO")
         raise TimeoutError("Botao Publicar desabilitado por demais tempo.")
     aguardar_barra_carregamento_topo(page, etiqueta="antes de Publicar")
+    time.sleep(0.15)
+    # Garante que nenhum input file transparente cobre o botao
+    _restaurar_inputs_file(page)
     try:
-        btn.click(timeout=15000)
+        box = btn.bounding_box()
+        if box:
+            page.mouse.click(
+                box["x"] + box["width"] / 2,
+                box["y"] + box["height"] / 2,
+            )
+        else:
+            btn.click(timeout=15000)
     except Exception:
         btn.click(force=True, timeout=15000)
-    time.sleep(0.2)
+    print("    Clicou em Publicar.")
+    time.sleep(0.25)
     aguardar_resultado_apos_publicar(page, modal_root)
     time.sleep(PAUSA_APOS_CLICAR_PUBLICAR)
 
@@ -1052,19 +1963,26 @@ def clicar_publicar(page):
 def publicar_um(page, item, idx, total):
     _abortar_se_cancelado()
     rotulo = item.get("numero") or item.get("data") or "sessao"
-    print("[{}/{}] {} | {} | {}".format(idx, total, item.get("tipo"), item.get("data"), rotulo))
+    print(
+        "[-> SESSAO] [{}/{}] {} | {} | {}".format(
+            idx, total, item.get("tipo"), item.get("data"), rotulo
+        )
+    )
     abrir_modal(page)
     preencher_modal_sessao(page, item)
     salvar_screenshot(page, "sessao_antes_{}_{}".format(idx, normalizar(rotulo)[:40]))
     clicar_publicar(page)
     salvar_screenshot(page, "sessao_apos_{}_{}".format(idx, normalizar(rotulo)[:40]))
     try:
-        if page.locator("button:has-text('Publicar')").first.is_visible():
+        if _loc_modal_titulo(page).is_visible():
             fechar_modal(page)
     except Exception:
-        fechar_modal(page)
-    print("    Concluido.")
-    time.sleep(0.2)
+        try:
+            fechar_modal(page)
+        except Exception:
+            pass
+    print("    [OK] Concluido.")
+    time.sleep(0.14)
 
 
 # ---------------------------------------------------------------------
@@ -1119,6 +2037,7 @@ def main(argv=None):
     print("  Total: {}".format(len(fila)))
     print("  Pasta: {}".format(PASTA_SESSOES))
     print("  URL: {}".format(URL_PORTAL_SESSAO))
+    print("  Ritmo: Criar Publicação → Cadastrar Sessão → Publicar")
     print("=" * 60)
 
     pw = browser = page = None

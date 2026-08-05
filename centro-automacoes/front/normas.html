@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Download de Normas — Opto Automações</title>
+    <title>Extração Pro — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,42 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home6" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home20" />
+    <style>
+      .entidade-grid {
+        display: grid;
+        gap: 0.65rem;
+        margin-top: 0.5rem;
+      }
+      .catalogo-ref {
+        margin: 0.75rem 0 0;
+      }
+      .catalogo-ref h4 {
+        margin: 0 0 0.45rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--mist, #9aa3b2);
+      }
+      .catalogo-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .catalogo-chips span {
+        font-size: 0.72rem;
+        line-height: 1.3;
+        padding: 0.22rem 0.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 2px;
+        color: rgba(220, 230, 235, 0.75);
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .painel-secao[hidden] {
+        display: none !important;
+      }
+    </style>
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -24,7 +59,7 @@
         <span>Opto Automações</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">API …</span>
+      <span class="api-pill" id="api-pill">Servidor …</span>
     </header>
 
     <main class="page-shell">
@@ -32,21 +67,21 @@
         <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
         <div class="hero-main">
           <header class="hero-copy">
-            <h1>Download de Normas</h1>
+            <h1>Extração Pro</h1>
             <p class="lede">
-              Leis, decretos, portarias e demais publicações. Lê o PDF para
-              nomear no padrão Portaria Nº010/2025, Lei Nº010/2025, LDO, LOA,
-              Decreto.
+              Cole as URLs nos modos abaixo. Pasta e nome saem do título da
+              página. <strong>Diárias</strong> geram planilha;
+              <strong>Pautas/Atas</strong> organizam por sessão
+              (ex. 17ª Sessão Ordinária).
             </p>
           </header>
           <article class="stream is-in">
-            <span class="stream-index">06</span>
-            <h3>Fontes (uma por linha)</h3>
+            <span class="stream-index">03</span>
+            <h3>Modos</h3>
             <ul>
-              <li>Formato: <code>url | modo | pasta</code></li>
-              <li><code>url</code> — link da página no WordPress</li>
-              <li><code>modo</code> — <code>categoria</code>, <code>hub_anos</code> ou <code>pagina</code></li>
-              <li><code>pasta</code> — nome da subpasta local (ex.: Leis, Decretos)</li>
+              <li><strong>Categoria</strong> — lista de posts WordPress</li>
+              <li><strong>Hub de anos</strong> — índice com links por ano</li>
+              <li><strong>Página</strong> — PDFs direto na URL</li>
             </ul>
           </article>
         </div>
@@ -56,14 +91,43 @@
         <header class="section-head"><h2>Painel</h2></header>
         <form class="painel-form" id="form-normas">
           <fieldset class="bloco">
+            <legend>Entidade</legend>
+            <div class="entidade-grid opcoes-modo">
+              <label class="check-row" for="entidade_prefeitura">
+                <input type="radio" name="entidade" id="entidade_prefeitura" value="prefeitura" checked />
+                <span class="check-copy">
+                  <strong>Prefeitura</strong>
+                  <small>Leis e Atos</small>
+                </span>
+              </label>
+              <label class="check-row" for="entidade_camara">
+                <input type="radio" name="entidade" id="entidade_camara" value="camara" />
+                <span class="check-copy">
+                  <strong>Câmara</strong>
+                  <small>Matérias, Normas Jurídicas e Documentos Administrativos</small>
+                </span>
+              </label>
+            </div>
+
+            <div id="ref-prefeitura" class="catalogo-ref">
+              <h4>Tipos reconhecidos (referência)</h4>
+              <div class="catalogo-chips" id="chips-prefeitura"></div>
+            </div>
+            <div id="ref-camara" class="catalogo-ref" hidden>
+              <h4>Tipos reconhecidos (referência)</h4>
+              <div class="catalogo-chips" id="chips-camara"></div>
+            </div>
+          </fieldset>
+
+          <fieldset class="bloco">
             <legend>Site e destino</legend>
             <label class="field">
-              <span class="field-label"><em>Site (domínio) *</em></span>
-              <input type="url" id="site" value="https://inhangapi.pa.gov.br" required />
+              <span class="field-label"><em>Site (domínio)</em></span>
+              <input type="url" id="site" placeholder="https://exemplo.pa.gov.br" />
             </label>
             <label class="field">
-              <span class="field-label"><em>Pasta base</em></span>
-              <input type="text" id="pasta_base" value="C:\Downloads\Inhangapi" />
+              <span class="field-label"><em>Pasta base *</em></span>
+              <input type="text" id="pasta_base" value="C:\Downloads\Prefeitura" required />
             </label>
             <label class="field">
               <span class="field-label"><em>Anos a baixar</em></span>
@@ -72,16 +136,57 @@
                 Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
               </small>
             </label>
+          </fieldset>
+
+          <fieldset class="bloco">
+            <legend>Fontes</legend>
+            <p class="opcoes-intro" style="margin-bottom:1rem">
+              Uma URL por linha. A pasta usa o <strong>título da página</strong>
+              (ou o final da URL). Opcional: <code>url | NomeManual</code>.
+            </p>
+
             <label class="field">
-              <span class="field-label"><em>Fontes (url | modo | pasta)</em></span>
+              <span class="field-label"><em>Categoria (lista de posts)</em></span>
               <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
-                Uma fonte por linha. Modos: categoria (lista posts), hub_anos (índice por ano), pagina (PDFs na própria URL).
+                Varre a categoria, abre cada post e baixa os PDFs.
               </small>
-              <textarea id="fontes" rows="8" spellcheck="false">https://inhangapi.pa.gov.br/c/publicacoes/leis/ | categoria | Leis
-https://inhangapi.pa.gov.br/decretos/ | hub_anos | Decretos
-https://inhangapi.pa.gov.br/c/publicacoes/portarias/ | categoria | Portarias
-https://inhangapi.pa.gov.br/c/publicacoes/demais/ | categoria | Demais</textarea>
+              <textarea
+                id="fontes_categoria"
+                rows="6"
+                spellcheck="false"
+                placeholder="https://site.gov.br/c/publicacoes/leis/&#10;https://site.gov.br/c/publicacoes/portarias/"
+              ></textarea>
             </label>
+
+            <label class="field">
+              <span class="field-label"><em>Hub de anos</em></span>
+              <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
+                Página índice com links para cada ano.
+              </small>
+              <textarea
+                id="fontes_hub_anos"
+                rows="3"
+                spellcheck="false"
+                placeholder="https://site.gov.br/decretos/"
+              ></textarea>
+            </label>
+
+            <label class="field">
+              <span class="field-label"><em>Página (só documentos)</em></span>
+              <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
+                PDFs já listados na própria URL.
+              </small>
+              <textarea
+                id="fontes_pagina"
+                rows="4"
+                spellcheck="false"
+                placeholder="https://site.gov.br/portal/balancete/"
+              ></textarea>
+            </label>
+          </fieldset>
+
+          <fieldset class="bloco bloco-opcoes">
+            <legend>Extras</legend>
             <label class="check-row" for="ler_pdf">
               <input type="checkbox" id="ler_pdf" checked />
               <span class="check-copy">
@@ -89,13 +194,30 @@ https://inhangapi.pa.gov.br/c/publicacoes/demais/ | categoria | Demais</textarea
                 <small>Recomendado — extrai número/título do documento</small>
               </span>
             </label>
+            <label class="check-row" for="refinar_ia">
+              <input type="checkbox" id="refinar_ia" checked />
+              <span class="check-copy">
+                <strong>Confirmar com IA local (Ollama)</strong>
+                <small>Relê o PDF: corrige nome do arquivo e valida campos de Diárias quando a fonte for de diárias.</small>
+              </span>
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Modelo Ollama (opcional)</em></span>
+              <input
+                type="text"
+                id="modelo_ia"
+                value="llama3.2:3b"
+                placeholder="llama3.2:3b"
+              />
+            </label>
             <label class="field">
               <span class="field-label"><em>Limite de posts/páginas (0 = todos)</em></span>
               <input type="number" id="limite_posts" value="0" min="0" />
             </label>
           </fieldset>
+
           <div class="acao-row">
-            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar download</button>
+            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar baixa</button>
             <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
             <a class="btn btn-ghost" href="#log">Ver log</a>
           </div>
@@ -105,24 +227,186 @@ https://inhangapi.pa.gov.br/c/publicacoes/demais/ | categoria | Demais</textarea
       <section class="log-wrap" id="log">
         <header class="section-head">
           <h2>Log</h2>
-          <p>Status: <strong id="log-state">Parado</strong></p>
+          <p>Situação: <strong id="log-state">Parado</strong></p>
         </header>
         <div class="log-console" id="log-console"></div>
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home6"></script>
-    <script src="/assets/shared.js?v=home6"></script>
+    <script src="/assets/fluid-particles.js?v=home20"></script>
+    <script src="/assets/shared.js?v=home20"></script>
     <script>
       CR2Centro.injectNav("normas");
       CR2Centro.pingApi();
-      const fields = ["site", "pasta_base", "anos", "fontes", "ler_pdf", "limite_posts"];
+
+      const STORAGE_KEY = "cr2-centro-normas";
+
+      const LEIS_E_ATOS = [
+        "Balancete Financeiro",
+        "Balanço Anual",
+        "Demais Publicações Oficiais",
+        "Diário Oficial",
+        "Edital",
+        "Emenda à Lei Orgânica",
+        "Instrução Normativa",
+        "LDO",
+        "LOA",
+        "Legislação de pessoal",
+        "Lei",
+        "Lei Complementar",
+        "Lei Orgânica",
+        "Notificações",
+        "Ofício",
+        "PCCR",
+        "PPA",
+        "Portaria",
+        "Projeto de lei",
+        "Relatório de Gestão",
+        "Relatório do Controle Interno",
+        "Requerimento",
+        "Resolução",
+        "Norma de Estrutura Organizacional",
+      ];
+
+      const CAMARA_TIPOS = [
+        "Anteprojeto de Lei",
+        "Emendas Impositivas",
+        "Indicação",
+        "Iniciativa Popular",
+        "Moção",
+        "Moção de Aplauso",
+        "Moção de Pesar",
+        "Moção de Reconhecimento",
+        "Pedido de Providência",
+        "Projeto de Decreto Legislativo",
+        "Projeto de Emenda à Lei Orgânica",
+        "Projeto de Emenda ao RI",
+        "Projeto de Indicação",
+        "Projeto de Lei",
+        "Projeto de Lei Complementar",
+        "Projeto de Resolução",
+        "Proposições",
+        "Requerimento",
+        "Veto",
+        "Devolvido ao Executivo",
+        "Atos de Promulgação",
+        "Decreto Legislativo",
+        "Diário Oficial",
+        "Emenda à Lei Orgânica",
+        "LDO",
+        "LOA",
+        "Legislação de Pessoal",
+        "Lei",
+        "Lei Complementar",
+        "Lei Orgânica",
+        "PCCR",
+        "PPA",
+        "Resolução",
+        "Regulamentação de Cotas Parlamentares",
+        "Ata de Audiência Pública",
+        "Ato de Convocação",
+        "Ato da Presidência",
+        "Ato da Mesa Diretora",
+        "Ato do Controle Interno",
+        "Balancete Financeiro",
+        "Balanço Anual",
+        "Instrução Normativa",
+        "Memorando",
+        "Ofício",
+        "Portaria",
+        "Relatório de Gestão",
+        "Relatório do Controle Interno",
+        "Requerimento de Autoria Técnica",
+        "Demais Publicações",
+        "Ato Legislativo Especial",
+      ];
+
+      function renderChips(containerId, itens) {
+        const host = document.getElementById(containerId);
+        host.innerHTML = itens.map((n) => "<span>" + n + "</span>").join("");
+      }
+
+      renderChips("chips-prefeitura", LEIS_E_ATOS);
+      renderChips("chips-camara", CAMARA_TIPOS);
+
+      function getEntidade() {
+        const r = document.querySelector('input[name="entidade"]:checked');
+        return (r && r.value) || "prefeitura";
+      }
+
+      function setEntidade(valor) {
+        const v = valor === "camara" ? "camara" : "prefeitura";
+        const r = document.querySelector('input[name="entidade"][value="' + v + '"]');
+        if (r) r.checked = true;
+        atualizarSecoes();
+      }
+
+      function atualizarSecoes() {
+        const ent = getEntidade();
+        document.getElementById("ref-prefeitura").hidden = ent !== "prefeitura";
+        document.getElementById("ref-camara").hidden = ent !== "camara";
+        const pasta = document.getElementById("pasta_base");
+        if (pasta) {
+          const atual = (pasta.value || "").trim().toLowerCase();
+          if (
+            !atual ||
+            atual.endsWith("\\camara") ||
+            atual.endsWith("\\prefeitura") ||
+            atual.endsWith("/camara") ||
+            atual.endsWith("/prefeitura")
+          ) {
+            pasta.value =
+              ent === "camara" ? "C:\\Downloads\\Camara" : "C:\\Downloads\\Prefeitura";
+          }
+        }
+      }
+
+      const fields = [
+        "site",
+        "pasta_base",
+        "anos",
+        "fontes_categoria",
+        "fontes_hub_anos",
+        "fontes_pagina",
+        "ler_pdf",
+        "refinar_ia",
+        "modelo_ia",
+        "limite_posts",
+      ];
+
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (data.entidade) setEntidade(data.entidade);
+        }
+      } catch (_) {}
+
+      atualizarSecoes();
+      document.querySelectorAll('input[name="entidade"]').forEach((el) => {
+        el.addEventListener("change", () => {
+          atualizarSecoes();
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            const data = raw ? JSON.parse(raw) : {};
+            data.entidade = getEntidade();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          } catch (_) {}
+        });
+      });
+
       CR2Centro.bindRun("normas", "form-normas", fields, () => ({
+        entidade: getEntidade(),
         site: document.getElementById("site").value.trim(),
         pasta_base: document.getElementById("pasta_base").value.trim(),
         anos: document.getElementById("anos").value.trim(),
-        fontes: document.getElementById("fontes").value,
+        fontes_categoria: document.getElementById("fontes_categoria").value,
+        fontes_hub_anos: document.getElementById("fontes_hub_anos").value,
+        fontes_pagina: document.getElementById("fontes_pagina").value,
+        fontes_outros: "",
         ler_pdf: document.getElementById("ler_pdf").checked,
+        refinar_ia: document.getElementById("refinar_ia").checked,
+        modelo_ia: document.getElementById("modelo_ia").value.trim() || "llama3.2:3b",
         limite_posts: Number(document.getElementById("limite_posts").value || 0),
       }), false);
     </script>

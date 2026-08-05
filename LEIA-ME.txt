@@ -1,19 +1,11 @@
-Opto Automacoes — como usar (Windows)
-=====================================
+Opto Automacoes
+===============
 
-1) EXTRAIR o ZIP em uma pasta (nao rode de dentro do ZIP).
-2) Instalar Python 3: https://www.python.org/downloads/
-   - Marque "Add python.exe to PATH"
-   - Nao use so o Python da Microsoft Store
-3) Clique duas vezes em INSTALAR.bat e ESPERE terminar.
-4) Clique duas vezes em INICIAR.bat
-5) Abra no navegador: http://127.0.0.1:8765
+1) Botao direito no ZIP -> Extrair Tudo
+2) Entre na pasta
+3) Clique DUAS VEZES em:  COMECE_AQUI.bat
 
-Se o INSTALAR abrir e fechar / der erro:
-- Ficou aberto o texto? Leia a mensagem vermelha/erro
-- Envie ao Miguel o arquivo: instalacao-log.txt
-  (fica na mesma pasta do INSTALAR.bat)
+O site abre sozinho. Na 1a vez demora um pouco — nao feche a janela.
 
-Teste rapido do Python (Prompt de Comando):
-  python --version
-Se nao mostrar a versao, o Python nao esta no PATH.
+Se pedir Python: instale (marque Add to PATH) e clique de novo em COMECE_AQUI.bat
+Se der erro: envie o arquivo instalacao-log.txt

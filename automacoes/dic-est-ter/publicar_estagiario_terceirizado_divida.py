@@ -155,8 +155,9 @@ URL_LOGIN = "https://www.portalcr2.com.br/?view=login"
 ABRIR_LOGIN_ANTES_DO_PORTAL = True
 HEADLESS = False
 
-PORTAL_USUARIO = "tobiasmiguel007@gmail.com"
-PORTAL_SENHA = "Sophia#2019"
+# Credenciais só pelo painel ou variáveis de ambiente (nunca no código).
+PORTAL_USUARIO = os.environ.get("PORTAL_USUARIO", "").strip()
+PORTAL_SENHA = os.environ.get("PORTAL_SENHA", "").strip()
 PORTAL_LOGIN_BOTAO = "Acessar"
 TIMEOUT_LOGIN_CONCLUIDO_S = 60
 

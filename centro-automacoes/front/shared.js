@@ -14,15 +14,15 @@
     categorias: {
       id: "categorias",
       nome: "Categorias",
-      descricao: "Varre categorias WordPress e baixa PDFs de cada post.",
+      descricao: "Varre categorias WordPress e baixa PDFs de cada post, com IA local opcional no nome.",
       pagina: "/categorias.html",
       icon: "folder",
       cta: "Abrir",
     },
     normas: {
       id: "normas",
-      nome: "Normas",
-      descricao: "Leis, decretos e portarias com nome padrão e leitura do PDF.",
+      nome: "Extração Pro",
+      descricao: "Leis, atos, matérias e documentos — Prefeitura ou Câmara, com nomeação automática e IA local opcional.",
       pagina: "/normas.html",
       icon: "book",
       cta: "Abrir",
@@ -35,10 +35,18 @@
       icon: "building",
       cta: "Abrir",
     },
+    contratos: {
+      id: "contratos",
+      nome: "Contratos",
+      descricao: "Contratos e aditivos do Governo Transparente — PDFs e planilha.",
+      pagina: "/contratos.html",
+      icon: "contract",
+      cta: "Abrir",
+    },
     publicacao: {
       id: "publicacao",
       nome: "RGF / RREO / Balancete",
-      descricao: "Publicação financeira no portal Bubble (Playwright).",
+      descricao: "Publicação financeira no portal CR2 (navegador automático).",
       pagina: "/publicacao.html",
       icon: "upload",
       cta: "Abrir",
@@ -90,6 +98,8 @@
       '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     table:
       '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3z"/><path d="M3 10h18"/><path d="M3 15h18"/><path d="M9 5v14"/><path d="M15 5v14"/></svg>',
+    contract:
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/><path d="m9 9 1.5 1.5L13 8"/></svg>',
   };
 
   /** Hubs de alto nível: Extração | Publicação | Mapa */
@@ -100,10 +110,11 @@
       href: "/extrair.html",
       titulo: "Extração",
       descricao:
-        "Downloads do portal: documentos, categorias, normas e licitações.",
+        "Baixas do portal: documentos, categorias, Extração Pro e licitações.",
       icon: "download",
       cta: "Ver ferramentas",
       tools: ["documentos", "categorias", "normas", "licitacoes"],
+      // ocultos por enquanto: "contratos"
     },
     {
       key: "publicar",
@@ -114,6 +125,7 @@
       icon: "publish",
       cta: "Ver ferramentas",
       tools: ["publicacao", "sessao", "dic_est_ter"],
+      // ocultos por enquanto: nenhum
     },
     {
       key: "mapa",
@@ -286,16 +298,58 @@
     if (!pill) return;
     try {
       const r = await fetch(`${API}/api/health`);
-      if (r.ok) {
-        pill.textContent = "Online";
-        pill.classList.add("online");
-        pill.classList.remove("offline");
-      } else throw new Error();
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+      atualizarPillStatus(pill, data);
+      if (!window.__optoPillTimer) {
+        window.__optoPillTimer = setInterval(() => {
+          pingApi().catch(() => {});
+        }, 2000);
+      }
     } catch {
       pill.textContent = "Offline";
+      pill.title = "Servidor do painel indisponível";
       pill.classList.add("offline");
-      pill.classList.remove("online");
+      pill.classList.remove("online", "running");
     }
+  }
+
+  function atualizarPillStatus(pill, data) {
+    const ativo = data && data.ativo;
+    pill.classList.remove("offline");
+    if (!ativo) {
+      pill.textContent = "Online";
+      pill.title = "Servidor online — nenhum processo em execução";
+      pill.classList.add("online");
+      pill.classList.remove("running");
+      return;
+    }
+
+    const nome = ativo.nome || ativo.service_id || "Processo";
+    const done = Number(ativo.done) || 0;
+    const total = Number(ativo.total) || 0;
+    let pct = ativo.percent;
+    if (pct == null && total > 0) {
+      pct = Math.round((100 * done) / total);
+    }
+
+    let texto = nome;
+    if (total > 0) {
+      texto = `${nome} · ${done}/${total}`;
+      if (pct != null) texto += ` · ${pct}%`;
+    } else if (pct != null) {
+      texto = `${nome} · ${pct}%`;
+    } else if (ativo.cancel_requested) {
+      texto = `${nome} · cancelando…`;
+    } else {
+      texto = `${nome} · em execução`;
+    }
+
+    pill.textContent = texto;
+    pill.title = ativo.label
+      ? `${nome}: ${ativo.label}`
+      : `${nome} em andamento`;
+    pill.classList.add("online", "running");
   }
 
   function loadForm(key, fields) {
@@ -327,9 +381,58 @@
   function appendLog(line, level) {
     const box = el("log-console");
     if (!box) return;
+
+    const empty = box.querySelector(".log-empty");
+    if (empty) empty.remove();
+
+    let msg = "";
+    let lvl = level || "info";
+    let time = "";
+
+    if (line && typeof line === "object") {
+      msg = String(line.msg || "");
+      lvl = line.level || lvl || "info";
+      time = line.t || "";
+    } else {
+      msg = String(line || "");
+    }
+
+    msg = msg.replace(/\s+/g, " ").trim();
+    if (!msg || msg === "— fim —" || msg === "- fim -") return;
+
+    // Separadores do script (====) viram linha visual limpa
+    if (/^=+$/.test(msg) || /^-+$/.test(msg)) {
+      const sep = document.createElement("div");
+      sep.className = "log-sep";
+      sep.setAttribute("aria-hidden", "true");
+      box.appendChild(sep);
+      box.scrollTop = box.scrollHeight;
+      return;
+    }
+
+    // Títulos de seção / progresso do job
+    const isSection =
+      /^(fonte|resumo|download de normas|processando|p[aá]gina:)/i.test(msg) ||
+      msg.includes("FONTE (") ||
+      msg.startsWith("====") ||
+      /^──\s*\[/.test(msg) ||
+      /^etapas?:/i.test(msg) ||
+      /\betapa:\s/i.test(msg);
+
+    const labels = {
+      info: "info",
+      warn: "aviso",
+      error: "erro",
+      ok: "ok",
+    };
+
     const div = document.createElement("div");
-    div.className = `log-line log-${level || "info"}`;
-    div.textContent = line.t ? `[${line.t}] ${line.msg}` : line.msg || line;
+    div.className = `log-line log-${lvl}${isSection ? " log-section-line" : ""}`;
+    div.innerHTML =
+      '<span class="t"></span><span class="lv"></span><span class="msg"></span>';
+    div.querySelector(".t").textContent = time || "··:··";
+    div.querySelector(".lv").textContent = labels[lvl] || lvl;
+    div.querySelector(".msg").textContent = msg.replace(/^====\s*/, "").replace(/\s*====$/, "");
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
   }
@@ -370,14 +473,23 @@
   }
 
   const SERVICE_LABELS = {
-    documentos: "Download de Documentos",
-    categorias: "Download por Categoria",
-    normas: "Download de Normas",
+    documentos: "Baixar Documentos",
+    categorias: "Baixar por Categoria",
+    normas: "Extração Pro",
     licitacoes: "Licitações",
+    contratos: "Contratos / Aditivos",
     publicacao: "Publicação CR2",
-    sessao: "Publicação Sessão",
+    sessao: "Publicação de Sessão",
     mapa: "Mapa do Site",
     dic_est_ter: "Publicação Dic/Est/Ter",
+  };
+
+  const STATUS_PT = {
+    pending: "Na fila",
+    running: "Em execução",
+    completed: "Concluído",
+    failed: "Erro",
+    cancelled: "Cancelado",
   };
 
   let es = null;
@@ -431,7 +543,9 @@
     const runBtn = el("btn-run");
     if (runBtn) runBtn.disabled = true;
     const box = el("log-console");
-    if (box) box.innerHTML = "";
+    if (box) {
+      box.innerHTML = '<p class="log-empty">Aguardando execução…</p>';
+    }
 
     es = new EventSource(`${API}/api/jobs/${jobId}/logs/stream`);
     es.onmessage = (ev) => {
@@ -494,6 +608,8 @@
       const label = SERVICE_LABELS[job.service_id] || job.service_id || "Automação";
       const already = noticeShownFor === jobId;
       const finished = ["completed", "failed", "cancelled"].includes(job.status);
+      const st = el("job-status");
+      if (st) st.textContent = STATUS_PT[job.status] || job.status;
 
       if (finished) {
         setCancelVisible(false);

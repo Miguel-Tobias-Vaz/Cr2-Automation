@@ -1,0 +1,24 @@
+20:22:04 [info] Processo iniciado — sessao
+20:22:04 [info] Iniciando publicação de Sessão (pasta)...
+20:22:04 [info] [INFO] 53 sessao(oes) na planilha C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\Sessoes.xlsx
+20:22:04 [info] [INFO] Modo teste: 1 sessao.
+20:22:04 [info] ============================================================
+20:22:04 [info]   PUBLICACAO DE SESSAO — portal CR2
+20:22:04 [info]   Total: 1
+20:22:04 [info]   Pasta: C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua
+20:22:04 [info]   URL: https://www.portalcr2.com.br/sessoes/sessoes-cm-nova-timboteua
+20:22:04 [info]   Ritmo: Criar Publicação → Cadastrar Sessão → Publicar
+20:22:04 [info] ============================================================
+20:22:06 [info] [INFO] Abrindo Opera: C:\Users\tobia\AppData\Local\Programs\Opera GX\opera.exe
+20:22:12 [info] [INFO] Carregando login...
+20:22:28 [info] [INFO] Formulario de login enviado.
+20:22:29 [info] [INFO] Carregando Sessao...
+20:22:31 [info] [INFO] URL atual: https://www.portalcr2.com.br/sessoes/sessoes-cm-nova-timboteua
+20:22:32 [info] [INFO] Botao Criar Publicacao visivel.
+20:22:32 [info] [-> SESSAO] [1/1] Sessão 2019 |  | Sessão 2019
+20:23:00 [error]     [ERRO] Campo Tipo nao encontrado (valor='Sessão 2019')
+20:23:08 [info] ============================================================
+20:23:08 [ok]   CONCLUIDO! OK: 0 | Erros: 1 | Total: 1
+20:23:08 [info] ============================================================
+20:23:08 [error] Publicacao de sessao com 1 erro(s).
+20:23:08 [info] — fim —

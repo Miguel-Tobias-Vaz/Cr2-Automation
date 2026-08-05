@@ -1,0 +1,24 @@
+{
+  "job_id": "atual",
+  "running": false,
+  "progresso": {
+    "total": 0,
+    "publicadas": 0,
+    "erros": 0,
+    "retries": 0,
+    "chunk_atual": 0,
+    "chunk_total": 0,
+    "fase": "cancelado",
+    "iniciado_em": null,
+    "eta_s": null,
+    "linhas_processadas": 0,
+    "msg": "Cancelar fila"
+  },
+  "resumo": {
+    "ok": false,
+    "cancelado": true
+  },
+  "arquivo_nao_publicadas": null,
+  "log_path": null,
+  "atualizado_em": 1785858226.9978468
+}

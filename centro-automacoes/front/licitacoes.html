@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home6" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home20" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -24,7 +24,7 @@
         <span>Opto Automações</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">API …</span>
+      <span class="api-pill" id="api-pill">Servidor …</span>
     </header>
 
     <main class="page-shell">
@@ -34,8 +34,10 @@
           <header class="hero-copy">
             <h1>Licitações</h1>
             <p class="lede">
-              Coleta licitações do portal CR2 (API ou HTML), baixa anexos,
-              extrai valores e preenche planilha com aba de auditoria.
+              Coleta licitações do portal CR2, baixa anexos e gera as duas
+              planilhas oficiais para subir no sistema
+              (<code>subirLicitacoes.xlsx</code> e
+              <code>subirDocumentosLicitacoes.xlsx</code>.
             </p>
           </header>
           <article class="stream is-in">
@@ -43,9 +45,10 @@
             <h3>O que faz</h3>
             <ul>
               <li>Listagem WordPress <code>/c/licitacoes/</code></li>
-              <li>Download dos anexos por pasta</li>
+              <li>Baixa dos anexos por pasta</li>
               <li>Extração de valor estimado / homologado</li>
-              <li>Planilha <code>Licitacoes_preenchida.xlsx</code></li>
+              <li>Saídas oficiais: <code>subirLicitacoes.xlsx</code> + <code>subirDocumentosLicitacoes.xlsx</code></li>
+              <li>Auditoria: aba <code>Auditoria</code> em <code>Licitacoes_preenchida.xlsx</code> e em <code>contratos.xlsx</code></li>
             </ul>
           </article>
         </div>
@@ -74,12 +77,24 @@
               <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
                 Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
-                O filtro vale antes do download — só processa licitações desses anos.
+                        O filtro vale antes da baixa — só processa licitações desses anos.
               </small>
             </label>
             <label class="field">
               <span class="field-label"><em>Planilha modelo (opcional)</em></span>
               <input type="text" id="planilha_modelo" placeholder="C:\caminho\Front.xlsx" />
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Link base das pastas (opcional)</em></span>
+              <input
+                type="url"
+                id="link_pasta_base"
+                placeholder="https://drive.google.com/... ou SharePoint"
+              />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Se preenchido, a coluna <code>LinkDaPasta</code> usa
+                <code>{base}/{nome_da_pasta}</code>. Vazio = caminho local absoluto.
+              </small>
             </label>
           </fieldset>
 
@@ -115,10 +130,10 @@
             <legend>Extras (opcional)</legend>
             <div class="opcoes-grid">
               <label class="check-row" for="ocr">
-                <input type="checkbox" id="ocr" />
+                <input type="checkbox" id="ocr" checked />
                 <span class="check-copy">
                   <strong>OCR em PDFs escaneados</strong>
-                  <small>Tesseract / EasyOCR — quando o PDF não tem texto</small>
+                  <small>Já vem no INSTALAR.bat (Tesseract + Poppler). Desmarque só se quiser pular.</small>
                 </span>
               </label>
               <label class="check-row" for="incluir_subcategorias">
@@ -132,7 +147,7 @@
                 <input type="checkbox" id="so_html" />
                 <span class="check-copy">
                   <strong>Forçar coleta HTML</strong>
-                  <small>Ignora a API REST do WordPress</small>
+                  <small>Ignora a API REST do WordPress (usa só a página)</small>
                 </span>
               </label>
               <label class="check-row" for="ignorar_ssl">
@@ -142,7 +157,23 @@
                   <small>Só se o certificado do site estiver inválido</small>
                 </span>
               </label>
+              <label class="check-row" for="refinar_ia">
+                <input type="checkbox" id="refinar_ia" checked />
+                <span class="check-copy">
+                  <strong>Refinar com IA local (Ollama)</strong>
+                  <small>Lê Edital/DFD/TR/Homologação e, nos contratos, todos os PDFs da pasta. Grátis no PC.</small>
+                </span>
+              </label>
             </div>
+            <label class="field" style="margin-top:0.75rem">
+              <span class="field-label"><em>Modelo Ollama (opcional)</em></span>
+              <input
+                type="text"
+                id="modelo_ia"
+                value="llama3.2:3b"
+                placeholder="llama3.2:3b"
+              />
+            </label>
           </fieldset>
 
           <div class="acao-row">
@@ -156,14 +187,14 @@
       <section class="log-wrap" id="log">
         <header class="section-head">
           <h2>Log</h2>
-          <p>Status: <strong id="log-state">Parado</strong> · Job: <span id="job-status">—</span></p>
+          <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
         </header>
         <div class="log-console" id="log-console"></div>
       </section>
     </main>
 
-        <script src="/assets/fluid-particles.js?v=home6"></script>
-    <script src="/assets/shared.js?v=home6"></script>
+        <script src="/assets/fluid-particles.js?v=home20"></script>
+    <script src="/assets/shared.js?v=home20"></script>
     <script>
       CR2Centro.injectNav("licitacoes");
       CR2Centro.pingApi();
@@ -174,10 +205,13 @@
         "pasta_saida",
         "anos",
         "planilha_modelo",
+        "link_pasta_base",
         "ocr",
         "incluir_subcategorias",
         "so_html",
         "ignorar_ssl",
+        "refinar_ia",
+        "modelo_ia",
       ];
 
       function getModo() {
@@ -223,11 +257,14 @@
           pasta_saida: document.getElementById("pasta_saida").value.trim(),
           anos: document.getElementById("anos").value.trim(),
           planilha_modelo: document.getElementById("planilha_modelo").value.trim(),
+          link_pasta_base: document.getElementById("link_pasta_base").value.trim(),
           modo,
           ocr: document.getElementById("ocr").checked,
           incluir_subcategorias: document.getElementById("incluir_subcategorias").checked,
           so_html: document.getElementById("so_html").checked,
           ignorar_ssl: document.getElementById("ignorar_ssl").checked,
+          refinar_ia: document.getElementById("refinar_ia").checked,
+          modelo_ia: document.getElementById("modelo_ia").value.trim() || "llama3.2:3b",
           so_planilha: modo === "so_planilha",
           sem_extracao: modo === "so_baixar",
         };
@@ -241,10 +278,12 @@
           const raw = localStorage.getItem(STORAGE_KEY);
           const data = raw ? JSON.parse(raw) : {};
           data.modo = getModo();
-          ["ocr", "incluir_subcategorias", "so_html", "ignorar_ssl"].forEach((id) => {
+          ["ocr", "incluir_subcategorias", "so_html", "ignorar_ssl", "refinar_ia"].forEach((id) => {
             const n = document.getElementById(id);
             if (n) data[id] = n.checked;
           });
+          const mi = document.getElementById("modelo_ia");
+          if (mi) data.modelo_ia = mi.value.trim();
           localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } catch (_) {}
       });

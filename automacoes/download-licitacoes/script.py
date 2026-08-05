@@ -2,52 +2,34 @@
 # -*- coding: utf-8 -*-
 """
 ==============================================================================
- BAIXADOR + EXTRATOR DE LICITAÇÕES — Portais CR2 (padrão: Prefeitura de Gurupá)
- v2 — revisado
+ BAIXADOR + EXTRATOR DE LICITAÇÕES — Portais CR2
 ==============================================================================
 
 SCRIPT ÚNICO. Faz tudo:
-  1) Coleta as licitações (API REST do WordPress; fallback: raspagem HTML com
-     varredura sequencial de páginas /page/N/)
-  2) Baixa os anexos, organizados em pastas por licitação
-  3) Lê o texto de cada documento (OCR automático quando o PDF é digitalizado;
-     resultado do OCR é cacheado em .ocr.txt e reaproveitado nas próximas rodadas)
-  4) Extrai VALOR ESTIMADO e VALOR HOMOLOGADO (+ data de abertura e situação)
-  5) Preenche a planilha-modelo (Front.xlsx) — 1 linha por licitação
-  6) Gera uma aba de AUDITORIA com a origem de cada valor (documento + trecho)
+  1) Coleta as licitações (API REST do WordPress; fallback: raspagem HTML)
+  2) Baixa os anexos em pastas por licitação
+  3) Lê o texto dos documentos (OCR opcional; cache em .ocr.txt)
+  4) Extrai valores, datas e situação (regras + IA local Ollama opcional)
+  5) Gera Licitacoes_preenchida.xlsx (intermediária) e as planilhas oficiais
+     de upload: subirLicitacoes.xlsx + subirDocumentosLicitacoes.xlsx
 
-Genérico: a entidade é derivada da URL de --listagem. O padrão é Gurupá,
-mas funciona em qualquer portal CR2 trocando --listagem.
-
-A planilha-modelo deve ter os cabeçalhos na linha 1:
-  Modalidade | Número | Ano | Objeto | Data de Publicação |
-  Data de Abertura | Valor Estimado | Situação da Licitação | Valor Homologado
+Genérico: a entidade vem da URL de --listagem (qualquer portal CR2).
 
 ------------------------------------------------------------------------------
  REQUISITOS
 ------------------------------------------------------------------------------
   pip install requests beautifulsoup4 openpyxl pdfplumber
 
-  OCR (opcional, para PDFs digitalizados):
-    pip install ocrmypdf            (+ Tesseract-OCR "por" + Ghostscript)
-      Windows: Tesseract  -> https://github.com/UB-Mannheim/tesseract/wiki
-               Ghostscript -> https://ghostscript.com/releases/gsdnld.html
-    OU, backend alternativo:
-    pip install pytesseract pdf2image   (+ Tesseract + Poppler)
-
-  EasyOCR (opcional — motor de reserva p/ scans ruins; lento sem GPU):
-    pip install easyocr pdf2image numpy
-    (baixa ~64MB de modelos na 1ª execução; usado no modo MOTOR_OCR="auto"
-     quando o resultado do Tesseract vem fraco, ou com --motor-ocr easyocr)
+  OCR (opcional): Tesseract + Poppler (ou ocrmypdf + Ghostscript)
+  IA local (opcional): Ollama com modelo llama3.2:3b (ou --modelo-ia)
 
 ------------------------------------------------------------------------------
  USO
 ------------------------------------------------------------------------------
-  python baixar_licitacoes.py --planilha-modelo Front.xlsx
-  python baixar_licitacoes.py --planilha-modelo Front.xlsx --ocr
-  python baixar_licitacoes.py --so-planilha        (não rebaixa; só extrai/preenche)
-  python baixar_licitacoes.py --listagem https://OUTRA.pa.gov.br/c/licitacoes/ --ocr
-  python baixar_licitacoes.py --ignorar-ssl        (portais com certificado quebrado)
+  python script.py --ocr --refinar-ia
+  python script.py --so-planilha --ocr --refinar-ia
+  python script.py --listagem https://OUTRA.pa.gov.br/c/licitacoes/ --ocr
+  python script.py --ignorar-ssl
 ==============================================================================
 """
 
@@ -89,40 +71,33 @@ def _abortar_se_cancelado():
 # ============================================================================
 # CONFIGURAÇÃO
 # ============================================================================
-LISTAGEM_PADRAO = "https://cmbrasilnovo.pa.gov.br/c/licitacoes"
-SAIDA_PADRAO    = r"C:\Downloads\Licitacoes_CM Brasil Novo"
+# Defaults neutros — o painel / CLI deve informar listagem e pasta.
+LISTAGEM_PADRAO = ""
+SAIDA_PADRAO    = r"C:\Downloads\Licitacoes"
 PLANILHA_SAIDA  = "Licitacoes_preenchida.xlsx"
+ULTIMO_RESULTADO_UPLOAD = None  # preenchido ao final (caminhos das planilhas oficiais)
 SUBCATEGORIAS   = ["licitacoes-fracassadas", "licitacoes-desertas"]
 MAX_PAGINAS     = 300     # trava de segurança na varredura de /page/N/
 
 # ----------------------------------------------------------------------------
-# FILTRO DE ANOS — edite aqui (ou use --anos 2023,2024 na linha de comando).
-# Lista vazia = baixa TODOS os anos.
-#   Exemplos:  ANOS_FILTRO = ["2023"]
-#              ANOS_FILTRO = ["2022", "2023", "2024"]
+# FILTRO DE ANOS — vazio = todos. Use --anos 2023,2024 ou o campo do painel.
 # ----------------------------------------------------------------------------
-ANOS_FILTRO = ["2023"]
+ANOS_FILTRO = []
 
 # ----------------------------------------------------------------------------
 # RENOMEAÇÃO PELO TÍTULO INTERNO — quando o nome do anexo é genérico
 # ("Download", "documento", "anexo1"...), o script lê o título dentro do
 # PDF (via texto nativo ou OCR) e renomeia o arquivo por ele.
-#   True  = renomeia automaticamente
-#   False = mantém os nomes originais dos links
 # ----------------------------------------------------------------------------
+RENOMEAR_POR_TITULO = True
+
 # ----------------------------------------------------------------------------
 # MOTOR DE OCR — edite aqui (ou use --motor-ocr na linha de comando).
-#   "auto"      = Tesseract primeiro (rápido); se o resultado vier ruim
-#                 (curto/ilegível) e o EasyOCR estiver instalado, refaz com
-#                 EasyOCR e usa o melhor dos dois.  <- RECOMENDADO
+#   "auto"      = Tesseract primeiro; se fraco e EasyOCR instalado, usa o melhor
 #   "tesseract" = só Tesseract (ocrmypdf/pytesseract)
-#   "easyocr"   = só EasyOCR (deep learning; melhor em scans ruins, bem mais
-#                 lento sem GPU). Instalação: pip install easyocr
-#                 (baixa ~64MB de modelos na primeira execução)
+#   "easyocr"   = só EasyOCR (melhor em scans ruins; mais lento sem GPU)
 # ----------------------------------------------------------------------------
 MOTOR_OCR = "auto"
-
-RENOMEAR_POR_TITULO = True
 
 EXT_DOCS = {
     ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
@@ -403,33 +378,9 @@ def eh_contratacao_direta(modalidade):
 
 
 # ============================================================================
-# BIBLIOTECA DE MODALIDADES — nomes padronizados na planilha
+# MODALIDADES — regras de reconhecimento (ordem: específica → genérica)
+# Cada regra: (termos que DEVEM aparecer, nome padrão).
 # ============================================================================
-MODALIDADES_PADRAO = [
-    "Adesão a Ata de Registro de Preço",
-    "Carona",
-    "Credenciamento",
-    "Concorrência",
-    "Concurso",
-    "Convite",
-    "Chamada Pública",
-    "Diálogo Competitivo",
-    "Dispensa de Licitação",
-    "Inexigibilidade de Licitação",
-    "Intenção de Registro de Preços",
-    "Leilão",
-    "Pregão Eletrônico",
-    "Pregão Presencial",
-    "Registro de Preços Originário de Chamamento Público",
-    "Registro de Preços Originário de Pregão Eletrônico",
-    "Registro de Preços Originário de Pregão Presencial",
-    "Tomada de Preços",
-    "Contratação Direta",
-]
-
-# Regras de reconhecimento, avaliadas EM ORDEM (da mais específica para a
-# mais genérica). Cada regra: (termos que DEVEM aparecer, nome padrão).
-# Os termos são testados no título normalizado (minúsculo, sem acento).
 _REGRAS_MODALIDADE = [
     # --- compostas de Registro de Preços (SRP) primeiro ---
     (["pregao", "eletronico", "srp"],       "Registro de Preços Originário de Pregão Eletrônico"),
@@ -441,7 +392,6 @@ _REGRAS_MODALIDADE = [
     (["chamamento", "registro de precos"],  "Registro de Preços Originário de Chamamento Público"),
     (["chamada publica", "registro de precos"],
                                             "Registro de Preços Originário de Chamamento Público"),
-    (["intencao de registro"],              "Intenção de Registro de Preços"),
     # --- adesão / carona ---
     (["adesao"],                            "Adesão a Ata de Registro de Preço"),
     (["carona"],                            "Carona"),
@@ -449,12 +399,13 @@ _REGRAS_MODALIDADE = [
     (["dispensa"],                          "Dispensa de Licitação"),
     (["inexigibilidade"],                   "Inexigibilidade de Licitação"),
     (["contratacao direta"],                "Contratação Direta"),
-    # --- demais modalidades ---
+    # --- demais modalidades (lista oficial Front) ---
     (["dialogo competitivo"],               "Diálogo Competitivo"),
     (["credenciamento"],                    "Credenciamento"),
     (["chamada publica"],                   "Chamada Pública"),
     (["chamamento publico"],                "Chamada Pública"),
     (["chamamento"],                        "Chamada Pública"),
+    # Concorrência eletrônica/presencial → Concorrência (CC)
     (["concorrencia"],                      "Concorrência"),
     (["concurso"],                          "Concurso"),
     (["carta convite"],                     "Convite"),
@@ -661,8 +612,10 @@ _CONECTIVOS = {
 # Siglas comuns em documentos de licitação: preservadas em MAIÚSCULO.
 _SIGLAS = {
     "srp", "arp", "rp", "cpl", "cmp", "pmg", "pe", "pp", "pprp", "perp",
-    "tp", "cc", "rdc", "cnpj", "cpf", "me", "epp", "ltda", "eireli",
+    "tp", "cc", "con", "rdc", "cnpj", "cpf", "me", "epp", "ltda", "eireli",
     "fme", "fms", "fmas", "fundeb", "semed", "semus", "sead", "pgm",
+    "ad", "cr", "ca", "cd", "cv", "cp", "dc", "dl", "in", "ll",
+    "rpcp", "rppe", "rppp",
 }
 
 
@@ -917,28 +870,84 @@ def coletar_via_html(sessao, listagens):
 # PARTE 4 — OCR + LEITURA DE TEXTO
 # ============================================================================
 _OCR_BACKEND = None
+_OCR_PATHS_OK = False
+
+
+def _configurar_caminhos_ocr():
+    """Localiza Tesseract/Poppler no Windows (INSTALAR.bat / winget)."""
+    global _OCR_PATHS_OK
+    if _OCR_PATHS_OK:
+        return
+    _OCR_PATHS_OK = True
+    candidatos_tess = [
+        os.environ.get("TESSERACT_CMD") or "",
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        shutil.which("tesseract") or "",
+    ]
+    # WinGet packages
+    local = os.environ.get("LOCALAPPDATA") or ""
+    if local:
+        winget = os.path.join(local, "Microsoft", "WinGet", "Packages")
+        if os.path.isdir(winget):
+            for nome in os.listdir(winget):
+                if "Tesseract" in nome:
+                    cand = os.path.join(winget, nome, "tesseract.exe")
+                    if os.path.isfile(cand):
+                        candidatos_tess.append(cand)
+                if "Poppler" in nome:
+                    for sub in ("Library\\bin", "bin"):
+                        pdir = os.path.join(winget, nome, sub)
+                        if os.path.isfile(os.path.join(pdir, "pdftoppm.exe")):
+                            os.environ["PATH"] = pdir + os.pathsep + os.environ.get("PATH", "")
+    tess = next((c for c in candidatos_tess if c and os.path.isfile(c)), None)
+    if tess:
+        try:
+            import pytesseract
+            pytesseract.pytesseract.tesseract_cmd = tess
+            tess_dir = os.path.dirname(tess)
+            if tess_dir not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = tess_dir + os.pathsep + os.environ.get("PATH", "")
+        except Exception:
+            pass
+    for pop in (
+        r"C:\Program Files\poppler\Library\bin",
+        r"C:\Program Files\poppler\bin",
+    ):
+        if os.path.isfile(os.path.join(pop, "pdftoppm.exe")):
+            os.environ["PATH"] = pop + os.pathsep + os.environ.get("PATH", "")
+            break
 
 
 def detectar_backend_ocr():
     global _OCR_BACKEND
     if _OCR_BACKEND is not None:
         return _OCR_BACKEND
+    _configurar_caminhos_ocr()
     if shutil.which("ocrmypdf"):
         _OCR_BACKEND = "ocrmypdf"
     else:
         try:
             import pytesseract, pdf2image  # noqa
-            _OCR_BACKEND = "pytesseract"
+            # Confirma que o binário existe
+            try:
+                pytesseract.get_tesseract_version()
+                _OCR_BACKEND = "pytesseract"
+            except Exception:
+                _OCR_BACKEND = "nenhum"
         except Exception:
             _OCR_BACKEND = "nenhum"
     return _OCR_BACKEND
 
 
-def ler_texto_pdf(caminho):
+def ler_texto_pdf(caminho, max_paginas=None):
     try:
         import pdfplumber
         with pdfplumber.open(caminho) as pdf:
-            return "\n".join((p.extract_text() or "") for p in pdf.pages)
+            pages = pdf.pages
+            if max_paginas is not None and max_paginas > 0:
+                pages = pages[: int(max_paginas)]
+            return "\n".join((p.extract_text() or "") for p in pages)
     except Exception:
         return ""
 
@@ -1106,11 +1115,14 @@ def ocr_instalado():
     return detectar_backend_ocr() != "nenhum" or easyocr_disponivel()
 
 
-def obter_texto(caminho, usar_ocr, idioma="por", min_chars=40, motor="auto"):
+def obter_texto(caminho, usar_ocr, idioma="por", min_chars=40, motor="auto",
+                max_paginas=None, max_chars=None):
     """Retorna (texto, origem in {'nativo','ocr','ocr-cache','vazio'})."""
     if os.path.splitext(caminho)[1].lower() not in EXT_TEXTAVEIS:
         return "", "vazio"
-    texto = ler_texto_pdf(caminho)
+    texto = ler_texto_pdf(caminho, max_paginas=max_paginas)
+    if max_chars and texto and len(texto) > max_chars:
+        texto = texto[:max_chars]
     if len(texto.strip()) >= min_chars:
         return texto, "nativo"
     # cache de OCR de rodadas anteriores
@@ -1119,12 +1131,16 @@ def obter_texto(caminho, usar_ocr, idioma="por", min_chars=40, motor="auto"):
         try:
             with open(txt_path, encoding="utf-8", errors="ignore") as f:
                 cache = f.read()
+            if max_chars and cache and len(cache) > max_chars:
+                cache = cache[:max_chars]
             if len(cache.strip()) >= min_chars:
                 return cache, "ocr-cache"
         except Exception:
             pass
     if usar_ocr and ocr_instalado():
         texto_ocr = ocr_para_texto(caminho, idioma, motor)
+        if max_chars and texto_ocr and len(texto_ocr) > max_chars:
+            texto_ocr = texto_ocr[:max_chars]
         if len(texto_ocr.strip()) >= min_chars:
             return texto_ocr, "ocr"
     return texto, ("nativo" if texto.strip() else "vazio")
@@ -1492,13 +1508,414 @@ def preencher_planilha(linhas, auditoria, modelo, saida):
 
 
 # ============================================================================
+# PRIORIDADE DE DOCS + IA LOCAL (Ollama)
+# ============================================================================
+def _log(msg, *args):
+    """Print imediato (flush) para o painel não parecer parado."""
+    if args:
+        msg = msg.format(*args)
+    print(msg, flush=True)
+
+
+def _barra(atual, total, largura=18):
+    if total <= 0:
+        return "[" + ("#" * largura) + "]"
+    frac = max(0.0, min(1.0, float(atual) / float(total)))
+    cheios = int(round(frac * largura))
+    return "[" + ("#" * cheios) + ("-" * (largura - cheios)) + "]"
+
+
+def _pct(atual, total):
+    if total <= 0:
+        return 0
+    return int(100 * atual / total)
+
+
+def _garantir_path_script():
+    d = os.path.dirname(os.path.abspath(__file__))
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    return d
+
+
+def situacao_para_front(situacao):
+    """Mapeia rótulos internos (Homologada, Deserta…) para o vocabulário Front."""
+    if not situacao:
+        return ""
+    s = str(situacao).strip()
+    try:
+        _garantir_path_script()
+        from gestor_regras.config_front import MAPA_SITUACAO, SITUACOES
+    except ImportError:
+        return s
+    if s in SITUACOES:
+        return s
+    return MAPA_SITUACAO.get(normaliza(s), s)
+
+
+def numero_com_sigla_front(numero, modalidade):
+    try:
+        _garantir_path_script()
+        from ia_local import numero_com_sigla
+        return numero_com_sigla(numero or "", modalidade or "")
+    except ImportError:
+        return (numero or "").strip()
+
+
+def _precisa_ia(linha):
+    """True se falta campo que a IA pode refinar."""
+    for k in ("Número", "Objeto", "Situação da Licitação",
+              "Valor Estimado", "Valor Homologado"):
+        v = linha.get(k)
+        if v is None or str(v).strip() in ("", "Não informado"):
+            return True
+    return False
+
+
+def _ler_docs_priorizados(arquivos_locais, usar_ocr, idioma_ocr, motor_ocr,
+                          renomear, pasta):
+    """
+    Classifica anexos; Edital, DFD, TR e Termo de Homologação são lidos
+    INTEIROS para a IA de valores. Devolve (arquivos_texto, cabecalhos, nomes).
+    """
+    _garantir_path_script()
+    from ia_local import classificar, limites_leitura, selecionar_para_leitura
+    try:
+        from ia_local.classificar_docs import TIPOS_OBRIGATORIOS_VALORES
+    except ImportError:
+        # processo do painel pode ter módulo antigo em cache
+        import importlib
+        import ia_local.classificar_docs as _cd
+        importlib.reload(_cd)
+        TIPOS_OBRIGATORIOS_VALORES = getattr(
+            _cd,
+            "TIPOS_OBRIGATORIOS_VALORES",
+            ("dfd", "edital", "termo_referencia", "orcamento", "homologacao", "contrato"),
+        )
+
+    metas = []
+    for fp in arquivos_locais:
+        nome = os.path.basename(fp)
+        meta = classificar(nome, fp)
+        meta["caminho"] = fp
+        meta["nome"] = nome
+        meta["url"] = fp  # selecionar_para_leitura usa url p/ .pdf
+        metas.append(meta)
+
+    metas.sort(key=lambda x: (x.get("prioridade", 99), x.get("nome", "").lower()))
+    escolhidos = selecionar_para_leitura(metas, max_pdfs=8, so_pdf=True)
+    escolhidos_paths = {os.path.abspath(e["caminho"]) for e in escolhidos}
+
+    # Garante Edital + DFD (e demais obrigatórios de valor) mesmo se a seleção falhar
+    for m in metas:
+        if m.get("tipo") in TIPOS_OBRIGATORIOS_VALORES:
+            escolhidos_paths.add(os.path.abspath(m["caminho"]))
+
+    # Garante limites também nos não escolhidos (leitura curta p/ rename/situação)
+    por_path = {os.path.abspath(m["caminho"]): m for m in metas}
+
+    arquivos_texto = []
+    cabecalhos = []
+    novos_paths = []
+
+    for fp in arquivos_locais:
+        _abortar_se_cancelado()
+        abs_fp = os.path.abspath(fp)
+        meta = por_path.get(abs_fp) or classificar(os.path.basename(fp), fp)
+        tipo = meta.get("tipo") or "outro"
+        max_pag, max_chars = limites_leitura(tipo)
+        eh_escolhido = abs_fp in escolhidos_paths
+        # não-priorizados: leitura curta só p/ rename / nomes
+        if not eh_escolhido:
+            if max_pag is None:
+                max_pag = 3
+            else:
+                max_pag = min(max_pag, 3)
+            max_chars = min(max_chars, 3500)
+        elif tipo in ("edital", "dfd", "termo_referencia", "homologacao"):
+            _log(
+                "        lendo {0} INTEIRO ({1})…",
+                meta.get("rotulo") or tipo,
+                os.path.basename(fp)[:50],
+            )
+
+        texto, origem = obter_texto(
+            fp, usar_ocr, idioma_ocr, motor=motor_ocr,
+            max_paginas=max_pag, max_chars=max_chars,
+        )
+        if origem == "ocr":
+            print(f"        (OCR) {os.path.basename(fp)}")
+
+        nome_atual = os.path.basename(fp)
+        raiz_atual, ext = os.path.splitext(nome_atual)
+        if renomear and texto and nome_eh_generico(raiz_atual):
+            tit = titulo_interno(texto)
+            if tit:
+                novo = capitaliza_nome_arquivo(limpa_nome(tit) + ext.lower())
+                novo_fp = caminho_unico_arquivo(pasta, novo, fp)
+                if novo_fp != fp:
+                    try:
+                        os.replace(fp, novo_fp)
+                        sc_velho = caminho_sidecar(fp)
+                        if os.path.exists(sc_velho):
+                            os.replace(sc_velho, caminho_sidecar(novo_fp))
+                        print(f"        [REN ] {nome_atual} -> "
+                              f"{os.path.basename(novo_fp)}")
+                        fp = novo_fp
+                        meta = classificar(os.path.basename(fp), fp)
+                        meta["caminho"] = fp
+                        meta["nome"] = os.path.basename(fp)
+                        tipo = meta.get("tipo") or tipo
+                    except OSError as e:
+                        print(f"        (renomear falhou: {e})")
+
+        nome_final = os.path.basename(fp)
+        arquivos_texto.append((nome_final, texto))
+        novos_paths.append(fp)
+
+        doc = {
+            "nome": nome_final,
+            "tipo": tipo,
+            "rotulo": meta.get("rotulo") or tipo,
+            "texto": texto or "",
+            "prioritario": bool(meta.get("prioritario")),
+        }
+        if eh_escolhido or meta.get("prioritario") or tipo in TIPOS_OBRIGATORIOS_VALORES:
+            cabecalhos.append(doc)
+        elif tipo in ("contrato", "aceite_adesao", "homologacao", "ata"):
+            cabecalhos.append(doc)
+
+    # ordena cabecalhos: DFD/Edital/TR/Homologação primeiro (valores)
+    peso = {
+        "dfd": 0, "edital": 1, "termo_referencia": 2, "homologacao": 3,
+        "orcamento": 4, "etp": 5, "contrato": 6,
+    }
+    cabecalhos.sort(key=lambda d: (peso.get(d.get("tipo"), 40), d.get("nome", "")))
+
+    # log dos prioritários lidos
+    tipos_lidos = [
+        "{0}({1}c)".format(c["tipo"], len(c.get("texto") or ""))
+        for c in cabecalhos if c.get("texto")
+    ]
+    if tipos_lidos:
+        _log("        docs p/ IA/valores: {0}", ", ".join(tipos_lidos[:8]))
+
+    return arquivos_texto, cabecalhos, [os.path.basename(p) for p in novos_paths]
+
+
+def _aplicar_valores_prioritarios(linha, cabecalhos, arquivos_texto,
+                                  modalidade, data_pub, ano):
+    """Valores via regras_valores (docs tipados); fallback na extração antiga."""
+    _garantir_path_script()
+    from ia_local import extrair_valores_dos_docs
+
+    vals_prio = extrair_valores_dos_docs(cabecalhos)
+    auditoria = []
+
+    if vals_prio.get("valor_estimado"):
+        try:
+            linha["Valor Estimado"] = float(vals_prio["valor_estimado"])
+        except ValueError:
+            linha["Valor Estimado"] = vals_prio["valor_estimado"]
+        meta = vals_prio.get("valor_estimado_meta") or {}
+        auditoria.append({
+            "campo": "Valor Estimado", "valor": vals_prio["valor_estimado"],
+            "origem": "prioritario", "doc": meta.get("doc", ""),
+            "rotulo": meta.get("rotulo", ""), "trecho": meta.get("trecho", ""),
+            "pts": "", "outros": "",
+        })
+    if vals_prio.get("valor_homologado"):
+        try:
+            linha["Valor Homologado"] = float(vals_prio["valor_homologado"])
+        except ValueError:
+            linha["Valor Homologado"] = vals_prio["valor_homologado"]
+        meta = vals_prio.get("valor_homologado_meta") or {}
+        auditoria.append({
+            "campo": "Valor Homologado", "valor": vals_prio["valor_homologado"],
+            "origem": "prioritario", "doc": meta.get("doc", ""),
+            "rotulo": meta.get("rotulo", ""), "trecho": meta.get("trecho", ""),
+            "pts": "", "outros": "",
+        })
+
+    # data de abertura + fallback de valores pela lógica antiga
+    vals = extrair_valores_da_licitacao(
+        arquivos_texto, modalidade=modalidade,
+        data_pub=data_pub if isinstance(data_pub, datetime) else None,
+        ano=ano)
+    if not linha.get("Valor Estimado") and vals["valor_estimado"] is not None:
+        linha["Valor Estimado"] = vals["valor_estimado"]
+    if not linha.get("Valor Homologado") and vals["valor_homologado"] is not None:
+        linha["Valor Homologado"] = vals["valor_homologado"]
+    if vals["data_abertura"]:
+        d, mth, y = vals["data_abertura"]
+        linha["Data de Abertura"] = datetime(y, mth, d)
+    # Evita duplicar Valor Estimado/Homologado se já veio dos docs prioritários
+    campos_ja = {a.get("campo") for a in auditoria}
+    for item in vals.get("auditoria") or []:
+        if item.get("campo") in campos_ja and item.get("campo") in (
+            "Valor Estimado", "Valor Homologado",
+        ):
+            continue
+        auditoria.append(item)
+    return auditoria
+
+
+def _item_aud_simples(campo, valor, doc, rotulo, trecho=""):
+    return {
+        "campo": campo,
+        "valor": valor if valor not in ("", None) else None,
+        "doc": doc or "—",
+        "rotulo": rotulo or "",
+        "trecho": trecho or "",
+        "pts": "",
+        "outros": "",
+    }
+
+
+def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
+                        modelo, ollama_url, pasta_cache, so_se_faltar):
+    """Chama Ollama se ligado; nunca quebra o job se estiver offline."""
+    import threading
+
+    if so_se_faltar and not _precisa_ia(linha):
+        _log("        etapa: IA — pulada (campos já preenchidos)")
+        return None
+
+    _garantir_path_script()
+    from ia_local import ErroIA, ollama_disponivel, refinar
+    from pathlib import Path
+
+    if not ollama_disponivel(ollama_url):
+        _log("        ! Ollama offline — seguindo só com regras ({0})",
+             ollama_url)
+        return None
+
+    leitura_local = {
+        "numero": linha.get("Número") or "",
+        "numero_bruto": re.sub(r"-([A-Za-z]+)$", "", str(linha.get("Número") or "")),
+        "ano": str(linha.get("Ano") or ""),
+        "objeto": linha.get("Objeto") or "",
+        "situacao": linha.get("Situação da Licitação") or "",
+        "valor_estimado": (
+            f"{linha['Valor Estimado']:.2f}"
+            if isinstance(linha.get("Valor Estimado"), (int, float))
+            else str(linha.get("Valor Estimado") or "")
+        ),
+        "valor_homologado": (
+            f"{linha['Valor Homologado']:.2f}"
+            if isinstance(linha.get("Valor Homologado"), (int, float))
+            else str(linha.get("Valor Homologado") or "")
+        ),
+        "modalidade": modalidade,
+    }
+
+    stop = threading.Event()
+
+    def _heartbeat():
+        t0 = time.time()
+        while not stop.wait(15):
+            _log("        IA: ainda processando... {0}s (aguarde)",
+                 int(time.time() - t0))
+
+    th = threading.Thread(target=_heartbeat, daemon=True)
+    try:
+        _log("        etapa: IA — refinando com Ollama ({0}) — pode levar 1–3 min...",
+             modelo)
+        th.start()
+        out = refinar(
+            titulo, leitura_local, cabecalhos,
+            provedor="ollama", modelo=modelo, ollama_url=ollama_url,
+            pasta_cache=Path(pasta_cache) if pasta_cache else None,
+            usar_cache=True,
+        )
+    except ErroIA as e:
+        _log("        ! IA: {0}", e)
+        return None
+    except Exception as e:
+        _log("        ! IA falhou: {0}: {1}", type(e).__name__, e)
+        return None
+    finally:
+        stop.set()
+
+    if out.get("cache"):
+        _log("        IA: cache hit (resposta instantânea)")
+    mudancas = out.get("mudancas") or []
+    if mudancas:
+        _log("        IA: " + "; ".join(mudancas[:4]))
+    else:
+        _log("        IA: sem mudanças (manteve regras)")
+
+    # funde só o que veio validado + monta auditoria da IA
+    aud_ia = []
+    origem_ia = out.get("origem") or "ia_local"
+    if out.get("cache"):
+        origem_ia = "ia_cache"
+
+    def _aud_ia(campo, valor, trecho="", motivo=""):
+        aud_ia.append(_item_aud_simples(
+            campo, valor,
+            doc=origem_ia,
+            rotulo=motivo or "refino Ollama",
+            trecho=trecho,
+        ))
+
+    if out.get("numero"):
+        ant = linha.get("Número")
+        linha["Número"] = numero_com_sigla_front(out["numero"], modalidade)
+        if out.get("ano"):
+            linha["Ano"] = out["ano"]
+        _aud_ia(
+            "Número", linha["Número"],
+            trecho=out.get("trecho_numero") or "",
+            motivo="IA alterou (antes: {0})".format(ant or "—"),
+        )
+    if out.get("objeto"):
+        ant = (linha.get("Objeto") or "")[:60]
+        linha["Objeto"] = out["objeto"]
+        _aud_ia(
+            "Objeto", out["objeto"],
+            trecho=out.get("trecho_objeto") or "",
+            motivo="IA alterou (antes: {0})".format(ant or "—"),
+        )
+    if out.get("situacao"):
+        ant = linha.get("Situação da Licitação")
+        linha["Situação da Licitação"] = situacao_para_front(out["situacao"])
+        _aud_ia(
+            "Situação da Licitação", linha["Situação da Licitação"],
+            trecho=out.get("motivo_situacao") or "",
+            motivo="IA alterou (antes: {0})".format(ant or "—"),
+        )
+    for campo_linha, campo_ia, chave_trecho in (
+        ("Valor Estimado", "valor_estimado", "trecho_valor_estimado"),
+        ("Valor Homologado", "valor_homologado", "trecho_valor_homologado"),
+    ):
+        v = out.get(campo_ia) or ""
+        if not v:
+            continue
+        ant = linha.get(campo_linha)
+        try:
+            linha[campo_linha] = float(v)
+            valor_aud = float(v)
+        except ValueError:
+            linha[campo_linha] = v
+            valor_aud = v
+        _aud_ia(
+            campo_linha, valor_aud,
+            trecho=out.get(chave_trecho) or "",
+            motivo="IA alterou (antes: {0})".format(ant if ant not in ("", None) else "—"),
+        )
+    out["auditoria"] = aud_ia
+    return out
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 def main():
     ap = argparse.ArgumentParser(
         description="Baixa licitações de portais CR2 e preenche planilha.")
     ap.add_argument("--listagem", default=LISTAGEM_PADRAO,
-                    help=f"URL da listagem (padrão: {LISTAGEM_PADRAO})")
+                    help="URL da listagem de licitações (obrigatória).")
     ap.add_argument("--saida", default=SAIDA_PADRAO, help="Pasta dos downloads.")
     ap.add_argument("--planilha-modelo", default="Front.xlsx",
                     help="Planilha-modelo com os cabeçalhos (padrão: Front.xlsx).")
@@ -1524,7 +1941,37 @@ def main():
                     help="Não renomeia anexos pelo título interno do documento.")
     ap.add_argument("--ignorar-ssl", action="store_true",
                     help="Ignora erros de certificado SSL (portais com cert quebrado).")
+    ap.add_argument(
+        "--link-pasta-base",
+        default="",
+        help="URL base (Drive/SharePoint) para montar LinkDaPasta. "
+             "Vazio = usa caminho local absoluto da pasta de anexos.",
+    )
+    ap.add_argument(
+        "--refinar-ia", action="store_true",
+        help="Refina numero/objeto/situacao/valores com Ollama local (grátis).",
+    )
+    ap.add_argument(
+        "--modelo-ia", default="llama3.2:3b",
+        help="Modelo Ollama (padrão: llama3.2:3b).",
+    )
+    ap.add_argument(
+        "--ollama-url", default="http://127.0.0.1:11434",
+        help="URL do Ollama (padrão: http://127.0.0.1:11434).",
+    )
+    ap.add_argument(
+        "--ia-sempre", action="store_true",
+        help="Chama a IA mesmo quando regras já preencheram os campos "
+             "(padrão: só chama se faltar número/objeto/situação/valor).",
+    )
+    ap.add_argument(
+        "--limite", type=int, default=0,
+        help="Processa no máximo N licitações (0 = todas). Útil para testes.",
+    )
     args = ap.parse_args()
+
+    if not (args.listagem or "").strip():
+        ap.error("Informe --listagem com a URL da página de licitações.")
 
     p = urlparse(args.listagem)
     base = f"{p.scheme}://{p.netloc}"
@@ -1568,6 +2015,13 @@ def main():
     print(f"Planilha : {args.planilha_saida}  (modelo: {args.planilha_modelo})")
     print(f"Anos     : {', '.join(anos_filtro) if anos_filtro else 'todos'}")
     print(f"Renomear : {'pelo título interno dos documentos' if renomear else 'não'}")
+    if args.limite and args.limite > 0:
+        print(f"Limite   : {args.limite} licitação(ões)")
+    if args.refinar_ia:
+        print(f"IA       : Ollama / {args.modelo_ia} @ {args.ollama_url}"
+              + (" (só se faltar campo)" if not args.ia_sempre else " (sempre)"))
+    else:
+        print("IA       : desligada")
     print("=" * 66 + "\n")
 
     licitacoes = None
@@ -1581,14 +2035,18 @@ def main():
             [f"{base}/c/licitacoes/{s}/" for s in SUBCATEGORIAS]
             if args.incluir_subcategorias else [])
         licitacoes = coletar_via_html(sessao, listagens)
-    print(f"\n► {len(licitacoes)} licitação(ões).\n")
+    if args.limite and args.limite > 0:
+        licitacoes = licitacoes[: args.limite]
+    print(f"\n► {len(licitacoes)} licitação(ões) a processar.\n")
 
     linhas_planilha, auditoria_geral = [], []
+    itens_upload = []  # {linha, pasta, titulo} para subir*.xlsx
 
     puladas_ano = 0
     cancelado = False
+    total_lic = len(licitacoes)
     try:
-        for lic in licitacoes:
+        for idx, lic in enumerate(licitacoes, 1):
             _abortar_se_cancelado()
             titulo = lic["titulo"]
 
@@ -1603,13 +2061,22 @@ def main():
             if anos_filtro:
                 if ano and ano not in anos_filtro:
                     puladas_ano += 1
+                    _log("  · [{0}/{1}] pulada (ano {2} fora do filtro)",
+                         idx, total_lic, ano)
                     continue
                 if not ano:
-                    print(f"  ! sem ano identificável (mantida): {titulo[:60]}")
+                    _log("  ! [{0}/{1}] sem ano identificável (mantida): {2}",
+                         idx, total_lic, titulo[:55])
 
             pasta = os.path.join(args.saida, nome_pasta(titulo))
             os.makedirs(pasta, exist_ok=True)
-            print(f"  ► {titulo[:70]}")
+
+            barra = _barra(idx - 1, total_lic)
+            _log("")
+            _log("── [{0}/{1} · {2}%] {3} {4}",
+                 idx, total_lic, _pct(idx - 1, total_lic), barra, titulo[:55])
+            _log("    etapa: baixar anexos ({0} link(s))...",
+                 len(lic.get("anexos") or []))
 
             arquivos_locais = []
             nomes_nesta_execucao = set()
@@ -1677,60 +2144,100 @@ def main():
                      "Situação da Licitação": "", "Valor Homologado": ""}
 
             if not args.sem_extracao:
-                arquivos_texto = []
-                for fp in arquivos_locais:
-                    _abortar_se_cancelado()
-                    texto, origem = obter_texto(fp, args.ocr, args.idioma_ocr,
-                                                motor=motor_ocr)
-                    if origem == "ocr":
-                        print(f"        (OCR) {os.path.basename(fp)}")
-
-                    # --- RENOMEAÇÃO PELO TÍTULO INTERNO: nome genérico + título
-                    # reconhecido dentro do documento (texto nativo ou OCR).
-                    nome_atual = os.path.basename(fp)
-                    raiz_atual, ext = os.path.splitext(nome_atual)
-                    if renomear and texto and nome_eh_generico(raiz_atual):
-                        tit = titulo_interno(texto)
-                        if tit:
-                            novo = capitaliza_nome_arquivo(
-                                limpa_nome(tit) + ext.lower())
-                            novo_fp = caminho_unico_arquivo(pasta, novo, fp)
-                            if novo_fp != fp:
-                                try:
-                                    os.replace(fp, novo_fp)
-                                    # o cache de OCR acompanha o arquivo
-                                    sc_velho = caminho_sidecar(fp)
-                                    if os.path.exists(sc_velho):
-                                        os.replace(sc_velho,
-                                                   caminho_sidecar(novo_fp))
-                                    print(f"        [REN ] {nome_atual} -> "
-                                          f"{os.path.basename(novo_fp)}")
-                                    fp = novo_fp
-                                except OSError as e:
-                                    print(f"        (renomear falhou: {e})")
-
-                    arquivos_texto.append((os.path.basename(fp), texto))
-
-                vals = extrair_valores_da_licitacao(
-                    arquivos_texto, modalidade=modalidade,
-                    data_pub=data_pub if isinstance(data_pub, datetime) else None,
-                    ano=ano)
-                if vals["valor_estimado"] is not None:
-                    linha["Valor Estimado"] = vals["valor_estimado"]
-                if vals["valor_homologado"] is not None:
-                    linha["Valor Homologado"] = vals["valor_homologado"]
-                if vals["data_abertura"]:
-                    d, mth, y = vals["data_abertura"]
-                    linha["Data de Abertura"] = datetime(y, mth, d)   # já validada
-                linha["Situação da Licitação"] = inferir_situacao(
-                    titulo, [n for n, _ in arquivos_texto],
-                    modalidade=modalidade)
-
-                for item in vals["auditoria"]:
+                _log("    etapa: ler documentos prioritários...")
+                arquivos_texto, cabecalhos, nomes_docs = _ler_docs_priorizados(
+                    arquivos_locais, args.ocr, args.idioma_ocr, motor_ocr,
+                    renomear, pasta,
+                )
+                _log("    etapa: extrair valores / situação...")
+                for item in _aplicar_valores_prioritarios(
+                    linha, cabecalhos, arquivos_texto,
+                    modalidade, data_pub, ano,
+                ):
                     item["licitacao"] = titulo
                     auditoria_geral.append(item)
 
+                sit = situacao_para_front(
+                    inferir_situacao(titulo, nomes_docs, modalidade=modalidade)
+                )
+                linha["Situação da Licitação"] = sit
+                auditoria_geral.append({
+                    **_item_aud_simples(
+                        "Situação da Licitação", sit,
+                        doc="título + nomes dos anexos",
+                        rotulo="inferir_situacao (regras)",
+                        trecho=(titulo or "")[:120],
+                    ),
+                    "licitacao": titulo,
+                })
+
+                # Número com sigla (ex.: 002/2023-AD)
+                num_final = numero_com_sigla_front(
+                    linha.get("Número") or numero, modalidade
+                )
+                linha["Número"] = num_final
+                auditoria_geral.append({
+                    **_item_aud_simples(
+                        "Número", num_final,
+                        doc="título da listagem",
+                        rotulo="split_modalidade_numero + sigla Front",
+                        trecho=(titulo or "")[:120],
+                    ),
+                    "licitacao": titulo,
+                })
+                auditoria_geral.append({
+                    **_item_aud_simples(
+                        "Modalidade", modalidade,
+                        doc="título da listagem",
+                        rotulo="modalidade_padrao (regras)",
+                        trecho=(titulo or "")[:120],
+                    ),
+                    "licitacao": titulo,
+                })
+                auditoria_geral.append({
+                    **_item_aud_simples(
+                        "Objeto", linha.get("Objeto") or "",
+                        doc="título da listagem",
+                        rotulo="extrai_objeto (texto entre parênteses)",
+                        trecho=(titulo or "")[:160],
+                    ),
+                    "licitacao": titulo,
+                })
+
+                est = linha.get("Valor Estimado")
+                hom = linha.get("Valor Homologado")
+                _log(
+                    "    leitura: nº {0} | sit. {1} | est. {2} | hom. {3}",
+                    linha.get("Número") or "—",
+                    linha.get("Situação da Licitação") or "—",
+                    est if est not in ("", None) else "—",
+                    hom if hom not in ("", None) else "—",
+                )
+
+                if args.refinar_ia:
+                    pasta_cache = os.path.join(
+                        os.path.dirname(os.path.abspath(__file__)), "cache_ia"
+                    )
+                    out_ia = _refinar_com_ollama(
+                        titulo, linha, cabecalhos, modalidade,
+                        modelo=args.modelo_ia,
+                        ollama_url=args.ollama_url,
+                        pasta_cache=pasta_cache,
+                        so_se_faltar=not args.ia_sempre,
+                    )
+                    if out_ia:
+                        for item in out_ia.get("auditoria") or []:
+                            item["licitacao"] = titulo
+                            auditoria_geral.append(item)
+
             linhas_planilha.append(linha)
+            itens_upload.append({
+                "linha": dict(linha),
+                "pasta": os.path.abspath(pasta),
+                "titulo": titulo,
+            })
+            _log("    ✓ [{0}/{1} · {2}%] concluída {3}",
+                 idx, total_lic, _pct(idx, total_lic), _barra(idx, total_lic))
     except Cancelado:
         cancelado = True
 
@@ -1743,11 +2250,82 @@ def main():
         preencher_planilha(linhas_planilha, auditoria_geral,
                            args.planilha_modelo, args.planilha_saida)
         print(f"  ✓ {args.planilha_saida}")
+        print("  · Aba 'Auditoria': origem de cada campo (documento + trecho)")
+        global ULTIMO_RESULTADO_UPLOAD
+        ULTIMO_RESULTADO_UPLOAD = {
+            "planilha_preenchida": os.path.abspath(args.planilha_saida),
+            "planilha_auditoria": os.path.abspath(args.planilha_saida),
+        }
+
+        # Planilhas oficiais de upload (Front)
+        try:
+            from gestor_regras import gerar_planilhas_upload
+        except ImportError:
+            # execução via load_module do painel: pasta do script no path
+            _dir_script = os.path.dirname(os.path.abspath(__file__))
+            if _dir_script not in sys.path:
+                sys.path.insert(0, _dir_script)
+            from gestor_regras import gerar_planilhas_upload
+
+        print("\n► Gerando planilhas de upload (subirLicitacoes / subirDocumentos / contratos)...")
+        resultado_upload = gerar_planilhas_upload(
+            itens_upload,
+            args.saida,
+            link_pasta_base=(args.link_pasta_base or "").strip(),
+            ler_texto=obter_texto,
+            usar_ocr=bool(args.ocr),
+            idioma_ocr=getattr(args, "idioma_ocr", "por") or "por",
+            motor_ocr=(getattr(args, "motor_ocr", None) or "auto"),
+            usar_ia_contratos=bool(getattr(args, "refinar_ia", False)),
+            modelo_ia=(getattr(args, "modelo_ia", None) or "llama3.2:3b"),
+            ollama_url=(getattr(args, "ollama_url", None) or "http://127.0.0.1:11434"),
+        )
+        print(
+            "  ✓ Prontas: {0}  |  Pendentes: {1}".format(
+                resultado_upload["prontas"],
+                resultado_upload["pendentes"],
+            )
+        )
+        print("  ✓ {0}".format(resultado_upload["planilha_licitacoes"]))
+        print("  ✓ {0}".format(resultado_upload["planilha_documentos"]))
+        if resultado_upload.get("planilha_contratos"):
+            print("  ✓ Contratos: {0} linha(s) → {1}".format(
+                resultado_upload.get("contratos_extraidos", "?"),
+                resultado_upload["planilha_contratos"],
+            ))
+        if resultado_upload.get("contratos_movidos"):
+            print("  · Contratos separados: {0} arquivo(s) em Contratos/".format(
+                resultado_upload["contratos_movidos"]))
+            for msg in (resultado_upload.get("logs_contratos") or [])[:8]:
+                print("  · {0}".format(msg))
+        if resultado_upload["pendentes"]:
+            print("  · Pendentes: {0}".format(resultado_upload["pendentes_relatorio"]))
+            for msg in (resultado_upload.get("logs_move") or [])[:10]:
+                print("  · Pasta pendente: {0}".format(msg))
+            if len(resultado_upload.get("logs_move") or []) > 10:
+                print("  · … (+{0} pastas movidas)".format(
+                    len(resultado_upload["logs_move"]) - 10))
+        for msg in (resultado_upload.get("logs_link") or [])[:5]:
+            print("  · {0}".format(msg))
+        if len(resultado_upload.get("logs_link") or []) > 5:
+            print("  · … (+{0} pastas)".format(
+                len(resultado_upload["logs_link"]) - 5))
+
+        # expõe caminhos para o runner do painel
+        ULTIMO_RESULTADO_UPLOAD.update(resultado_upload or {})
+        ULTIMO_RESULTADO_UPLOAD["planilha_preenchida"] = os.path.abspath(
+            args.planilha_saida
+        )
+        ULTIMO_RESULTADO_UPLOAD["planilha_auditoria"] = (
+            ULTIMO_RESULTADO_UPLOAD["planilha_preenchida"]
+        )  # aba Auditoria dentro do mesmo arquivo
 
     print("\n" + "=" * 66)
     print("CANCELADO." if cancelado else "Concluído.")
-    print("  Veja a aba 'Auditoria': documento de origem, rótulo, trecho e")
-    print("  pontuação de confiança de cada valor — e o motivo dos em branco.")
+    if not args.sem_extracao:
+        print("  Planilhas oficiais: subirLicitacoes.xlsx + subirDocumentosLicitacoes.xlsx")
+        print("  Contratos: Contratos/ + contratos.xlsx (aba Auditoria) + contratos.csv")
+        print("  Veja também a aba 'Auditoria' e a pasta PENDENTES/ se houver faltas.")
     print("=" * 66)
     if cancelado:
         raise Cancelado()

@@ -48,8 +48,8 @@ SERVICES = {
     },
     "normas": {
         "id": "normas",
-        "nome": "Download de Normas",
-        "descricao": "Leis, decretos e portarias com nome padrão (Lei Nº010/2025) e leitura do PDF.",
+        "nome": "Extração Pro",
+        "descricao": "Leis, atos, matérias e documentos — Prefeitura ou Câmara, com nomeação automática.",
         "pagina": "/normas.html",
         "icone": "03",
     },
@@ -59,6 +59,13 @@ SERVICES = {
         "descricao": "Baixa anexos de licitações CR2, extrai valores e preenche planilha.",
         "pagina": "/licitacoes.html",
         "icone": "04",
+    },
+    "contratos": {
+        "id": "contratos",
+        "nome": "Contratos / Aditivos",
+        "descricao": "Coleta contratos e aditivos do Governo Transparente, baixa PDFs e gera planilha.",
+        "pagina": "/contratos.html",
+        "icone": "09",
     },
     "publicacao": {
         "id": "publicacao",
@@ -91,6 +98,11 @@ SERVICES = {
 }
 
 
+# Ocultos no hub (código permanece; não entram na API de jobs do painel).
+# Quando prontos para o time: retire o id deste conjunto e inclua em HUBS no front.
+SERVICES_OCULTOS = frozenset({"contratos", "dic_est_ter"})
+
+
 class JobCreate(BaseModel):
     service_id: str
     config: dict = {}
@@ -98,12 +110,42 @@ class JobCreate(BaseModel):
 
 @app.get("/api/health")
 def health():
-    return {"ok": True}
+    """
+    Saúde do servidor + processo ativo (para o pill Online).
+    """
+    ativo = jobs.job_ativo()
+    payload = {"ok": True, "ativos": jobs.ativos(), "ativo": None}
+    if ativo is not None:
+        d = ativo.to_dict()
+        labels = {
+            "documentos": "Documentos",
+            "categorias": "Categorias",
+            "normas": "Extração Pro",
+            "licitacoes": "Licitações",
+            "contratos": "Contratos",
+            "publicacao": "Publicação",
+            "sessao": "Sessão",
+            "mapa": "Mapa",
+            "dic_est_ter": "Dic/Est/Ter",
+        }
+        prog = d.get("progress") or {}
+        payload["ativo"] = {
+            "id": d["id"],
+            "service_id": d["service_id"],
+            "nome": labels.get(d["service_id"], d["service_id"]),
+            "status": d["status"],
+            "cancel_requested": d.get("cancel_requested"),
+            "done": prog.get("done") or 0,
+            "total": prog.get("total") or 0,
+            "percent": prog.get("percent"),
+            "label": prog.get("label") or "",
+        }
+    return payload
 
 
 @app.get("/api/services")
 def list_services():
-    return list(SERVICES.values())
+    return [s for s in SERVICES.values() if s["id"] not in SERVICES_OCULTOS]
 
 
 @app.get("/api/jobs")
@@ -115,14 +157,19 @@ def list_jobs():
 def get_job(job_id: str):
     job = jobs.get(job_id)
     if not job:
-        raise HTTPException(404, "Job não encontrado")
+        raise HTTPException(404, "Processo não encontrado")
     return {**job.to_dict(), "logs": job.logs[-200:]}
 
 
 @app.post("/api/jobs")
 def create_job(body: JobCreate):
-    if body.service_id not in SERVICES or body.service_id == "dic_est_ter":
+    if body.service_id not in SERVICES or body.service_id in SERVICES_OCULTOS:
         raise HTTPException(400, "Serviço inválido")
+    if jobs.ativos() >= jobs.MAX_ATIVOS:
+        raise HTTPException(
+            409,
+            "Já existe um processo em andamento. Cancele ou aguarde terminar.",
+        )
     job = jobs.create(body.service_id, body.config)
     jobs.save_config(job)
     jobs.start(job, dispatch)
@@ -133,7 +180,8 @@ def create_job(body: JobCreate):
 def cancel_job(job_id: str):
     job = jobs.cancel(job_id)
     if not job:
-        raise HTTPException(404, "Job não encontrado")
+        raise HTTPException(404, "Processo não encontrado")
+
     return {
         "ok": True,
         "job_id": job.id,
@@ -147,7 +195,8 @@ def cancel_job(job_id: str):
 async def stream_logs(job_id: str):
     job = jobs.get(job_id)
     if not job:
-        raise HTTPException(404, "Job não encontrado")
+        raise HTTPException(404, "Processo não encontrado")
+
 
     async def gen():
         q = job.subscribe()
@@ -174,7 +223,8 @@ async def stream_logs(job_id: str):
 def download_job(job_id: str):
     job = jobs.get(job_id)
     if not job:
-        raise HTTPException(404, "Job não encontrado")
+        raise HTTPException(404, "Processo não encontrado")
+
     zip_path = job.result.get("zip")
     if zip_path and Path(zip_path).is_file():
         return FileResponse(zip_path, filename="cr2-{0}.zip".format(job_id))
@@ -221,6 +271,11 @@ def page_normas():
 @app.get("/licitacoes.html")
 def page_licitacoes():
     return _page("licitacoes.html")
+
+
+@app.get("/contratos.html")
+def page_contratos():
+    return _page("contratos.html")
 
 
 @app.get("/publicacao.html")

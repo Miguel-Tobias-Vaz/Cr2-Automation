@@ -1,8 +1,0 @@
-
-============================================================
-Pasta: C:\Users\tobia\Documents\GitHub\Cr2-Automation
-Data: 30/07/2026 11:21:07,90
-Usando: C:\Users\tobia\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe
-Pasta do painel: C:\Users\tobia\Documents\GitHub\Cr2-Automation\centro-automacoes
-Python do venv: C:\Users\tobia\Documents\GitHub\Cr2-Automation\centro-automacoes\venv\Scripts\python.exe
-Instalacao concluida!

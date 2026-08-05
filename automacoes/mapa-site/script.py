@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import requests
@@ -38,9 +39,9 @@ HEADERS = {
 #  CONFIGURAÇÕES
 # =============================================================
 
-WP_URL = "https://maracana.pa.gov.br"             	#Link da Entidade
-USER = "cr2-admin21@cr2transparencia.com.br"                  	#Seu Usuário  
-APP_PASSWORD = "jBOD uezv u5Gy ljEq u0GB fkSq"                                             	#Sua Senha de Aplicação
+WP_URL = os.environ.get("WP_URL", "").strip()
+USER = os.environ.get("WP_USER", "").strip()
+APP_PASSWORD = os.environ.get("WP_APP_PASSWORD", "").strip()
 
 SLUG_MAPA_DO_SITE = "mapa-do-site"                          	#Slug do Mapa do Site Geralmente vai ser esse que está como padrão
 																#Exemplo: https://conceicaodoaraguaia.pa.gov.br/mapa-do-site/

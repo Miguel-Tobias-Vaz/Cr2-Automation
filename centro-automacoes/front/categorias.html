@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Download por Categoria — Opto Automações</title>
+    <title>Baixar por Categoria — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home6" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home20" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -24,7 +24,7 @@
         <span>Opto Automações</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">API …</span>
+      <span class="api-pill" id="api-pill">Servidor …</span>
     </header>
 
     <main class="page-shell">
@@ -32,7 +32,7 @@
         <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
         <div class="hero-main">
           <header class="hero-copy">
-            <h1>Download por Categoria</h1>
+            <h1>Baixar por Categoria</h1>
             <p class="lede">
               Varre a listagem WordPress (com paginação), abre cada post e baixa
               todos os PDFs do corpo do artigo.
@@ -76,11 +76,25 @@
             </label>
             <label class="check-row" for="ler_pdf">
               <input type="checkbox" id="ler_pdf" checked />
-              <span>Ler texto do PDF para normalizar o nome (ex.: Lei Nº738-2023.pdf)</span>
+              <span class="check-copy">
+                <strong>Ler texto do PDF para nomear</strong>
+                <small>Ex.: Lei Nº738-2023.pdf</small>
+              </span>
+            </label>
+            <label class="check-row" for="refinar_ia">
+              <input type="checkbox" id="refinar_ia" checked />
+              <span class="check-copy">
+                <strong>Refinar nome com IA local (Ollama)</strong>
+                <small>Corrige tipo/número/ano quando as regras falham.</small>
+              </span>
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Modelo Ollama (opcional)</em></span>
+              <input type="text" id="modelo_ia" value="llama3.2:3b" placeholder="llama3.2:3b" />
             </label>
           </fieldset>
           <div class="acao-row">
-            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar download</button>
+            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar baixa</button>
             <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
             <a class="btn btn-ghost" href="#log">Ver log</a>
           </div>
@@ -90,23 +104,29 @@
       <section class="log-wrap" id="log">
         <header class="section-head">
           <h2>Log</h2>
-          <p>Status: <strong id="log-state">Parado</strong></p>
+          <p>Situação: <strong id="log-state">Parado</strong></p>
         </header>
         <div class="log-console" id="log-console"></div>
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home6"></script>
-    <script src="/assets/shared.js?v=home6"></script>
+    <script src="/assets/fluid-particles.js?v=home20"></script>
+    <script src="/assets/shared.js?v=home20"></script>
     <script>
       CR2Centro.injectNav("categorias");
       CR2Centro.pingApi();
-      CR2Centro.bindRun("categorias", "form-categorias", ["site", "url_categoria", "pasta_base", "anos", "ler_pdf"], () => ({
+      CR2Centro.bindRun(
+        "categorias",
+        "form-categorias",
+        ["site", "url_categoria", "pasta_base", "anos", "ler_pdf", "refinar_ia", "modelo_ia"],
+        () => ({
         site: document.getElementById("site").value.trim(),
         url_categoria: document.getElementById("url_categoria").value.trim(),
         pasta_base: document.getElementById("pasta_base").value.trim(),
         anos: document.getElementById("anos").value.trim(),
         ler_pdf: document.getElementById("ler_pdf").checked,
+        refinar_ia: document.getElementById("refinar_ia").checked,
+        modelo_ia: document.getElementById("modelo_ia").value.trim() || "llama3.2:3b",
       }), false);
     </script>
   </body>

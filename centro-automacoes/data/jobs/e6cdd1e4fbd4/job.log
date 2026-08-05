@@ -1,0 +1,1001 @@
+19:51:56 [info] Processo iniciado — normas
+19:51:56 [info] Fontes categoria: 1
+19:51:56 [info] Filtro de anos: todos
+19:51:56 [info] IA local: Ollama / llama3.2:3b @ http://127.0.0.1:11434 (nome + confirmação de Diárias)
+19:51:56 [info] Diárias: regra automática quando a URL/pasta/PDF for de diárias (+ IA confirma)
+19:51:56 [info] Sessões: Pautas/Atas/Presença/Votações → pasta por sessão (ex. 17ª Sessão Ordinária)
+19:51:56 [info] ============================================================
+19:51:56 [info]   DOWNLOAD DE NORMAS MUNICIPAIS
+19:51:56 [info]   Site: camaranovatimboteua.pa.gov.br
+19:51:56 [info]   Destino: C:\Downloads\novatembo
+19:51:56 [info]   Leitura PDF: sim
+19:51:56 [info]   Diárias → planilha: sim
+19:51:56 [info]   IA local: sim (llama3.2:3b)
+19:51:56 [info]   Anos: todos
+19:51:56 [info] ============================================================
+19:51:57 [info] ============================================================
+19:51:57 [info]   FONTE (categoria): https://camaranovatimboteua.pa.gov.br/c/atividades-legislativas/pautas-e-atas-das-sessoes/
+19:51:57 [info]   Pasta: Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua (de: Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua)
+19:51:57 [info] ============================================================
+19:51:57 [info]   Página 1: https://camaranovatimboteua.pa.gov.br/c/atividades-legislativas/pautas-e-atas-das-sessoes/
+19:51:57 [info]   255 posts novos. Total: 255
+19:51:58 [info]   Página 2: https://camaranovatimboteua.pa.gov.br/c/atividades-legislativas/pautas-e-atas-das-sessoes/page/2/
+19:52:00 [info]   0 posts novos. Total: 255
+19:52:00 [info]   Nenhum post novo. Fim.
+19:52:00 [info] [001/255] declaracao-de-pautas-e-atas-das-comissoes-de-fevereiro-de-20
+19:52:00 [info]     1 PDF(s) | titulo: DECLARAÇÃO DE PAUTAS E ATAS DAS COMISSÕES – DE FEVEREIRO DE 2024
+19:52:01 [info]     [SESSAO]   Declarações → Clique aqui para visualizar - 29-02-2024
+19:52:01 [ok]     [OK]      Clique aqui para visualizar - 29-02-2024.pdf (630.0 KB) <- Clique aqui para visualizar - 29-02-2024
+19:52:01 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2024\Declarações
+19:52:02 [info] [002/255] declaracao-de-pautas-e-atas-das-comissoes-de-janeiro-de-2024
+19:52:02 [info]     1 PDF(s) | titulo: DECLARAÇÃO DE PAUTAS E ATAS DAS COMISSÕES – DE JANEIRO DE 2024
+19:52:02 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:02 [info]     [SESSAO]   Declarações → Clique aqui para visualizar
+19:52:02 [ok]     [OK]      Clique aqui para visualizar.pdf (263.1 KB) <- Clique aqui para visualizar
+19:52:02 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2024\Declarações
+19:52:02 [info] [003/255] declaracao-de-pautas-e-atas-das-comissoes-01-de-dezembro-de-
+19:52:03 [info]     1 PDF(s) | titulo: DECLARAÇÃO DE PAUTAS E ATAS DAS COMISSÕES – 01 DE DEZEMBRO DE 2023 À 31 DE DEZEM
+19:52:03 [info]     [SESSAO]   Declarações → Clique aqui para visualizar - 01-12-2023
+19:52:03 [ok]     [OK]      Clique aqui para visualizar - 01-12-2023.pdf (628.9 KB) <- Clique aqui para visualizar - 01-12-2023
+19:52:03 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\Declarações
+19:52:04 [info] [004/255] sem-pautas-e-atas-em-dezembro-2023-e-janeiro-2024-recesso
+19:52:04 [info]     [SEM PDF] Nenhum PDF no corpo do post.
+19:52:04 [info] [005/255] declaracao-de-pautas-e-atas-das-comissoes-01-de-janeiro-de-2
+19:52:05 [info]     1 PDF(s) | titulo: DECLARAÇÃO DE PAUTAS E ATAS DAS COMISSÕES – 01 DE JANEIRO DE 2023 À 18 DE DEZEMB
+19:52:06 [info]     [SESSAO]   Declarações → Clique aqui para visualizar - 01-01-2023
+19:52:06 [ok]     [OK]      Clique aqui para visualizar - 01-01-2023.pdf (630.3 KB) <- Clique aqui para visualizar - 01-01-2023
+19:52:06 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\Declarações
+19:52:06 [info] [006/255] ata-no-018-da-sessao-ordinaria-de-16-de-novembro-de-2023
+19:52:06 [info]     1 PDF(s) | titulo: ATA No 018 DA SESSÃO ORDINÁRIA, DE 16 DE NOVEMBRO DE 2023
+19:52:07 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:07 [info]     [SESSAO]   18ª Sessão Ordinária (16-11-2023) → Ata
+19:52:07 [ok]     [OK]      Ata.pdf (678.9 KB) <- Ata
+19:52:07 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\18ª Sessão Ordinária - 16-11-2023
+19:52:07 [info] [007/255] pauta-no-018-da-sessao-ordinaria-de-14-de-novembro-de-2023
+19:52:07 [info]     1 PDF(s) | titulo: PAUTA No 018 DA SESSÃO ORDINÁRIA, DE 14 DE NOVEMBRO DE 2023
+19:52:08 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:08 [info]     [SESSAO]   18ª Sessão Ordinária (14-11-2023) → Pauta
+19:52:08 [ok]     [OK]      Pauta.pdf (294.5 KB) <- Pauta
+19:52:08 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\18ª Sessão Ordinária - 16-11-2023
+19:52:08 [info] [008/255] ata-no-017-da-sessao-ordinaria-de-26-de-outubro-de-2023
+19:52:08 [info]     1 PDF(s) | titulo: ATA No 017 DA SESSÃO ORDINÁRIA, DE 26 DE OUTUBRO DE 2023
+19:52:09 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:09 [info]     [SESSAO]   17ª Sessão Ordinária (26-10-2023) → Ata
+19:52:09 [ok]     [OK]      Ata.pdf (1045.6 KB) <- Ata
+19:52:09 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\17ª Sessão Ordinária - 26-10-2023
+19:52:09 [info] [009/255] pauta-no-017-da-sessao-ordinaria-de-26-de-outubro-de-2023
+19:52:10 [info]     1 PDF(s) | titulo: PAUTA No 017 DA SESSÃO ORDINÁRIA, DE 26 DE OUTUBRO DE 2023
+19:52:10 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:10 [info]     [SESSAO]   17ª Sessão Ordinária (26-10-2023) → Pauta
+19:52:10 [ok]     [OK]      Pauta.pdf (286.8 KB) <- Pauta
+19:52:10 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\17ª Sessão Ordinária - 26-10-2023
+19:52:10 [info] [010/255] ata-no-016-da-sessao-ordinaria-de-13-de-setembro-de-2023
+19:52:11 [info]     1 PDF(s) | titulo: ATA No 016 DA SESSÃO ORDINÁRIA, DE 13 DE SETEMBRO DE 2023
+19:52:11 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:11 [info]     [SESSAO]   16ª Sessão Ordinária (13-09-2023) → Ata
+19:52:11 [ok]     [OK]      Ata.pdf (658.6 KB) <- Ata
+19:52:11 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\16ª Sessão Ordinária - 13-09-2023
+19:52:12 [info] [011/255] pauta-no-016-da-sessao-ordinaria-de-13-de-setembro-de-2023
+19:52:14 [info]     1 PDF(s) | titulo: PAUTA No 016 DA SESSÃO ORDINÁRIA, DE 13 DE SETEMBRO DE 2023
+19:52:15 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:15 [info]     [SESSAO]   16ª Sessão Ordinária (13-09-2023) → Pauta
+19:52:15 [ok]     [OK]      Pauta.pdf (302.9 KB) <- Pauta
+19:52:15 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\16ª Sessão Ordinária - 13-09-2023
+19:52:15 [info] [012/255] ata-no-015-da-sessao-ordinaria-de-30-de-agosto-de-2023
+19:52:17 [info]     1 PDF(s) | titulo: ATA No 015 DA SESSÃO ORDINÁRIA, DE 30 DE AGOSTO DE 2023
+19:52:20 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:20 [info]     [SESSAO]   15ª Sessão Ordinária (30-08-2023) → Ata
+19:52:20 [ok]     [OK]      Ata.pdf (662.6 KB) <- Ata
+19:52:20 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\15ª Sessão Ordinária - 30-08-2023
+19:52:20 [info] [013/255] pauta-no-015-da-sessao-ordinaria-de-30-de-agosto-de-2023
+19:52:22 [info]     1 PDF(s) | titulo: PAUTA No 015 DA SESSÃO ORDINÁRIA, DE 30 DE AGOSTO DE 2023
+19:52:23 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:23 [info]     [SESSAO]   15ª Sessão Ordinária (30-08-2023) → Pauta
+19:52:23 [ok]     [OK]      Pauta.pdf (308.4 KB) <- Pauta
+19:52:23 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\15ª Sessão Ordinária - 30-08-2023
+19:52:24 [info] [014/255] ata-no-014-da-sessao-ordinaria-de-10-de-agosto-de-2023
+19:52:25 [info]     1 PDF(s) | titulo: ATA No 014 DA SESSÃO ORDINÁRIA, DE 10 DE AGOSTO DE 2023
+19:52:29 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:29 [info]     [SESSAO]   14ª Sessão Ordinária (10-08-2023) → Ata
+19:52:29 [ok]     [OK]      Ata.pdf (573.7 KB) <- Ata
+19:52:29 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\14ª Sessão Ordinária - 10-08-2023
+19:52:30 [info] [015/255] pauta-no-014-da-sessao-ordinaria-de-10-de-agosto-de-2023
+19:52:32 [info]     1 PDF(s) | titulo: PAUTA No 014 DA SESSÃO ORDINÁRIA, DE 10 DE AGOSTO DE 2023
+19:52:32 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:32 [info]     [SESSAO]   14ª Sessão Ordinária (10-08-2023) → Pauta
+19:52:32 [ok]     [OK]      Pauta.pdf (279.6 KB) <- Pauta
+19:52:32 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\14ª Sessão Ordinária - 10-08-2023
+19:52:33 [info] [016/255] sem-pautas-e-atas-em-julho-2023-recesso
+19:52:34 [info]     [SEM PDF] Nenhum PDF no corpo do post.
+19:52:35 [info] [017/255] ata-no-013-da-sessao-ordinaria-de-22-de-junho-de-2023
+19:52:37 [info]     1 PDF(s) | titulo: ATA No 013 DA SESSÃO ORDINÁRIA, DE 22 DE JUNHO DE 2023
+19:52:38 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:38 [info]     [SESSAO]   13ª Sessão Ordinária (22-06-2023) → Ata
+19:52:38 [ok]     [OK]      Ata.pdf (70.6 KB) <- Ata
+19:52:38 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\13ª Sessão Ordinária - 22-06-2023
+19:52:39 [info] [018/255] pauta-no-013-da-sessao-ordinaria-de-22-de-junho-de-2023
+19:52:40 [info]     1 PDF(s) | titulo: PAUTA No 013 DA SESSÃO ORDINÁRIA, DE 22 DE JUNHO DE 2023
+19:52:41 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:41 [info]     [SESSAO]   13ª Sessão Ordinária (22-06-2023) → Pauta
+19:52:41 [ok]     [OK]      Pauta.pdf (40.6 KB) <- Pauta
+19:52:41 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\13ª Sessão Ordinária - 22-06-2023
+19:52:41 [info] [019/255] ata-no-012-da-sessao-ordinaria-de-14-de-junho-de-2023
+19:52:43 [info]     1 PDF(s) | titulo: ATA No 012 DA SESSÃO ORDINÁRIA, DE 14 DE JUNHO DE 2023
+19:52:43 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:43 [info]     [SESSAO]   12ª Sessão Ordinária (14-06-2023) → Ata
+19:52:43 [ok]     [OK]      Ata.pdf (94.6 KB) <- Ata
+19:52:43 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\12ª Sessão Ordinária - 14-06-2023
+19:52:44 [info] [020/255] pauta-no-012-da-sessao-ordinaria-de-14-de-junho-de-2023
+19:52:46 [info]     1 PDF(s) | titulo: PAUTA No 012 DA SESSÃO ORDINÁRIA, DE 14 DE JUNHO DE 2023
+19:52:46 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:46 [info]     [SESSAO]   12ª Sessão Ordinária (14-06-2023) → Pauta
+19:52:46 [ok]     [OK]      Pauta.pdf (44.0 KB) <- Pauta
+19:52:46 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\12ª Sessão Ordinária - 14-06-2023
+19:52:46 [info] [021/255] ata-no-011-da-sessao-extraordinaria-de-05-de-junho-de-2023
+19:52:48 [info]     1 PDF(s) | titulo: ATA No 011 DA SESSÃO EXTRAORDINÁRIA, DE 05 DE JUNHO DE 2023
+19:52:49 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:49 [info]     [SESSAO]   11ª Sessão Extraordinária (05-06-2023) → Ata
+19:52:49 [ok]     [OK]      Ata.pdf (77.5 KB) <- Ata
+19:52:49 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\11ª Sessão Extraordinária - 05-06-2023
+19:52:49 [info] [022/255] pauta-no-011-da-sessao-extraordinaria-de-05-de-junho-de-2023
+19:52:51 [info]     1 PDF(s) | titulo: PAUTA No 011 DA SESSÃO EXTRAORDINÁRIA, DE 05 DE JUNHO DE 2023
+19:52:51 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:51 [info]     [SESSAO]   11ª Sessão Extraordinária (05-06-2023) → Pauta
+19:52:51 [ok]     [OK]      Pauta.pdf (45.2 KB) <- Pauta
+19:52:51 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\11ª Sessão Extraordinária - 05-06-2023
+19:52:52 [info] [023/255] ata-no-010-da-sessao-ordinaria-de-01-de-junho-de-2023
+19:52:53 [info]     1 PDF(s) | titulo: ATA No 010 DA SESSÃO ORDINÁRIA, DE 01 DE JUNHO DE 2023
+19:52:54 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:54 [info]     [SESSAO]   10ª Sessão Ordinária (01-06-2023) → Ata
+19:52:54 [ok]     [OK]      Ata.pdf (149.7 KB) <- Ata
+19:52:54 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\10ª Sessão Ordinária - 01-06-2023
+19:52:54 [info] [024/255] pauta-no-010-da-sessao-ordinaria-de-05-de-junho-de-2023
+19:52:56 [info]     1 PDF(s) | titulo: PAUTA No 010 DA SESSÃO ORDINÁRIA, DE 01 DE JUNHO DE 2023
+19:52:57 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:57 [info]     [SESSAO]   10ª Sessão Ordinária (01-06-2023) → Pauta
+19:52:57 [ok]     [OK]      Pauta.pdf (47.5 KB) <- Pauta
+19:52:57 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\10ª Sessão Ordinária - 01-06-2023
+19:52:57 [info] [025/255] ata-no-009-da-sessao-ordinaria-de-11-de-maio-de-2023
+19:52:59 [info]     1 PDF(s) | titulo: ATA No 009 DA SESSÃO ORDINÁRIA, DE 11 DE MAIO DE 2023
+19:52:59 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:52:59 [info]     [SESSAO]   9ª Sessão Ordinária (11-05-2023) → Ata
+19:52:59 [ok]     [OK]      Ata.pdf (94.1 KB) <- Ata
+19:52:59 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\9ª Sessão Ordinária - 11-05-2023
+19:53:00 [info] [026/255] pauta-no-009-da-sessao-ordinaria-de-11-de-maio-de-2023
+19:53:02 [info]     1 PDF(s) | titulo: PAUTA No 009 DA SESSÃO ORDINÁRIA, DE 11 DE MAIO DE 2023
+19:53:02 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:02 [info]     [SESSAO]   9ª Sessão Ordinária (11-05-2023) → Pauta
+19:53:02 [ok]     [OK]      Pauta.pdf (47.0 KB) <- Pauta
+19:53:02 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\9ª Sessão Ordinária - 11-05-2023
+19:53:02 [info] [027/255] ata-no-008-da-sessao-ordinaria-de-04-de-maio-de-2023
+19:53:04 [info]     1 PDF(s) | titulo: ATA No 008 DA SESSÃO ORDINÁRIA, DE 04 DE MAIO DE 2023
+19:53:05 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:05 [info]     [SESSAO]   8ª Sessão Ordinária (04-05-2023) → Ata
+19:53:05 [ok]     [OK]      Ata.pdf (115.9 KB) <- Ata
+19:53:05 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\8ª Sessão Ordinária - 04-05-2023
+19:53:05 [info] [028/255] pauta-no-008-da-sessao-ordinaria-de-04-de-maio-de-2023
+19:53:07 [info]     1 PDF(s) | titulo: PAUTA No 008 DA SESSÃO ORDINÁRIA, DE 04 DE MAIO DE 2023
+19:53:07 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:07 [info]     [SESSAO]   8ª Sessão Ordinária (04-05-2023) → Pauta
+19:53:07 [ok]     [OK]      Pauta.pdf (47.7 KB) <- Pauta
+19:53:07 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\8ª Sessão Ordinária - 04-05-2023
+19:53:08 [info] [029/255] ata-no-007-da-sessao-ordinaria-de-13-de-abril-de-2023
+19:53:09 [info]     1 PDF(s) | titulo: ATA No 007 DA SESSÃO ORDINÁRIA, DE 13 DE ABRIL DE 2023
+19:53:10 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:10 [info]     [SESSAO]   7ª Sessão Ordinária (13-04-2023) → Ata
+19:53:10 [ok]     [OK]      Ata.pdf (111.9 KB) <- Ata
+19:53:10 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\7ª Sessão Ordinária - 13-04-2023
+19:53:10 [info] [030/255] pauta-no-007-da-sessao-ordinaria-de-13-de-abril-de-2023
+19:53:13 [info]     1 PDF(s) | titulo: PAUTA No 007 DA SESSÃO ORDINÁRIA, DE 13 DE ABRIL DE 2023
+19:53:13 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:13 [info]     [SESSAO]   7ª Sessão Ordinária (13-04-2023) → Pauta
+19:53:13 [ok]     [OK]      Pauta.pdf (43.1 KB) <- Pauta
+19:53:13 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\7ª Sessão Ordinária - 13-04-2023
+19:53:13 [info] [031/255] pauta-no-006-da-sessao-solene-de-16-de-marco-de-2023
+19:53:15 [info]     1 PDF(s) | titulo: PAUTA No 006 DA SESSÃO SOLENE, DE 16 DE MARÇO DE 2023
+19:53:15 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:15 [info]     [SESSAO]   6ª Sessão Solene (16-03-2023) → Pauta
+19:53:15 [ok]     [OK]      Pauta.pdf (37.3 KB) <- Pauta
+19:53:15 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\6ª Sessão Solene - 16-03-2023
+19:53:16 [info] [032/255] ata-no-006-da-sessao-solene-de-16-de-marco-de-2023
+19:53:18 [info]     1 PDF(s) | titulo: ATA No 006 DA SESSÃO SOLENE, DE 16 DE MARÇO DE 2023
+19:53:18 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:18 [info]     [SESSAO]   6ª Sessão Solene (16-03-2023) → Ata
+19:53:18 [ok]     [OK]      Ata.pdf (88.2 KB) <- Ata
+19:53:18 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\6ª Sessão Solene - 16-03-2023
+19:53:19 [info] [033/255] pauta-no-005-da-sessao-ordinaria-de-09-de-marco-de-2023
+19:53:21 [info]     1 PDF(s) | titulo: PAUTA No 005 DA SESSÃO ORDINÁRIA, DE 09 DE MARÇO DE 2023
+19:53:21 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:21 [info]     [SESSAO]   5ª Sessão Ordinária (09-03-2023) → Pauta
+19:53:21 [ok]     [OK]      Pauta.pdf (43.1 KB) <- Pauta
+19:53:21 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\5ª Sessão Ordinária - 09-03-2023
+19:53:22 [info] [034/255] ata-no-005-da-sessao-ordinaria-de-09-de-marco-de-2023
+19:53:23 [info]     1 PDF(s) | titulo: ATA No 005 DA SESSÃO ORDINÁRIA, DE 09 DE MARÇO DE 2023
+19:53:24 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:24 [info]     [SESSAO]   5ª Sessão Ordinária (09-03-2023) → Ata
+19:53:24 [ok]     [OK]      Ata.pdf (108.8 KB) <- Ata
+19:53:24 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\5ª Sessão Ordinária - 09-03-2023
+19:53:25 [info] [035/255] pauta-no-004-da-sessao-ordinaria-de-02-de-marco-de-2023
+19:53:26 [info]     1 PDF(s) | titulo: PAUTA No 004 DA SESSÃO ORDINÁRIA, DE 02 DE MARÇO DE 2023
+19:53:27 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:27 [info]     [SESSAO]   4ª Sessão Ordinária (02-03-2023) → Pauta
+19:53:27 [ok]     [OK]      Pauta.pdf (40.6 KB) <- Pauta
+19:53:27 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\4ª Sessão Ordinária - 02-03-2023
+19:53:27 [info] [036/255] ata-no-004-da-sessao-ordinaria-de-02-de-marco-de-2023
+19:53:29 [info]     1 PDF(s) | titulo: ATA No 004 DA SESSÃO ORDINÁRIA, DE 02 DE MARÇO DE 2023
+19:53:30 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:30 [info]     [SESSAO]   4ª Sessão Ordinária (02-03-2023) → Ata
+19:53:30 [ok]     [OK]      Ata.pdf (91.3 KB) <- Ata
+19:53:30 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\4ª Sessão Ordinária - 02-03-2023
+19:53:30 [info] [037/255] pauta-no-003-da-sessao-ordinaria-de-23-de-fevereiro-de-2023
+19:53:32 [info]     1 PDF(s) | titulo: PAUTA No 003 DA SESSÃO ORDINÁRIA, DE 23 DE FEVEREIRO DE 2023
+19:53:32 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:32 [info]     [SESSAO]   3ª Sessão Ordinária (23-02-2023) → Pauta
+19:53:32 [ok]     [OK]      Pauta.pdf (46.5 KB) <- Pauta
+19:53:32 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\3ª Sessão Ordinária - 23-02-2023
+19:53:32 [info] [038/255] ata-no-003-da-sessao-ordinaria-de-23-de-fevereiro-de-2023
+19:53:34 [info]     1 PDF(s) | titulo: ATA No 003 DA SESSÃO ORDINÁRIA, DE 23 DE FEVEREIRO DE 2023
+19:53:35 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:35 [info]     [SESSAO]   3ª Sessão Ordinária (23-02-2023) → Ata
+19:53:35 [ok]     [OK]      Ata.pdf (110.7 KB) <- Ata
+19:53:35 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\3ª Sessão Ordinária - 23-02-2023
+19:53:35 [info] [039/255] ata-no-002-da-sessao-ordinaria-de-16-de-fevereiro-de-2023
+19:53:37 [info]     1 PDF(s) | titulo: ATA No 002 DA SESSÃO ORDINÁRIA, DE 16 DE FEVEREIRO DE 2023
+19:53:38 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:38 [info]     [SESSAO]   2ª Sessão Ordinária (16-02-2023) → Ata
+19:53:38 [ok]     [OK]      Ata.pdf (162.9 KB) <- Ata
+19:53:38 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\2ª Sessão Ordinária - 16-02-2023
+19:53:38 [info] [040/255] pauta-no-002-da-sessao-ordinaria-de-16-de-fevereiro-de-2023
+19:53:40 [info]     1 PDF(s) | titulo: PAUTA No 002 DA SESSÃO ORDINÁRIA, DE 16 DE FEVEREIRO DE 2023
+19:53:41 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:41 [info]     [SESSAO]   2ª Sessão Ordinária (16-02-2023) → Pauta
+19:53:41 [ok]     [OK]      Pauta.pdf (60.6 KB) <- Pauta
+19:53:41 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\2ª Sessão Ordinária - 16-02-2023
+19:53:41 [info] [041/255] ata-no-001-da-sessao-extraordinaria-de-09-de-janeiro-de-2023
+19:53:42 [info]     1 PDF(s) | titulo: ATA No 001 DA SESSÃO EXTRAORDINÁRIA, DE 09 DE JANEIRO DE 2023
+19:53:43 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:43 [info]     [SESSAO]   1ª Sessão Extraordinária (09-01-2023) → Ata
+19:53:43 [ok]     [OK]      Ata.pdf (85.9 KB) <- Ata
+19:53:43 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\1ª Sessão Extraordinária - 09-01-2023
+19:53:43 [info] [042/255] pauta-no-001-da-sessao-extraordinaria-de-09-de-janeiro-de-20
+19:53:45 [info]     1 PDF(s) | titulo: PAUTA No 001 DA SESSÃO EXTRAORDINÁRIA, DE 09 DE JANEIRO DE 2023
+19:53:46 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:46 [info]     [SESSAO]   1ª Sessão Extraordinária (09-01-2023) → Pauta
+19:53:46 [ok]     [OK]      Pauta.pdf (48.0 KB) <- Pauta
+19:53:46 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2023\1ª Sessão Extraordinária - 09-01-2023
+19:53:46 [info] [043/255] ata-no-027-da-sessao-ordinaria-de-15-de-dezembro-de-2022
+19:53:47 [info]     1 PDF(s) | titulo: ATA No 027 DA SESSÃO ORDINÁRIA, DE 15 DE DEZEMBRO DE 2022
+19:53:50 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:50 [info]     [SESSAO]   27ª Sessão Ordinária (15-12-2022) → Ata
+19:53:50 [ok]     [OK]      Ata.pdf (91.7 KB) <- Ata
+19:53:50 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\27ª Sessão Ordinária - 15-12-2022
+19:53:51 [info] [044/255] pauta-no-027-da-sessao-ordinaria-de-15-de-dezembro-de-2022
+19:53:52 [info]     1 PDF(s) | titulo: PAUTA No 027 DA SESSÃO ORDINÁRIA, DE 15 DE DEZEMBRO DE 2022
+19:53:53 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:53 [info]     [SESSAO]   27ª Sessão Ordinária (15-12-2022) → Pauta
+19:53:53 [ok]     [OK]      Pauta.pdf (46.6 KB) <- Pauta
+19:53:53 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\27ª Sessão Ordinária - 15-12-2022
+19:53:53 [info] [045/255] pauta-no-026-da-sessao-ordinaria-de-01-de-dezembro-de-2022
+19:53:55 [info]     1 PDF(s) | titulo: PAUTA No 026 DA SESSÃO ORDINÁRIA, DE 01 DE DEZEMBRO DE 2022
+19:53:55 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:55 [info]     [SESSAO]   26ª Sessão Ordinária (01-12-2022) → Pauta
+19:53:55 [ok]     [OK]      Pauta.pdf (38.7 KB) <- Pauta
+19:53:55 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\26ª Sessão Ordinária - 01-12-2022
+19:53:56 [info] [046/255] ata-no-026-da-sessao-ordinaria-de-01-de-dezembro-de-2022
+19:53:57 [info]     1 PDF(s) | titulo: ATA No 026 DA SESSÃO ORDINÁRIA, DE 01 DE DEZEMBRO DE 2022
+19:53:58 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:53:58 [info]     [SESSAO]   26ª Sessão Ordinária (01-12-2022) → Ata
+19:53:58 [ok]     [OK]      Ata.pdf (77.9 KB) <- Ata
+19:53:58 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\26ª Sessão Ordinária - 01-12-2022
+19:53:58 [info] [047/255] pauta-no-025-da-sessao-extraordinaria-para-eleicao-da-mesa-d
+19:54:00 [info]     1 PDF(s) | titulo: PAUTA No 025 DA SESSÃO EXTRAORDINÁRIA PARA ELEIÇÃO DA MESA DIRETORA PARA O BIÊNI
+19:54:00 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:00 [info]     [SESSAO]   25ª Sessão Extraordinária - Eleição da Mesa Diretora Para o Biênio 2023/2024 (24-11-2022) → Pauta
+19:54:00 [ok]     [OK]      Pauta.pdf (38.9 KB) <- Pauta
+19:54:00 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\25ª Sessão Extraordinária - Eleição da Mesa Diretora Para o Biênio 2023\2024 - 24-11-2022
+19:54:01 [info] [048/255] ata-no-025-da-sessao-extraordinaria-para-eleicao-da-mesa-dir
+19:54:02 [info]     1 PDF(s) | titulo: ATA No 025 DA SESSÃO EXTRAORDINÁRIA PARA ELEIÇÃO DA MESA DIRETORA PARA O BIÊNIO 
+19:54:04 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:04 [info]     [SESSAO]   25ª Sessão Extraordinária - Eleição da Mesa Diretora Para o Biênio 2023/2024 (24-11-2022) → Ata
+19:54:04 [ok]     [OK]      Ata.pdf (201.9 KB) <- Ata
+19:54:04 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\25ª Sessão Extraordinária - Eleição da Mesa Diretora Para o Biênio 2023
+19:54:04 [info] [049/255] pauta-no-024-da-sessao-ordinaria-de-24-de-novembro-de-2022
+19:54:06 [info]     1 PDF(s) | titulo: PAUTA No 024 DA SESSÃO ORDINÁRIA, DE 24 DE NOVEMBRO DE 2022
+19:54:06 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:06 [info]     [SESSAO]   24ª Sessão Ordinária (24-11-2022) → Pauta
+19:54:06 [ok]     [OK]      Pauta.pdf (40.8 KB) <- Pauta
+19:54:06 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\24ª Sessão Ordinária - 24-11-2022
+19:54:07 [info] [050/255] ata-no-024-da-sessao-ordinaria-de-24-de-novembro-de-2022
+19:54:08 [info]     1 PDF(s) | titulo: ATA No 024 DA SESSÃO ORDINÁRIA, DE 24 DE NOVEMBRO DE 2022
+19:54:09 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:09 [info]     [SESSAO]   24ª Sessão Ordinária (24-11-2022) → Ata
+19:54:09 [ok]     [OK]      Ata.pdf (88.1 KB) <- Ata
+19:54:09 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\24ª Sessão Ordinária - 24-11-2022
+19:54:09 [info] [051/255] pauta-no-023-da-sessao-ordinaria-de-17-de-novembro-de-2022
+19:54:12 [info]     1 PDF(s) | titulo: PAUTA No 023 DA SESSÃO ORDINÁRIA, DE 17 DE NOVEMBRO DE 2022
+19:54:12 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:12 [info]     [SESSAO]   23ª Sessão Ordinária (17-11-2022) → Pauta
+19:54:12 [ok]     [OK]      Pauta.pdf (41.4 KB) <- Pauta
+19:54:12 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\23ª Sessão Ordinária - 17-11-2022
+19:54:12 [info] [052/255] ata-no-023-da-sessao-ordinaria-de-17-de-novembro-de-2022
+19:54:14 [info]     1 PDF(s) | titulo: ATA No 023 DA SESSÃO ORDINÁRIA, DE 17 DE NOVEMBRO DE 2022
+19:54:15 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:15 [info]     [SESSAO]   23ª Sessão Ordinária (17-11-2022) → Ata
+19:54:15 [ok]     [OK]      Ata.pdf (92.1 KB) <- Ata
+19:54:15 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\23ª Sessão Ordinária - 17-11-2022
+19:54:15 [info] [053/255] pauta-no-022-da-sessao-ordinaria-de-27-de-outubro-de-2022
+19:54:17 [info]     1 PDF(s) | titulo: PAUTA No 022 DA SESSÃO ORDINÁRIA, DE 27 DE OUTUBRO DE 2022
+19:54:17 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:17 [info]     [SESSAO]   22ª Sessão Ordinária (27-10-2022) → Pauta
+19:54:17 [ok]     [OK]      Pauta.pdf (43.2 KB) <- Pauta
+19:54:17 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\22ª Sessão Ordinária - 27-10-2022
+19:54:18 [info] [054/255] ata-no-022-da-sessao-ordinaria-de-27-de-outubro-de-2022
+19:54:19 [info]     1 PDF(s) | titulo: ATA No 022 DA SESSÃO ORDINÁRIA, DE 27 DE OUTUBRO DE 2022
+19:54:20 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:20 [info]     [SESSAO]   22ª Sessão Ordinária (27-10-2022) → Ata
+19:54:20 [ok]     [OK]      Ata.pdf (96.9 KB) <- Ata
+19:54:20 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\22ª Sessão Ordinária - 27-10-2022
+19:54:20 [info] [055/255] pauta-no-021-da-sessao-ordinaria-de-20-de-outubro-de-2022
+19:54:22 [info]     1 PDF(s) | titulo: PAUTA No 021 DA SESSÃO ORDINÁRIA, DE 20 DE OUTUBRO DE 2022
+19:54:24 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:24 [info]     [SESSAO]   21ª Sessão Ordinária (20-10-2022) → Pauta
+19:54:24 [ok]     [OK]      Pauta.pdf (40.9 KB) <- Pauta
+19:54:24 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\21ª Sessão Ordinária - 20-10-2022
+19:54:24 [info] [056/255] ata-no-021-da-sessao-ordinaria-de-20-de-outubro-de-2022
+19:54:26 [info]     1 PDF(s) | titulo: ATA No 021 DA SESSÃO ORDINÁRIA, DE 20 DE OUTUBRO DE 2022
+19:54:27 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:27 [info]     [SESSAO]   21ª Sessão Ordinária (20-10-2022) → Ata
+19:54:27 [ok]     [OK]      Ata.pdf (80.5 KB) <- Ata
+19:54:27 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\21ª Sessão Ordinária - 20-10-2022
+19:54:27 [info] [057/255] pauta-no-020-da-sessao-ordinaria-de-13-de-outubro-de-2022
+19:54:33 [info]     1 PDF(s) | titulo: PAUTA No 020 DA SESSÃO ORDINÁRIA, DE 13 DE OUTUBRO DE 2022
+19:54:33 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:33 [info]     [SESSAO]   20ª Sessão Ordinária (13-10-2022) → Pauta
+19:54:33 [ok]     [OK]      Pauta.pdf (39.2 KB) <- Pauta
+19:54:33 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\20ª Sessão Ordinária - 13-10-2022
+19:54:33 [info] [058/255] ata-no-020-da-sessao-ordinaria-de-13-de-outubro-de-2022
+19:54:35 [info]     1 PDF(s) | titulo: ATA No 020 DA SESSÃO ORDINÁRIA, DE 13 DE OUTUBRO DE 2022
+19:54:36 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:36 [info]     [SESSAO]   20ª Sessão Ordinária (13-10-2022) → Ata
+19:54:36 [ok]     [OK]      Ata.pdf (75.1 KB) <- Ata
+19:54:36 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\20ª Sessão Ordinária - 13-10-2022
+19:54:37 [info] [059/255] pauta-no-019-da-sessao-ordinaria-de-29-de-setembro-de-2022
+19:54:38 [info]     1 PDF(s) | titulo: PAUTA No 019 DA SESSÃO ORDINÁRIA, DE 29 DE SETEMBRO DE 2022
+19:54:39 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:39 [info]     [SESSAO]   19ª Sessão Ordinária (29-09-2022) → Pauta
+19:54:39 [ok]     [OK]      Pauta.pdf (39.3 KB) <- Pauta
+19:54:39 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\19ª Sessão Ordinária - 29-09-2022
+19:54:39 [info] [060/255] ata-no-019-da-sessao-ordinaria-de-29-de-setembro-de-2022
+19:54:41 [info]     1 PDF(s) | titulo: ATA No 019 DA SESSÃO ORDINÁRIA, DE 29 DE SETEMBRO DE 2022
+19:54:42 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:42 [info]     [SESSAO]   19ª Sessão Ordinária (29-09-2022) → Ata
+19:54:42 [ok]     [OK]      Ata.pdf (75.5 KB) <- Ata
+19:54:42 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\19ª Sessão Ordinária - 29-09-2022
+19:54:42 [info] [061/255] pauta-no-018-da-sessao-ordinaria-de-22-de-setembro-de-2022
+19:54:44 [info]     1 PDF(s) | titulo: PAUTA No 018 DA SESSÃO ORDINÁRIA, DE 22 DE SETEMBRO DE 2022
+19:54:45 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:45 [info]     [SESSAO]   18ª Sessão Ordinária (22-09-2022) → Pauta
+19:54:45 [ok]     [OK]      Pauta.pdf (39.8 KB) <- Pauta
+19:54:45 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\18ª Sessão Ordinária - 22-09-2022
+19:54:45 [info] [062/255] ata-no-018-da-sessao-ordinaria-de-22-de-setembro-de-2022
+19:54:47 [info]     1 PDF(s) | titulo: ATA No 018 DA SESSÃO ORDINÁRIA, DE 22 DE SETEMBRO DE 2022
+19:54:48 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:48 [info]     [SESSAO]   18ª Sessão Ordinária (22-09-2022) → Ata
+19:54:48 [ok]     [OK]      Ata.pdf (78.9 KB) <- Ata
+19:54:48 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\18ª Sessão Ordinária - 22-09-2022
+19:54:48 [info] [063/255] pauta-no-017-da-sessao-ordinaria-de-15-de-setembro-de-2022
+19:54:50 [info]     1 PDF(s) | titulo: PAUTA No 017 DA SESSÃO ORDINÁRIA, DE 15 DE SETEMBRO DE 2022
+19:54:50 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:50 [info]     [SESSAO]   17ª Sessão Ordinária (15-09-2022) → Pauta
+19:54:50 [ok]     [OK]      Pauta.pdf (38.3 KB) <- Pauta
+19:54:50 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\17ª Sessão Ordinária - 15-09-2022
+19:54:50 [info] [064/255] ata-no-017-da-sessao-ordinaria-de-15-de-setembro-de-2022
+19:54:52 [info]     1 PDF(s) | titulo: ATA No 017 DA SESSÃO ORDINÁRIA, DE 15 DE SETEMBRO DE 2022
+19:54:53 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:53 [info]     [SESSAO]   17ª Sessão Ordinária (15-09-2022) → Ata
+19:54:53 [ok]     [OK]      Ata.pdf (85.3 KB) <- Ata
+19:54:53 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\17ª Sessão Ordinária - 15-09-2022
+19:54:53 [info] [065/255] ata-no-016-da-sessao-ordinaria-de-08-de-setembro-de-2022
+19:54:55 [info]     1 PDF(s) | titulo: ATA No 016 DA SESSÃO ORDINÁRIA, DE 08 DE SETEMBRO DE 2022
+19:54:56 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:56 [info]     [SESSAO]   16ª Sessão Ordinária (08-09-2022) → Ata
+19:54:56 [ok]     [OK]      Ata.pdf (102.0 KB) <- Ata
+19:54:56 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\16ª Sessão Ordinária - 08-09-2022
+19:54:56 [info] [066/255] pauta-no-016-da-sessao-ordinaria-de-08-de-setembro-de-2022
+19:54:58 [info]     1 PDF(s) | titulo: PAUTA No 016 DA SESSÃO ORDINÁRIA, DE 08 DE SETEMBRO DE 2022
+19:54:59 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:54:59 [info]     [SESSAO]   16ª Sessão Ordinária (08-09-2022) → Pauta
+19:54:59 [ok]     [OK]      Pauta.pdf (38.4 KB) <- Pauta
+19:54:59 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\16ª Sessão Ordinária - 08-09-2022
+19:54:59 [info] [067/255] ata-no-015-da-sessao-ordinaria-de-01-de-setembro-de-2022
+19:55:01 [info]     1 PDF(s) | titulo: ATA No 015 DA SESSÃO ORDINÁRIA, DE 01 DE SETEMBRO DE 2022
+19:55:02 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:02 [info]     [SESSAO]   15ª Sessão Ordinária (01-09-2022) → Ata
+19:55:02 [ok]     [OK]      Ata.pdf (89.2 KB) <- Ata
+19:55:02 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\15ª Sessão Ordinária - 01-09-2022
+19:55:02 [info] [068/255] pauta-no-015-da-sessao-ordinaria-de-01-de-setembro-de-2022
+19:55:04 [info]     1 PDF(s) | titulo: PAUTA No 015 DA SESSÃO ORDINÁRIA, DE 01 DE SETEMBRO DE 2022
+19:55:04 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:04 [info]     [SESSAO]   15ª Sessão Ordinária (01-09-2022) → Pauta
+19:55:04 [ok]     [OK]      Pauta.pdf (38.2 KB) <- Pauta
+19:55:04 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\15ª Sessão Ordinária - 01-09-2022
+19:55:05 [info] [069/255] ata-no-014-da-sessao-ordinaria-de-18-de-agosto-de-2022
+19:55:06 [info]     1 PDF(s) | titulo: ATA No 014 DA SESSÃO ORDINÁRIA, DE 18 DE AGOSTO DE 2022
+19:55:07 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:07 [info]     [SESSAO]   14ª Sessão Ordinária (18-08-2022) → Ata
+19:55:07 [ok]     [OK]      Ata.pdf (96.1 KB) <- Ata
+19:55:07 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\14ª Sessão Ordinária - 18-08-2022
+19:55:08 [info] [070/255] pauta-no-014-da-sessao-ordinaria-de-18-de-agosto-de-2022
+19:55:09 [info]     1 PDF(s) | titulo: PAUTA No 014 DA SESSÃO ORDINÁRIA, DE 18 DE AGOSTO DE 2022
+19:55:10 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:10 [info]     [SESSAO]   14ª Sessão Ordinária (18-08-2022) → Pauta
+19:55:10 [ok]     [OK]      Pauta.pdf (39.7 KB) <- Pauta
+19:55:10 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\14ª Sessão Ordinária - 18-08-2022
+19:55:10 [info] [071/255] ata-no-013-da-sessao-ordinaria-de-11-de-agosto-de-2022
+19:55:12 [info]     1 PDF(s) | titulo: ATA No 013 DA SESSÃO ORDINÁRIA, DE 11 DE AGOSTO DE 2022
+19:55:12 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:13 [info]     [SESSAO]   13ª Sessão Ordinária (11-08-2022) → Ata
+19:55:13 [ok]     [OK]      Ata.pdf (80.1 KB) <- Ata
+19:55:13 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\13ª Sessão Ordinária - 11-08-2022
+19:55:13 [info] [072/255] pauta-no-013-da-sessao-ordinaria-de-11-de-agosto-de-2022
+19:55:14 [info]     1 PDF(s) | titulo: PAUTA No 013 DA SESSÃO ORDINÁRIA, DE 11 DE AGOSTO DE 2022
+19:55:15 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:15 [info]     [SESSAO]   13ª Sessão Ordinária (11-08-2022) → Pauta
+19:55:15 [ok]     [OK]      Pauta.pdf (39.6 KB) <- Pauta
+19:55:15 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\13ª Sessão Ordinária - 11-08-2022
+19:55:15 [info] [073/255] ata-no-012-da-sessao-ordinaria-de-04-de-agosto-de-2022
+19:55:17 [info]     1 PDF(s) | titulo: ATA No 012 DA SESSÃO ORDINÁRIA, DE 04 DE AGOSTO DE 2022
+19:55:18 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:18 [info]     [SESSAO]   12ª Sessão Ordinária (04-08-2022) → Ata
+19:55:18 [ok]     [OK]      Ata.pdf (73.6 KB) <- Ata
+19:55:18 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\12ª Sessão Ordinária - 04-08-2022
+19:55:18 [info] [074/255] pauta-no-012-da-sessao-ordinaria-de-04-de-agosto-de-2022
+19:55:20 [info]     1 PDF(s) | titulo: PAUTA No 012 DA SESSÃO ORDINÁRIA, DE 04 DE AGOSTO DE 2022
+19:55:20 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:20 [info]     [SESSAO]   12ª Sessão Ordinária (04-08-2022) → Pauta
+19:55:20 [ok]     [OK]      Pauta.pdf (37.7 KB) <- Pauta
+19:55:20 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\12ª Sessão Ordinária - 04-08-2022
+19:55:21 [info] [075/255] sem-pautas-e-atas-em-julho-2022-recesso
+19:55:22 [info]     [SEM PDF] Nenhum PDF no corpo do post.
+19:55:23 [info] [076/255] pauta-no-011-da-sessao-ordinaria-de-23-de-junho-de-2022
+19:55:24 [info]     1 PDF(s) | titulo: PAUTA No 011 DA SESSÃO ORDINÁRIA, DE 23 DE JUNHO DE 2022
+19:55:25 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:25 [info]     [SESSAO]   11ª Sessão Ordinária (23-06-2022) → Pauta
+19:55:25 [ok]     [OK]      Pauta.pdf (39.9 KB) <- Pauta
+19:55:25 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\11ª Sessão Ordinária - 23-06-2022
+19:55:25 [info] [077/255] ata-no-011-da-sessao-ordinaria-de-23-de-junho-de-2022
+19:55:27 [info]     1 PDF(s) | titulo: ATA No 011 DA SESSÃO ORDINÁRIA, DE 23 DE JUNHO DE 2022
+19:55:27 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:27 [info]     [SESSAO]   11ª Sessão Ordinária (23-06-2022) → Ata
+19:55:27 [ok]     [OK]      Ata.pdf (89.4 KB) <- Ata
+19:55:27 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\11ª Sessão Ordinária - 23-06-2022
+19:55:28 [info] [078/255] ata-no-010-da-sessao-ordinaria-de-02-de-junho-de-2022
+19:55:30 [info]     1 PDF(s) | titulo: ATA No 010 DA SESSÃO ORDINÁRIA, DE 02 DE JUNHO DE 2022
+19:55:36 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:36 [info]     [SESSAO]   10ª Sessão Ordinária (02-06-2022) → Ata
+19:55:36 [ok]     [OK]      Ata.pdf (114.3 KB) <- Ata
+19:55:36 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\10ª Sessão Ordinária - 02-06-2022
+19:55:36 [info] [079/255] pauta-no-010-da-sessao-ordinaria-de-02-de-junho-de-2022
+19:55:38 [info]     1 PDF(s) | titulo: PAUTA No 010 DA SESSÃO ORDINÁRIA, DE 02 DE JUNHO DE 2022
+19:55:39 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:39 [info]     [SESSAO]   10ª Sessão Ordinária (02-06-2022) → Pauta
+19:55:39 [ok]     [OK]      Pauta.pdf (42.6 KB) <- Pauta
+19:55:39 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\10ª Sessão Ordinária - 02-06-2022
+19:55:39 [info] [080/255] pauta-no-009-da-sessao-ordinaria-de-26-de-maio-de-2022
+19:55:42 [info]     1 PDF(s) | titulo: PAUTA No 009 DA SESSÃO ORDINÁRIA, DE 26 DE MAIO DE 2022
+19:55:42 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:42 [info]     [SESSAO]   9ª Sessão Ordinária (26-05-2022) → Pauta
+19:55:42 [ok]     [OK]      Pauta.pdf (43.1 KB) <- Pauta
+19:55:42 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\9ª Sessão Ordinária - 26-05-2022
+19:55:43 [info] [081/255] ata-no-009-da-sessao-ordinaria-de-26-de-maio-de-2022
+19:55:44 [info]     1 PDF(s) | titulo: ATA No 009 DA SESSÃO ORDINÁRIA, DE 26 DE MAIO DE 2022
+19:55:46 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:46 [info]     [SESSAO]   9ª Sessão Ordinária (26-05-2022) → Ata
+19:55:46 [ok]     [OK]      Ata.pdf (102.4 KB) <- Ata
+19:55:46 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\9ª Sessão Ordinária - 26-05-2022
+19:55:46 [info] [082/255] pauta-no-008-da-sessao-ordinaria-de-19-de-maio-de-2022
+19:55:48 [info]     1 PDF(s) | titulo: PAUTA No 008 DA SESSÃO ORDINÁRIA, DE 19 DE MAIO DE 2022
+19:55:48 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:48 [info]     [SESSAO]   8ª Sessão Ordinária (19-05-2022) → Pauta
+19:55:48 [ok]     [OK]      Pauta.pdf (40.3 KB) <- Pauta
+19:55:48 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\8ª Sessão Ordinária - 19-05-2022
+19:55:48 [info] [083/255] ata-no-008-da-sessao-ordinaria-de-19-de-maio-de-2022
+19:55:50 [info]     1 PDF(s) | titulo: ATA No 008 DA SESSÃO ORDINÁRIA, DE 19 DE MAIO DE 2022
+19:55:51 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:51 [info]     [SESSAO]   8ª Sessão Ordinária (19-05-2022) → Ata
+19:55:51 [ok]     [OK]      Ata.pdf (99.9 KB) <- Ata
+19:55:51 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\8ª Sessão Ordinária - 19-05-2022
+19:55:52 [info] [084/255] pauta-no-007-da-sessao-ordinaria-de-05-de-maio-de-2022
+19:55:53 [info]     1 PDF(s) | titulo: PAUTA No 007 DA SESSÃO ORDINÁRIA, DE 05 DE MAIO DE 2022
+19:55:54 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:54 [info]     [SESSAO]   7ª Sessão Ordinária (05-05-2022) → Pauta
+19:55:54 [ok]     [OK]      Pauta.pdf (42.0 KB) <- Pauta
+19:55:54 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\7ª Sessão Ordinária - 05-05-2022
+19:55:54 [info] [085/255] ata-no-007-da-sessao-ordinaria-de-05-de-maio-de-2022
+19:55:56 [info]     1 PDF(s) | titulo: ATA No 007 DA SESSÃO ORDINÁRIA, DE 05 DE MAIO DE 2022
+19:55:57 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:55:57 [info]     [SESSAO]   7ª Sessão Ordinária (05-05-2022) → Ata
+19:55:57 [ok]     [OK]      Ata.pdf (111.1 KB) <- Ata
+19:55:57 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\7ª Sessão Ordinária - 05-05-2022
+19:55:57 [info] [086/255] ata-no-006-da-sessao-ordinaria-de-07-de-abril-de-2022
+19:55:59 [info]     1 PDF(s) | titulo: ATA No 006 DA SESSÃO ORDINÁRIA, DE 07 DE ABRIL DE 2022
+19:56:00 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:00 [info]     [SESSAO]   6ª Sessão Ordinária (07-04-2022) → Ata
+19:56:00 [ok]     [OK]      Ata.pdf (116.1 KB) <- Ata
+19:56:00 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\6ª Sessão Ordinária - 07-04-2022
+19:56:00 [info] [087/255] pauta-no-006-da-sessao-ordinaria-de-07-de-abril-de-2022
+19:56:02 [info]     1 PDF(s) | titulo: PAUTA No 006 DA SESSÃO ORDINÁRIA, DE 07 DE ABRIL DE 2022
+19:56:03 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:03 [info]     [SESSAO]   6ª Sessão Ordinária (07-04-2022) → Pauta
+19:56:03 [ok]     [OK]      Pauta.pdf (40.7 KB) <- Pauta
+19:56:03 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\6ª Sessão Ordinária - 07-04-2022
+19:56:03 [info] [088/255] pauta-no-005-da-sessao-ordinaria-de-24-de-marco-de-2022
+19:56:05 [info]     1 PDF(s) | titulo: PAUTA No 005 DA SESSÃO ORDINÁRIA, DE 24 DE MARÇO DE 2022
+19:56:06 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:06 [info]     [SESSAO]   5ª Sessão Ordinária (24-03-2022) → Pauta
+19:56:06 [ok]     [OK]      Pauta.pdf (42.7 KB) <- Pauta
+19:56:06 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\5ª Sessão Ordinária - 24-03-2022
+19:56:06 [info] [089/255] ata-no-005-da-sessao-ordinaria-de-24-de-marco-de-2022
+19:56:08 [info]     1 PDF(s) | titulo: ATA No 005 DA SESSÃO ORDINÁRIA, DE 24 DE MARÇO DE 2022
+19:56:10 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:10 [info]     [SESSAO]   5ª Sessão Ordinária (24-03-2022) → Ata
+19:56:10 [ok]     [OK]      Ata.pdf (153.2 KB) <- Ata
+19:56:10 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\5ª Sessão Ordinária - 24-03-2022
+19:56:10 [info] [090/255] pauta-no-004-da-sessao-ordinaria-de-17-de-marco-de-2022
+19:56:12 [info]     1 PDF(s) | titulo: PAUTA No 004 DA SESSÃO ORDINÁRIA, DE 17 DE MARÇO DE 2022
+19:56:13 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:13 [info]     [SESSAO]   4ª Sessão Ordinária (17-03-2022) → Pauta
+19:56:13 [ok]     [OK]      Pauta.pdf (38.9 KB) <- Pauta
+19:56:13 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\4ª Sessão Ordinária - 17-03-2022
+19:56:13 [info] [091/255] ata-no-004-da-sessao-ordinaria-de-17-de-marco-de-2022
+19:56:15 [info]     1 PDF(s) | titulo: ATA No 004 DA SESSÃO ORDINÁRIA, DE 17 DE MARÇO DE 2022
+19:56:16 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:16 [info]     [SESSAO]   4ª Sessão Ordinária (17-03-2022) → Ata
+19:56:16 [ok]     [OK]      Ata.pdf (80.6 KB) <- Ata
+19:56:16 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\4ª Sessão Ordinária - 17-03-2022
+19:56:16 [info] [092/255] pauta-no-003-da-sessao-ordinaria-de-03-de-marco-de-2022
+19:56:17 [info]     1 PDF(s) | titulo: PAUTA No 003 DA SESSÃO ORDINÁRIA, DE 03 DE MARÇO DE 2022
+19:56:18 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:18 [info]     [SESSAO]   3ª Sessão Ordinária (03-03-2022) → Pauta
+19:56:18 [ok]     [OK]      Pauta.pdf (37.4 KB) <- Pauta
+19:56:18 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\3ª Sessão Ordinária - 03-03-2022
+19:56:18 [info] [093/255] ata-no-003-da-sessao-ordinaria-de-03-de-marco-de-2022
+19:56:20 [info]     1 PDF(s) | titulo: ATA No 003 DA SESSÃO ORDINÁRIA, DE 03 DE MARÇO DE 2022
+19:56:21 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:21 [info]     [SESSAO]   3ª Sessão Ordinária (03-03-2022) → Ata
+19:56:21 [ok]     [OK]      Ata.pdf (94.5 KB) <- Ata
+19:56:21 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\3ª Sessão Ordinária - 03-03-2022
+19:56:21 [info] [094/255] ata-no-002-da-sessao-ordinaria-de-24-de-fevereiro-de-2022
+19:56:23 [info]     1 PDF(s) | titulo: ATA No 002 DA SESSÃO ORDINÁRIA, DE 24 DE FEVEREIRO DE 2022
+19:56:24 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:24 [info]     [SESSAO]   2ª Sessão Ordinária (24-02-2022) → Ata
+19:56:24 [ok]     [OK]      Ata.pdf (81.7 KB) <- Ata
+19:56:24 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\2ª Sessão Ordinária - 24-02-2022
+19:56:24 [info] [095/255] pauta-no-002-da-sessao-ordinaria-de-24-de-fevereiro-de-2022
+19:56:26 [info]     1 PDF(s) | titulo: PAUTA No 002 DA SESSÃO ORDINÁRIA, DE 24 DE FEVEREIRO DE 2022
+19:56:27 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:27 [info]     [SESSAO]   2ª Sessão Ordinária (24-02-2022) → Pauta
+19:56:27 [ok]     [OK]      Pauta.pdf (36.4 KB) <- Pauta
+19:56:27 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\2ª Sessão Ordinária - 24-02-2022
+19:56:27 [info] [096/255] ata-no-001-da-sessao-solene-de-17-de-fevereiro-de-2022
+19:56:29 [info]     1 PDF(s) | titulo: ATA No 001 DA SESSÃO SOLENE, DE 17 DE FEVEREIRO DE 2022
+19:56:30 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:30 [info]     [SESSAO]   1ª Sessão Solene (17-02-2022) → Ata
+19:56:30 [ok]     [OK]      Ata.pdf (71.6 KB) <- Ata
+19:56:30 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\1ª Sessão Solene - 17-02-2022
+19:56:30 [info] [097/255] pauta-no-001-da-sessao-solene-de-17-de-fevereiro-de-2022
+19:56:32 [info]     1 PDF(s) | titulo: PAUTA No 001 DA SESSÃO SOLENE, DE 17 DE FEVEREIRO DE 2022
+19:56:32 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:32 [info]     [SESSAO]   1ª Sessão Solene (17-02-2022) → Pauta
+19:56:32 [ok]     [OK]      Pauta.pdf (39.9 KB) <- Pauta
+19:56:32 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\1ª Sessão Solene - 17-02-2022
+19:56:32 [info] [098/255] ata-no-001-da-sessao-extraordinaria-de-07-de-janeiro-de-2022
+19:56:34 [info]     1 PDF(s) | titulo: ATA No 001 DA SESSÃO EXTRAORDINÁRIA, DE 07 DE JANEIRO DE 2022 (SEM PAUTA)
+19:56:35 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:35 [info]     [SESSAO]   1ª Sessão Extraordinária (07-01-2022) → Pauta
+19:56:35 [ok]     [OK]      Pauta.pdf (75.1 KB) <- Pauta
+19:56:35 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2022\1ª Sessão Extraordinária - 07-01-2022
+19:56:36 [info] [099/255] ata-no-20-da-sessao-ordinaria-de-02-de-dezembro-de-2021
+19:56:37 [info]     1 PDF(s) | titulo: ATA No 20 DA SESSÃO ORDINÁRIA, DE 02 DE DEZEMBRO DE 2021
+19:56:39 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:39 [info]     [SESSAO]   20ª Sessão Ordinária (02-12-2021) → Ata
+19:56:39 [ok]     [OK]      Ata.pdf (85.9 KB) <- Ata
+19:56:39 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\20ª Sessão Ordinária - 02-12-2021
+19:56:39 [info] [100/255] pauta-no-20-da-sessao-ordinaria-de-02-de-dezembro-de-2021
+19:56:41 [info]     1 PDF(s) | titulo: PAUTA No 20 DA SESSÃO ORDINÁRIA, DE 02 DE DEZEMBRO DE 2021
+19:56:42 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:42 [info]     [SESSAO]   20ª Sessão Ordinária (02-12-2021) → Pauta
+19:56:42 [ok]     [OK]      Pauta.pdf (43.8 KB) <- Pauta
+19:56:42 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\20ª Sessão Ordinária - 02-12-2021
+19:56:43 [info] [101/255] pauta-no-19-da-sessao-ordinaria-de-24-de-novembro-de-2021
+19:56:45 [info]     1 PDF(s) | titulo: PAUTA No 19 DA SESSÃO ORDINÁRIA, DE 25 DE NOVEMBRO DE 2021
+19:56:46 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:46 [info]     [SESSAO]   19ª Sessão Ordinária (25-11-2021) → Pauta
+19:56:46 [ok]     [OK]      Pauta.pdf (42.2 KB) <- Pauta
+19:56:46 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\19ª Sessão Ordinária - 25-11-2021
+19:56:47 [info] [102/255] ata-no-19-da-sessao-ordinaria-de-25-de-novembro-de-2021
+19:56:49 [info]     1 PDF(s) | titulo: ATA No 19 DA SESSÃO ORDINÁRIA, DE 25 DE NOVEMBRO DE 2021
+19:56:50 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:50 [info]     [SESSAO]   19ª Sessão Ordinária (25-11-2021) → Ata
+19:56:50 [ok]     [OK]      Ata.pdf (93.1 KB) <- Ata
+19:56:50 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\19ª Sessão Ordinária - 25-11-2021
+19:56:50 [info] [103/255] ata-no-18-da-sessao-ordinaria-de-18-de-novembro-de-2021
+19:56:52 [info]     1 PDF(s) | titulo: ATA No 18 DA SESSÃO ORDINÁRIA, DE 18 DE NOVEMBRO DE 2021
+19:56:52 [info] Multiple definitions in dictionary at byte 0x9553c for key /Info
+19:56:52 [info] Multiple definitions in dictionary at byte 0x95548 for key /Info
+19:56:52 [info] Multiple definitions in dictionary at byte 0x95554 for key /Info
+19:56:52 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:52 [info]     [SESSAO]   18ª Sessão Ordinária (18-11-2021) → Ata
+19:56:52 [ok]     [OK]      Ata.pdf (597.4 KB) <- Ata
+19:56:52 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\18ª Sessão Ordinária - 18-11-2021
+19:56:52 [info] Multiple definitions in dictionary at byte 0x9553c for key /Info
+19:56:52 [info] Multiple definitions in dictionary at byte 0x95548 for key /Info
+19:56:52 [info] Multiple definitions in dictionary at byte 0x95554 for key /Info
+19:56:53 [info] [104/255] pauta-no-18-da-sessao-ordinaria-de-18-de-novembro-de-2021
+19:56:54 [info]     1 PDF(s) | titulo: PAUTA No 18 DA SESSÃO ORDINÁRIA, DE 18 DE NOVEMBRO DE 2021
+19:56:55 [info] Multiple definitions in dictionary at byte 0x3c94f for key /Info
+19:56:55 [info] Multiple definitions in dictionary at byte 0x3c95b for key /Info
+19:56:55 [info] Multiple definitions in dictionary at byte 0x3c967 for key /Info
+19:56:55 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:56:55 [info]     [SESSAO]   18ª Sessão Ordinária (18-11-2021) → Pauta
+19:56:55 [ok]     [OK]      Pauta.pdf (242.4 KB) <- Pauta
+19:56:55 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\18ª Sessão Ordinária - 18-11-2021
+19:56:55 [info] Multiple definitions in dictionary at byte 0x3c94f for key /Info
+19:56:55 [info] Multiple definitions in dictionary at byte 0x3c95b for key /Info
+19:56:55 [info] Multiple definitions in dictionary at byte 0x3c967 for key /Info
+19:56:56 [info] [105/255] ata-no-17-da-sessao-especial-de-11-de-novembro-de-2021
+19:57:05 [info]     1 PDF(s) | titulo: ATA No 17 DA SESSÃO ESPECIAL, DE 11 DE NOVEMBRO DE 2021
+19:57:09 [info] Multiple definitions in dictionary at byte 0x738f9 for key /Info
+19:57:09 [info] Multiple definitions in dictionary at byte 0x73905 for key /Info
+19:57:09 [info] Multiple definitions in dictionary at byte 0x73911 for key /Info
+19:57:09 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:09 [info]     [SESSAO]   17ª Sessão Especial (11-11-2021) → Ata
+19:57:09 [ok]     [OK]      Ata.pdf (462.3 KB) <- Ata
+19:57:09 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\17ª Sessão Especial - 11-11-2021
+19:57:09 [info] Multiple definitions in dictionary at byte 0x738f9 for key /Info
+19:57:09 [info] Multiple definitions in dictionary at byte 0x73905 for key /Info
+19:57:09 [info] Multiple definitions in dictionary at byte 0x73911 for key /Info
+19:57:10 [info] [106/255] pauta-no-17-da-sessao-especial-de-11-de-novembro-de-2021
+19:57:11 [info]     1 PDF(s) | titulo: PAUTA No 17 DA SESSÃO ESPECIAL, DE 11 DE NOVEMBRO DE 2021
+19:57:13 [info] Multiple definitions in dictionary at byte 0x41989 for key /Info
+19:57:13 [info] Multiple definitions in dictionary at byte 0x41995 for key /Info
+19:57:13 [info] Multiple definitions in dictionary at byte 0x419a1 for key /Info
+19:57:13 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:13 [info]     [SESSAO]   17ª Sessão Especial (11-11-2021) → Pauta
+19:57:13 [ok]     [OK]      Pauta.pdf (262.4 KB) <- Pauta
+19:57:13 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\17ª Sessão Especial - 11-11-2021
+19:57:13 [info] Multiple definitions in dictionary at byte 0x41989 for key /Info
+19:57:13 [info] Multiple definitions in dictionary at byte 0x41995 for key /Info
+19:57:13 [info] Multiple definitions in dictionary at byte 0x419a1 for key /Info
+19:57:13 [info] [107/255] ata-no-16-da-sessao-ordinaria-de-04-de-novembro-de-2021
+19:57:15 [info]     1 PDF(s) | titulo: ATA No 16 DA SESSÃO ORDINÁRIA, DE 04 DE NOVEMBRO DE 2021
+19:57:18 [info] Multiple definitions in dictionary at byte 0xb59ff for key /Info
+19:57:18 [info] Multiple definitions in dictionary at byte 0xb5a0b for key /Info
+19:57:18 [info] Multiple definitions in dictionary at byte 0xb5a17 for key /Info
+19:57:18 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:18 [info]     [SESSAO]   16ª Sessão Ordinária (04-11-2021) → Ata
+19:57:18 [ok]     [OK]      Ata.pdf (726.5 KB) <- Ata
+19:57:18 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\16ª Sessão Ordinária - 04-11-2021
+19:57:18 [info] Multiple definitions in dictionary at byte 0xb59ff for key /Info
+19:57:18 [info] Multiple definitions in dictionary at byte 0xb5a0b for key /Info
+19:57:18 [info] Multiple definitions in dictionary at byte 0xb5a17 for key /Info
+19:57:18 [info] [108/255] pauta-no-16-da-sessao-ordinaria-de-04-de-novembro-de-2021
+19:57:20 [info]     1 PDF(s) | titulo: PAUTA No 16 DA SESSÃO ORDINÁRIA, DE 04 DE NOVEMBRO DE 2021
+19:57:22 [info] Multiple definitions in dictionary at byte 0x415c1 for key /Info
+19:57:22 [info] Multiple definitions in dictionary at byte 0x415cd for key /Info
+19:57:22 [info] Multiple definitions in dictionary at byte 0x415d9 for key /Info
+19:57:22 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:22 [info]     [SESSAO]   16ª Sessão Ordinária (04-11-2021) → Pauta
+19:57:22 [ok]     [OK]      Pauta.pdf (261.5 KB) <- Pauta
+19:57:22 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\16ª Sessão Ordinária - 04-11-2021
+19:57:22 [info] Multiple definitions in dictionary at byte 0x415c1 for key /Info
+19:57:22 [info] Multiple definitions in dictionary at byte 0x415cd for key /Info
+19:57:22 [info] Multiple definitions in dictionary at byte 0x415d9 for key /Info
+19:57:22 [info] [109/255] ata-no-15-da-sessao-ordinaria-de-21-de-outubro-de-2021
+19:57:24 [info]     1 PDF(s) | titulo: ATA No 15 DA SESSÃO ORDINÁRIA, DE 21 DE OUTUBRO DE 2021
+19:57:26 [info] Multiple definitions in dictionary at byte 0xcf7d4 for key /Info
+19:57:26 [info] Multiple definitions in dictionary at byte 0xcf7e0 for key /Info
+19:57:26 [info] Multiple definitions in dictionary at byte 0xcf7ec for key /Info
+19:57:26 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:26 [info]     [SESSAO]   15ª Sessão Ordinária (21-10-2021) → Ata
+19:57:26 [ok]     [OK]      Ata.pdf (830.0 KB) <- Ata
+19:57:26 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\15ª Sessão Ordinária - 21-10-2021
+19:57:26 [info] Multiple definitions in dictionary at byte 0xcf7d4 for key /Info
+19:57:26 [info] Multiple definitions in dictionary at byte 0xcf7e0 for key /Info
+19:57:26 [info] Multiple definitions in dictionary at byte 0xcf7ec for key /Info
+19:57:26 [info] [110/255] pauta-no-15-da-sessao-ordinaria-de-21-de-outubro-de-2021
+19:57:28 [info]     1 PDF(s) | titulo: PAUTA No 15 DA SESSÃO ORDINÁRIA, DE 21 DE OUTUBRO DE 2021
+19:57:28 [info] Multiple definitions in dictionary at byte 0x45b98 for key /Info
+19:57:28 [info] Multiple definitions in dictionary at byte 0x45ba4 for key /Info
+19:57:28 [info] Multiple definitions in dictionary at byte 0x45bb0 for key /Info
+19:57:28 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:28 [info]     [SESSAO]   15ª Sessão Ordinária (21-10-2021) → Pauta
+19:57:28 [ok]     [OK]      Pauta.pdf (278.9 KB) <- Pauta
+19:57:28 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\15ª Sessão Ordinária - 21-10-2021
+19:57:28 [info] Multiple definitions in dictionary at byte 0x45b98 for key /Info
+19:57:28 [info] Multiple definitions in dictionary at byte 0x45ba4 for key /Info
+19:57:28 [info] Multiple definitions in dictionary at byte 0x45bb0 for key /Info
+19:57:29 [info] [111/255] ata-no-02-da-sessao-solene-de-30-de-setembro-de-2021
+19:57:31 [info]     1 PDF(s) | titulo: ATA No 02 DA SESSÃO SOLENE, DE 30 DE SETEMBRO DE 2021
+19:57:31 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:31 [info]     [SESSAO]   2ª Sessão Solene (30-09-2021) → Ata
+19:57:31 [ok]     [OK]      Ata.pdf (81.0 KB) <- Ata
+19:57:31 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\2ª Sessão Solene - 30-09-2021
+19:57:31 [info] [112/255] pauta-no-02-da-sessao-solene-de-30-de-setembro-de-2021
+19:57:34 [info]     1 PDF(s) | titulo: PAUTA No 02 DA SESSÃO SOLENE, DE 30 DE SETEMBRO DE 2021
+19:57:35 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:35 [info]     [SESSAO]   2ª Sessão Solene (30-09-2021) → Pauta
+19:57:35 [ok]     [OK]      Pauta.pdf (42.3 KB) <- Pauta
+19:57:35 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\2ª Sessão Solene - 30-09-2021
+19:57:35 [info] [113/255] ata-no-14-da-sessao-ordinaria-de-16-de-setembro-de-2021
+19:57:37 [info]     1 PDF(s) | titulo: ATA No 14 DA SESSÃO ORDINÁRIA, DE 16 DE SETEMBRO DE 2021
+19:57:39 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:39 [info]     [SESSAO]   14ª Sessão Ordinária (16-09-2021) → Ata
+19:57:39 [ok]     [OK]      Ata.pdf (181.6 KB) <- Ata
+19:57:39 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\14ª Sessão Ordinária - 16-09-2021
+19:57:39 [info] [114/255] pauta-no-14-da-sessao-ordinaria-de-16-de-setembro-de-2021
+19:57:41 [info]     1 PDF(s) | titulo: PAUTA No 14 DA SESSÃO ORDINÁRIA, DE 16 DE SETEMBRO DE 2021
+19:57:42 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:42 [info]     [SESSAO]   14ª Sessão Ordinária (16-09-2021) → Pauta
+19:57:42 [ok]     [OK]      Pauta.pdf (51.0 KB) <- Pauta
+19:57:42 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\14ª Sessão Ordinária - 16-09-2021
+19:57:42 [info] [115/255] ata-no-13-da-sessao-ordinaria-de-09-de-setembro-de-2021
+19:57:44 [info]     1 PDF(s) | titulo: ATA No 13 DA SESSÃO ORDINÁRIA, DE 09 DE SETEMBRO DE 2021
+19:57:45 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:45 [info]     [SESSAO]   13ª Sessão Ordinária (09-09-2021) → Ata
+19:57:45 [ok]     [OK]      Ata.pdf (79.4 KB) <- Ata
+19:57:45 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\13ª Sessão Ordinária - 09-09-2021
+19:57:45 [info] [116/255] pauta-no-13-da-sessao-ordinaria-de-09-de-setembro-de-2021
+19:57:47 [info]     1 PDF(s) | titulo: PAUTA No 13 DA SESSÃO ORDINÁRIA, DE 09 DE SETEMBRO DE 2021
+19:57:47 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:47 [info]     [SESSAO]   13ª Sessão Ordinária (09-09-2021) → Pauta
+19:57:47 [ok]     [OK]      Pauta.pdf (43.0 KB) <- Pauta
+19:57:47 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\13ª Sessão Ordinária - 09-09-2021
+19:57:47 [info] [117/255] ata-no-12-da-sessao-ordinaria-de-02-de-setembro-de-2021
+19:57:49 [info]     1 PDF(s) | titulo: ATA No 12 DA SESSÃO ORDINÁRIA, DE 02 DE SETEMBRO DE 2021
+19:57:51 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:51 [info]     [SESSAO]   12ª Sessão Ordinária (02-09-2021) → Ata
+19:57:51 [ok]     [OK]      Ata.pdf (188.3 KB) <- Ata
+19:57:51 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\12ª Sessão Ordinária - 02-09-2021
+19:57:51 [info] [118/255] pauta-no-12-da-sessao-ordinaria-de-02-de-setembro-de-2021
+19:57:54 [info]     1 PDF(s) | titulo: PAUTA No 12 DA SESSÃO ORDINÁRIA, DE 02 DE SETEMBRO DE 2021
+19:57:55 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:55 [info]     [SESSAO]   12ª Sessão Ordinária (02-09-2021) → Pauta
+19:57:55 [ok]     [OK]      Pauta.pdf (48.6 KB) <- Pauta
+19:57:55 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\12ª Sessão Ordinária - 02-09-2021
+19:57:55 [info] [119/255] ata-da-11a-sessao-ordinaria-de-26-de-agosto-de-2021
+19:57:57 [info]     1 PDF(s) | titulo: ATA DA 11a SESSÃO ORDINÁRIA, DE 26 DE AGOSTO DE 2021
+19:57:59 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:57:59 [info]     [SESSAO]   11ª Sessão Ordinária (26-08-2021) → Ata
+19:57:59 [ok]     [OK]      Ata.pdf (106.2 KB) <- Ata
+19:57:59 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\11ª Sessão Ordinária - 26-08-2021
+19:57:59 [info] [120/255] pauta-da-sessao-ordinaria-de-26-de-agosto-de-2021
+19:58:01 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 26 DE AGOSTO DE 2021
+19:58:01 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:03 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:03 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 26 DE AGOSTO DE 2021.pdf (41.6 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 26 DE AGOSTO DE 2021
+19:58:04 [info] [121/255] ata-da-10a-sessao-ordinaria-de-19-de-agosto-de-2021
+19:58:06 [info]     1 PDF(s) | titulo: ATA DA 10a SESSÃO ORDINÁRIA, DE 19 DE AGOSTO DE 2021
+19:58:07 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:07 [info]     [SESSAO]   10ª Sessão Ordinária (19-08-2021) → Ata
+19:58:07 [ok]     [OK]      Ata.pdf (105.1 KB) <- Ata
+19:58:07 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\10ª Sessão Ordinária - 19-08-2021
+19:58:08 [info] [122/255] pauta-da-sessao-ordinaria-de-19-de-agosto-de-2021
+19:58:09 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 19 DE AGOSTO DE 2021
+19:58:10 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:12 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:12 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 19 DE AGOSTO DE 2021.pdf (45.0 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 19 DE AGOSTO DE 2021
+19:58:12 [info] [123/255] pauta-da-sessao-ordinaria-de-05-de-agosto-de-2021
+19:58:14 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 05 DE AGOSTO DE 2021
+19:58:15 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:17 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:17 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 05 DE AGOSTO DE 2021.pdf (42.7 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 05 DE AGOSTO DE 2021
+19:58:17 [info] [124/255] ata-da-9a-sessao-ordinaria-de-05-de-agosto-de-2021
+19:58:19 [info]     1 PDF(s) | titulo: ATA DA 9a SESSÃO ORDINÁRIA, DE 05 DE AGOSTO DE 2021
+19:58:20 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:20 [info]     [SESSAO]   9ª Sessão Ordinária (05-08-2021) → Ata
+19:58:20 [ok]     [OK]      Ata.pdf (89.2 KB) <- Ata
+19:58:20 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\9ª Sessão Ordinária - 05-08-2021
+19:58:20 [info] [125/255] sem-pautas-e-atas-em-julho-2021
+19:58:22 [info]     [SEM PDF] Nenhum PDF no corpo do post.
+19:58:22 [info] [126/255] ata-da-sessao-ordinaria-de-24-de-junho-de-2021
+19:58:24 [info]     1 PDF(s) | titulo: ATA DA SESSÃO ORDINÁRIA, DE 24 DE JUNHO DE 2021
+19:58:26 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:28 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:28 [ok]     [OK]      ATA DA SESSÃO ORDINÁRIA, DE 24 DE JUNHO DE 2021.pdf (198.8 KB) <- ATA DA SESSÃO ORDINÁRIA, DE 24 DE JUNHO DE 2021
+19:58:29 [info] [127/255] pauta-da-sessao-ordinaria-de-24-de-junho-de-2021
+19:58:30 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 24 DE JUNHO DE 2021
+19:58:32 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:34 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:34 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 24 DE JUNHO DE 2021.pdf (57.8 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 24 DE JUNHO DE 2021
+19:58:34 [info] [128/255] pauta-da-sessao-ordinaria-de-17-de-junho-de-2021
+19:58:36 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 17 DE JUNHO DE 2021
+19:58:36 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:38 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:38 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 17 DE JUNHO DE 2021.pdf (67.0 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 17 DE JUNHO DE 2021
+19:58:39 [info] [129/255] ata-da-sessao-ordinaria-de-17-de-junho-de-2021
+19:58:41 [info]     1 PDF(s) | titulo: ATA DA SESSÃO ORDINÁRIA, DE 17 DE JUNHO DE 2021
+19:58:42 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:44 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:44 [ok]     [OK]      ATA DA SESSÃO ORDINÁRIA, DE 17 DE JUNHO DE 2021.pdf (109.7 KB) <- ATA DA SESSÃO ORDINÁRIA, DE 17 DE JUNHO DE 2021
+19:58:45 [info] [130/255] pauta-da-sessao-ordinaria-de-10-de-junho-de-2021
+19:58:46 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 10 DE JUNHO DE 2021
+19:58:48 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:50 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:50 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 10 DE JUNHO DE 2021.pdf (48.4 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 10 DE JUNHO DE 2021
+19:58:50 [info] [131/255] ata-da-sessao-ordinaria-de-10-de-junho-de-2021
+19:58:52 [info]     1 PDF(s) | titulo: ATA DA SESSÃO ORDINÁRIA, DE 10 DE JUNHO DE 2021
+19:58:52 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:55 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:55 [ok]     [OK]      ATA DA SESSÃO ORDINÁRIA, DE 10 DE JUNHO DE 2021.pdf (97.3 KB) <- ATA DA SESSÃO ORDINÁRIA, DE 10 DE JUNHO DE 2021
+19:58:55 [info] [132/255] pauta-da-sessao-ordinaria-de-27-de-maio-de-2021
+19:58:57 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 27 DE MAIO DE 2021
+19:58:57 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:58:59 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:58:59 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 27 DE MAIO DE 2021.pdf (48.2 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 27 DE MAIO DE 2021
+19:59:00 [info] [133/255] ata-da-sessao-ordinaria-de-27-de-maio-de-2021
+19:59:01 [info]     1 PDF(s) | titulo: ATA DA SESSÃO ORDINÁRIA, DE 27 DE MAIO DE 2021
+19:59:02 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:04 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:59:04 [ok]     [OK]      ATA DA SESSÃO ORDINÁRIA, DE 27 DE MAIO DE 2021.pdf (213.7 KB) <- ATA DA SESSÃO ORDINÁRIA, DE 27 DE MAIO DE 2021
+19:59:05 [info] [134/255] ata-da-4o-sessao-ordinaria-de-20-de-maio-de-2021
+19:59:07 [info]     1 PDF(s) | titulo: ATA DA 4o SESSÃO ORDINÁRIA, DE 20 DE MAIO DE 2021
+19:59:08 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:10 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:59:10 [ok]     [OK]      ATA DA 4o SESSÃO ORDINÁRIA, DE 20 DE MAIO DE 2021.pdf (196.0 KB) <- ATA DA 4o SESSÃO ORDINÁRIA, DE 20 DE MAIO DE 2021
+19:59:10 [info] [135/255] pauta-da-4o-sessao-ordinaria-de-20-de-maio-de-2021
+19:59:13 [info]     1 PDF(s) | titulo: PAUTA DA 4o SESSÃO ORDINÁRIA, DE 20 DE MAIO DE 2021
+19:59:13 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:15 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:59:15 [ok]     [OK]      PAUTA DA 4o SESSÃO ORDINÁRIA, DE 20 DE MAIO DE 2021.pdf (49.8 KB) <- PAUTA DA 4o SESSÃO ORDINÁRIA, DE 20 DE MAIO DE 2021
+19:59:16 [info] [136/255] pauta-da-sessao-especial-de-13-de-maio-de-2021
+19:59:17 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ESPECIAL, DE 13 DE MAIO DE 2021
+19:59:19 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:19 [info]     [SESSAO]   Sessão Especial (13-05-2021) → Pauta
+19:59:19 [ok]     [OK]      Pauta.pdf (48.5 KB) <- Pauta
+19:59:19 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\Sessão Especial - 13-05-2021
+19:59:20 [info] [137/255] ata-da-sessao-especial-de-13-de-maio-de-2021
+19:59:21 [info]     1 PDF(s) | titulo: ATA DA SESSÃO ESPECIAL, DE 13 DE MAIO DE 2021
+19:59:22 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:22 [info]     [SESSAO]   Sessão Especial (13-05-2021) → Ata
+19:59:22 [ok]     [OK]      Ata.pdf (72.7 KB) <- Ata
+19:59:22 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\Sessão Especial - 13-05-2021
+19:59:23 [info] [138/255] pauta-da-sessao-ordinaria-de-06-de-maio-de-2021
+19:59:24 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 06 DE MAIO DE 2021
+19:59:26 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:28 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:59:28 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 06 DE MAIO DE 2021.pdf (50.7 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 06 DE MAIO DE 2021
+19:59:28 [info] [139/255] ata-da-sessao-ordinaria-de-06-de-maio-de-2021
+19:59:30 [info]     1 PDF(s) | titulo: ATA DA SESSÃO ORDINÁRIA, DE 06 DE MAIO DE 2021
+19:59:31 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:33 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:59:33 [ok]     [OK]      ATA DA SESSÃO ORDINÁRIA, DE 06 DE MAIO DE 2021.pdf (213.7 KB) <- ATA DA SESSÃO ORDINÁRIA, DE 06 DE MAIO DE 2021
+19:59:33 [info] [140/255] sem-pautas-e-atas-em-abril-2021
+19:59:35 [info]     [SEM PDF] Nenhum PDF no corpo do post.
+19:59:35 [info] [141/255] ata-da-sessao-ordinaria-de-04-de-marco-de-2021
+19:59:37 [info]     1 PDF(s) | titulo: ATA DA SESSÃO ORDINÁRIA, DE 04 DE MARÇO DE 2021
+19:59:38 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:40 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:59:40 [ok]     [OK]      ATA DA SESSÃO ORDINÁRIA, DE 04 DE MARÇO DE 2021.pdf (323.3 KB) <- ATA DA SESSÃO ORDINÁRIA, DE 04 DE MARÇO DE 2021
+19:59:41 [info] [142/255] pauta-da-sessao-ordinaria-de-04-de-marco-de-2020
+19:59:43 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 04 DE MARÇO DE 2021
+19:59:43 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:45 [info]     [IA]      Ollama offline — mantendo nome das regras
+19:59:45 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 04 DE MARÇO DE 2021.pdf (49.8 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 04 DE MARÇO DE 2021
+19:59:46 [info] [143/255] pauta-da-1a-sessao-ordinaria-de-25-de-fevereiro-de-2021
+19:59:47 [info]     1 PDF(s) | titulo: PAUTA DA 1a SESSÃO ORDINÁRIA, DE 25 DE FEVEREIRO DE 2021
+19:59:48 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:48 [info]     [SESSAO]   1ª Sessão Ordinária (25-02-2021) → Pauta
+19:59:48 [ok]     [OK]      Pauta.pdf (61.3 KB) <- Pauta
+19:59:48 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\1ª Sessão Ordinária - 25-02-2021
+19:59:48 [info] [144/255] ata-da-01a-sessao-ordinaria-de-25-de-fevereiro-de-2021
+19:59:50 [info]     1 PDF(s) | titulo: ATA DA 01a SESSÃO ORDINÁRIA, DE 25 DE FEVEREIRO DE 2021
+19:59:51 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:51 [info]     [SESSAO]   1ª Sessão Ordinária (25-02-2021) → Ata
+19:59:51 [ok]     [OK]      Ata.pdf (295.5 KB) <- Ata
+19:59:51 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\1ª Sessão Ordinária - 25-02-2021
+19:59:51 [info] [145/255] ata-da-sessao-solene-de-18-de-fevereiro-de-2021
+19:59:53 [info]     1 PDF(s) | titulo: ATA DA SESSÃO SOLENE, DE 18 DE FEVEREIRO DE 2021 (SEM PAUTA)
+19:59:53 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:54 [info]     [SESSAO]   Sessão Solene (18-02-2021) → Pauta
+19:59:54 [ok]     [OK]      Pauta.pdf (74.7 KB) <- Pauta
+19:59:54 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\Sessão Solene - 18-02-2021
+19:59:54 [info] [146/255] ata-da-sessao-preparatoria-de-posse-e-eleicao-da-mesa-direto
+19:59:55 [info]     1 PDF(s) | titulo: ATA DA SESSÃO PREPARATÓRIA DE POSSE E ELEIÇÃO DA MESA DIRETORA, DE 01 DE JANEIRO
+19:59:57 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+19:59:57 [info]     [SESSAO]   Sessão Preparatória - Posse e Eleição da Mesa Diretora (01-01-2021) → Pauta
+19:59:57 [ok]     [OK]      Pauta.pdf (589.6 KB) <- Pauta
+19:59:57 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2021\Sessão Preparatória - Posse e Eleição da Mesa Diretora - 01-01-2021
+19:59:57 [info] [147/255] pauta-da-sessao-ordinaria-de-12-de-marco-de-2020
+19:59:59 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 12 DE MARÇO DE 2020
+20:00:00 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:02 [info]     [IA]      Ollama offline — mantendo nome das regras
+20:00:02 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 12 DE MARÇO DE 2020.pdf (50.4 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 12 DE MARÇO DE 2020
+20:00:02 [info] [148/255] ata-da-02a-sessao-ordinaria-de-12-de-marco-de-2020
+20:00:04 [info]     1 PDF(s) | titulo: ATA DA 02a SESSÃO ORDINÁRIA, DE 12 DE MARÇO DE 2020
+20:00:05 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:05 [info]     [SESSAO]   2ª Sessão Ordinária (12-03-2020) → Ata
+20:00:05 [ok]     [OK]      Ata.pdf (253.3 KB) <- Ata
+20:00:05 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2020\2ª Sessão Ordinária - 12-03-2020
+20:00:05 [info] [149/255] pauta-da-sessao-ordinaria-de-20-de-fevereiro-de-2020
+20:00:07 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 20 DE FEVEREIRO DE 2020
+20:00:08 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:10 [info]     [IA]      Ollama offline — mantendo nome das regras
+20:00:10 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 20 DE FEVEREIRO DE 2020.pdf (54.4 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 20 DE FEVEREIRO DE 2020
+20:00:10 [info] [150/255] ata-da-01a-sessao-ordinaria-de-20-de-fevereiro-de-2020
+20:00:10 [info]     1 PDF(s) | titulo: ATA DA 01a SESSÃO ORDINÁRIA, DE 20 DE FEVEREIRO DE 2020
+20:00:11 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:11 [info]     [SESSAO]   1ª Sessão Ordinária (20-02-2020) → Ata
+20:00:11 [ok]     [OK]      Ata.pdf (210.1 KB) <- Ata
+20:00:11 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2020\1ª Sessão Ordinária - 20-02-2020
+20:00:12 [info] [151/255] pauta-da-sessao-ordinaria-de-12-de-dezembro-de-2019
+20:00:13 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 12 DE DEZEMBRO DE 2019
+20:00:14 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:16 [info]     [IA]      Ollama offline — mantendo nome das regras
+20:00:16 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 12 DE DEZEMBRO DE 2019.pdf (49.3 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 12 DE DEZEMBRO DE 2019
+20:00:16 [info] [152/255] ata-da-17a-sessao-ordinaria-de-12-de-dezembro-de-2019
+20:00:18 [info]     1 PDF(s) | titulo: ATA DA 17a SESSÃO ORDINÁRIA, DE 12 DE DEZEMBRO DE 2019
+20:00:20 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:20 [info]     [SESSAO]   17ª Sessão Ordinária (12-12-2019) → Ata
+20:00:20 [ok]     [OK]      Ata.pdf (198.3 KB) <- Ata
+20:00:20 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2019\17ª Sessão Ordinária - 12-12-2019
+20:00:20 [info] [153/255] pauta-da-sessao-ordinaria-de-28-de-novembro-de-2019
+20:00:22 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 28 DE NOVEMBRO DE 2019
+20:00:23 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:25 [info]     [IA]      Ollama offline — mantendo nome das regras
+20:00:25 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 28 DE NOVEMBRO DE 2019.pdf (57.9 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 28 DE NOVEMBRO DE 2019
+20:00:26 [info] [154/255] ata-da-16a-sessao-ordinaria-de-28-de-novembro-de-2019
+20:00:27 [info]     1 PDF(s) | titulo: ATA DA 16a SESSÃO ORDINÁRIA, DE 28 DE NOVEMBRO DE 2019
+20:00:28 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:28 [info]     [SESSAO]   16ª Sessão Ordinária (28-11-2019) → Ata
+20:00:28 [ok]     [OK]      Ata.pdf (952.9 KB) <- Ata
+20:00:28 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2019\16ª Sessão Ordinária - 28-11-2019
+20:00:29 [info] [155/255] ata-da-15a-sessao-ordinaria-de-17-de-outubro-de-2019
+20:00:30 [info]     1 PDF(s) | titulo: ATA DA 15a SESSÃO ORDINÁRIA, DE 17 DE OUTUBRO DE 2019
+20:00:31 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:31 [info]     [SESSAO]   15ª Sessão Ordinária (17-10-2019) → Ata
+20:00:31 [ok]     [OK]      Ata.pdf (368.4 KB) <- Ata
+20:00:31 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2019\15ª Sessão Ordinária - 17-10-2019
+20:00:31 [info] [156/255] pauta-da-sessao-ordinaria-de-17-de-outubro-de-2019
+20:00:33 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 17 DE OUTUBRO DE 2019
+20:00:34 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:36 [info]     [IA]      Ollama offline — mantendo nome das regras
+20:00:36 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 17 DE OUTUBRO DE 2019.pdf (762.2 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 17 DE OUTUBRO DE 2019
+20:00:36 [info] [157/255] pauta-da-sessao-ordinaria-de-12-de-setembro-de-2019
+20:00:38 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 12 DE SETEMBRO DE 2019
+20:00:39 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:41 [info]     [IA]      Ollama offline — mantendo nome das regras
+20:00:41 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 12 DE SETEMBRO DE 2019.pdf (347.2 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 12 DE SETEMBRO DE 2019
+20:00:41 [info] [158/255] ata-da-14a-sessao-ordinaria-de-12-de-setembro-de-2019
+20:00:43 [info]     1 PDF(s) | titulo: ATA DA 14a SESSÃO ORDINÁRIA, DE 12 DE SETEMBRO DE 2019
+20:00:44 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:44 [info]     [SESSAO]   14ª Sessão Ordinária (12-09-2019) → Ata
+20:00:44 [ok]     [OK]      Ata.pdf (5105.4 KB) <- Ata
+20:00:44 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2019\14ª Sessão Ordinária - 12-09-2019
+20:00:45 [info] [159/255] pauta-da-sessao-ordinaria-de-29-de-agosto-de-2019
+20:00:47 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 29 DE AGOSTO DE 2019
+20:00:47 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:49 [info]     [IA]      Ollama offline — mantendo nome das regras
+20:00:49 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 29 DE AGOSTO DE 2019.pdf (343.6 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 29 DE AGOSTO DE 2019
+20:00:49 [info] [160/255] ata-da-13a-sessao-ordinaria-de-29-de-agosto-de-2019
+20:00:51 [info]     1 PDF(s) | titulo: ATA DA 13a SESSÃO ORDINÁRIA, DE 29 DE AGOSTO DE 2019
+20:00:52 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:52 [info]     [SESSAO]   13ª Sessão Ordinária (29-08-2019) → Ata
+20:00:52 [ok]     [OK]      Ata.pdf (1829.4 KB) <- Ata
+20:00:52 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2019\13ª Sessão Ordinária - 29-08-2019
+20:00:53 [info] [161/255] pauta-da-sessao-ordinaria-de-08-de-agosto-de-2019
+20:00:54 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 08 DE AGOSTO DE 2019
+20:00:54 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:00:57 [info]     [IA]      Ollama offline — mantendo nome das regras
+20:00:57 [ok]     [OK]      PAUTA DA SESSÃO ORDINÁRIA, DE 08 DE AGOSTO DE 2019.pdf (352.4 KB) <- PAUTA DA SESSÃO ORDINÁRIA, DE 08 DE AGOSTO DE 2019
+20:00:57 [info] [162/255] ata-da-12a-sessao-ordinaria-de-08-de-agosto-de-2019
+20:00:59 [info]     1 PDF(s) | titulo: ATA DA 12a SESSÃO ORDINÁRIA, DE 08 DE AGOSTO DE 2019
+20:01:00 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link
+20:01:00 [info]     [SESSAO]   12ª Sessão Ordinária (08-08-2019) → Ata
+20:01:00 [ok]     [OK]      Ata.pdf (1785.1 KB) <- Ata
+20:01:00 [info]              em C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\2019\12ª Sessão Ordinária - 08-08-2019
+20:01:00 [info] [163/255] sem-pautas-e-atas-em-julho-2019
+20:01:02 [info]     [SEM PDF] Nenhum PDF no corpo do post.
+20:01:02 [info] [164/255] pauta-da-sessao-ordinaria-de-27-de-junho-de-2019
+20:01:04 [info]     1 PDF(s) | titulo: PAUTA DA SESSÃO ORDINÁRIA, DE 27 DE JUNHO DE 2019
+20:01:04 [warn]     [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link

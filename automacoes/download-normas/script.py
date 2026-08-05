@@ -23,9 +23,11 @@ import io
 import json
 import os
 import re
+import sys
 import time
 import unicodedata
-from urllib.parse import urljoin, urlparse
+from pathlib import Path
+from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -55,38 +57,54 @@ def _abortar_se_cancelado() -> None:
 PASTA_BASE = r"C:\Downloads\Inhangapi"
 SITE = "https://inhangapi.pa.gov.br"
 
-# Cada fonte: url, modo (categoria | hub_anos | pagina), pasta (subpasta local)
+# Cada fonte: url, modo (categoria | hub_anos | pagina), pasta opcional
+# (se pasta vazia → título da página ou slug da URL)
 FONTES = [
     {
         "url": "https://inhangapi.pa.gov.br/c/publicacoes/leis/",
         "modo": "categoria",
-        "pasta": "Leis",
+        "pasta": "",
     },
     {
         "url": "https://inhangapi.pa.gov.br/decretos/",
         "modo": "hub_anos",
-        "pasta": "Decretos",
+        "pasta": "",
     },
     {
         "url": "https://inhangapi.pa.gov.br/c/publicacoes/portarias/",
         "modo": "categoria",
-        "pasta": "Portarias",
+        "pasta": "",
     },
     {
         "url": "https://inhangapi.pa.gov.br/c/publicacoes/demais/",
         "modo": "categoria",
-        "pasta": "Demais",
+        "pasta": "",
     },
 ]
 
 # Lê as primeiras páginas do PDF para refinar o nome (recomendado).
 LER_PDF = True
 MAX_PAGINAS_PDF = 2
+# Páginas extras quando extrai campos de Diárias.
+MAX_PAGINAS_DIARIAS = 4
 # Limite opcional de posts por fonte (0 = todos). Útil para teste.
 LIMITE_POSTS = 0
 # Filtro de anos: lista de strings, ex. ["2023"] ou ["2022", "2023"].
 # Lista vazia = processa TODOS os anos.
 ANOS_FILTRO = []
+
+# Extrai campos quando a fonte/PDF é de Diárias (regra geral — não é opção).
+# Ex.: https://camaracachoeiradopiria.pa.gov.br/diarias-ate-2023/
+EXTRAI_DIARIAS = True
+
+# IA local (Ollama) — só corrige nome quando regras falham (tipo/número/ano).
+REFINAR_IA = False
+MODELO_IA = "llama3.2:3b"
+OLLAMA_URL = "http://127.0.0.1:11434"
+IA_SEMPRE = False
+
+# Acumulador de linhas da planilha de Diárias (preenchido em baixar_e_salvar).
+REGISTROS_DIARIAS: list[dict] = []
 
 HEADERS = {
     "User-Agent": (
@@ -107,6 +125,65 @@ _SESSION.headers.update(HEADERS)
 
 def criar_pasta(caminho: str) -> None:
     os.makedirs(caminho, exist_ok=True)
+
+
+def limpar_nome_pasta(nome: str) -> str:
+    """Remove caracteres inválidos para nome de pasta no Windows."""
+    nome = (nome or "").strip()
+    for c in '<>:"/\\|?*':
+        nome = nome.replace(c, "")
+    nome = re.sub(r"\s+", " ", nome).strip(" .")
+    return nome
+
+
+def pasta_da_url(url: str) -> str:
+    """
+    Deriva nome de pasta do último segmento útil da URL.
+    Ex.: /c/publicacoes/leis/ → Leis
+         /decretos/ → Decretos
+    """
+    path = urlparse(url or "").path.strip("/")
+    partes = [p for p in path.split("/") if p]
+    ignorar = {
+        "c", "category", "categoria", "categories", "publicacoes",
+        "publicação", "publicacao", "page", "p", "wp", "index.php",
+    }
+    uteis = [p for p in partes if p.lower() not in ignorar and not p.isdigit()]
+    slug = uteis[-1] if uteis else (partes[-1] if partes else "documentos")
+    slug = unquote(slug)
+    slug = slug.replace("-", " ").replace("_", " ")
+    slug = re.sub(r"\s+", " ", slug).strip()
+    # Capitaliza palavras simples (leis → Leis)
+    if slug and slug.islower():
+        slug = slug.title()
+    return limpar_nome_pasta(slug) or "Documentos"
+
+
+def resolver_pasta_hint(fonte: dict, titulo: str = "") -> str:
+    """
+    Nome da subpasta local:
+      1) pasta informada na fonte (override)
+      2) título da página (h1/title)
+      3) slug da URL
+    """
+    manual = limpar_nome_pasta((fonte.get("pasta") or "").strip())
+    if manual:
+        return manual
+    auto = limpar_nome_pasta(titulo or "")
+    if auto:
+        return auto
+    return pasta_da_url(fonte.get("url") or "")
+
+
+def obter_titulo_fonte(url: str) -> str:
+    """Abre a URL da fonte e lê o título da página."""
+    try:
+        resp = _get(url)
+        soup = BeautifulSoup(resp.content, "html.parser")
+        return titulo_da_pagina(soup)
+    except Exception as e:
+        print(f"  [AVISO] Não foi possível ler título de {url}: {e}")
+        return ""
 
 
 def limpar_nome_arquivo(nome: str) -> str:
@@ -180,15 +257,73 @@ _RE_NUM_ANO = re.compile(
 )
 
 _RE_TIPO_PRIORIDADE = [
-    ("LDO", re.compile(r"\bLDO\b", re.I)),
-    ("LOA", re.compile(r"\bLOA\b", re.I)),
+    # Orçamentárias / planos (antes de "Lei")
+    ("LDO", re.compile(r"\bLDO\b|lei\s+de\s+diretrizes\s+or[cç]ament[aá]rias?", re.I)),
+    ("LOA", re.compile(r"\bLOA\b|lei\s+or[cç]ament[aá]rias?\s+anual", re.I)),
+    ("PPA", re.compile(r"\bPPA\b|plano\s+plurianual", re.I)),
+    ("PCCR", re.compile(r"\bPCCR\b|plano\s+de\s+cargos", re.I)),
+    ("Balancete Financeiro", re.compile(r"balancete\s+financeiro", re.I)),
+    ("Balanço Anual", re.compile(r"balan[cç]o\s+anual", re.I)),
+    ("Relatório do Controle Interno", re.compile(
+        r"relat[oó]rio\s+do\s+controle\s+interno", re.I)),
+    ("Relatório de Gestão", re.compile(r"relat[oó]rio\s+de\s+gest[aã]o", re.I)),
+    ("Norma de Estrutura Organizacional", re.compile(
+        r"norma\s+de\s+estrutura\s+organizacional", re.I)),
+    ("Demais Publicações Oficiais", re.compile(
+        r"demais\s+publica[cç][oõ]es\s+oficiais?", re.I)),
+    ("Demais Publicações", re.compile(r"demais\s+publica[cç][oõ]es?\b", re.I)),
+    ("Instrução Normativa", re.compile(r"instru[cç][aã]o(?:es)?\s+normativa", re.I)),
+    ("Requerimento de Autoria Técnica", re.compile(
+        r"requerimento\s+de\s+autoria\s+t[eé]cnica", re.I)),
+    ("Ata de Audiência Pública", re.compile(
+        r"ata\s+de\s+audi[eê]ncia\s+p[uú]blica", re.I)),
+    ("Ato Legislativo Especial", re.compile(r"ato\s+legislativo\s+especial", re.I)),
+    ("Ato de Convocação", re.compile(r"ato\s+de\s+convoca[cç][aã]o", re.I)),
+    ("Ato da Presidência", re.compile(r"ato\s+da\s+presid[eê]ncia", re.I)),
+    ("Ato da Mesa Diretora", re.compile(r"ato\s+da\s+mesa\s+diretora", re.I)),
+    ("Ato do Controle Interno", re.compile(r"ato\s+do\s+controle\s+interno", re.I)),
+    ("Memorando", re.compile(r"\bmemorandos?\b", re.I)),
+    # Matérias / proposições (específico → genérico)
+    ("Projeto de Emenda à Lei Orgânica", re.compile(
+        r"projeto\s+de\s+emenda\s+[aà]\s+lei\s+org[aâ]nica", re.I)),
+    ("Projeto de Emenda ao Regimento Interno", re.compile(
+        r"projeto\s+de\s+emenda\s+ao\s+regimento", re.I)),
+    ("Projeto de Decreto Legislativo", re.compile(
+        r"projeto\s+de\s+decreto\s+legislativo", re.I)),
+    ("Projeto de Lei Complementar", re.compile(
+        r"projeto\s+de\s+lei\s+complementar", re.I)),
+    ("Projeto de Indicação", re.compile(r"projeto\s+de\s+indica[cç][aã]o", re.I)),
+    ("Projeto de Resolução", re.compile(r"projeto\s+de\s+resolu[cç][aã]o", re.I)),
+    ("Projeto de Lei", re.compile(r"projeto\s+de\s+lei\b", re.I)),
+    ("Anteprojeto de Lei", re.compile(r"anteprojeto\s+de\s+lei", re.I)),
+    ("Emenda à Lei Orgânica", re.compile(r"emenda\s+[aà]\s+lei\s+org[aâ]nica", re.I)),
+    ("Emendas Impositivas", re.compile(r"emendas?\s+impositivas?", re.I)),
+    ("Moção de Reconhecimento", re.compile(r"mo[cç][aã]o\s+de\s+reconhecimento", re.I)),
+    ("Moção de Aplauso", re.compile(r"mo[cç][aã]o\s+de\s+aplauso", re.I)),
+    ("Moção de Pesar", re.compile(r"mo[cç][aã]o\s+de\s+pesar", re.I)),
+    ("Pedido de Providência", re.compile(r"pedido\s+de\s+provid[eê]ncia", re.I)),
+    ("Iniciativa Popular", re.compile(r"iniciativa\s+popular", re.I)),
+    ("Decreto Legislativo", re.compile(r"decreto\s+legislativo", re.I)),
+    ("Lei Complementar", re.compile(r"lei\s+complementar", re.I)),
+    ("Lei Orgânica", re.compile(r"lei\s+org[aâ]nica", re.I)),
+    ("Atos de Promulgação", re.compile(r"atos?\s+de\s+promulga[cç][aã]o", re.I)),
+    ("Legislação de Pessoal", re.compile(r"legisla[cç][aã]o\s+de\s+pessoal", re.I)),
+    ("Diário Oficial", re.compile(r"di[aá]rio\s+oficial", re.I)),
+    ("Regulamentação de Cotas Parlamentares", re.compile(
+        r"regulamenta[cç][aã]o\s+de\s+cotas?\s+parlamentares?", re.I)),
+    ("Devolvido ao Executivo", re.compile(r"devolvido\s+ao\s+executivo", re.I)),
+    ("Notificações", re.compile(r"\bnotifica[cç][oõ]es?\b", re.I)),
+    ("Ofício", re.compile(r"\bof[ií]cios?\b", re.I)),
+    ("Indicação", re.compile(r"\bindica[cç][oõ]es?\b", re.I)),
+    ("Proposições", re.compile(r"\bproposi[cç][oõ]es?\b", re.I)),
+    ("Veto", re.compile(r"\bvetos?\b", re.I)),
     ("Portaria", re.compile(r"\bportarias?\b", re.I)),
     ("Decreto", re.compile(r"\bdecretos?\b", re.I)),
     ("Resolução", re.compile(r"\bresolu[cç][aã]o(?:es)?\b", re.I)),
     ("Edital", re.compile(r"\beditais?\b", re.I)),
     ("Moção", re.compile(r"\bmo[cç][aã]o(?:es)?\b", re.I)),
     ("Requerimento", re.compile(r"\brequerimentos?\b", re.I)),
-    ("Lei", re.compile(r"\b(?:lei(?:s)?\s+municipal(?:is)?|projeto\s+de\s+lei|leis?)\b", re.I)),
+    ("Lei", re.compile(r"\b(?:lei(?:s)?\s+municipal(?:is)?|leis?)\b", re.I)),
 ]
 
 _LINK_GENERICO = re.compile(
@@ -229,22 +364,61 @@ def _detectar_tipo(*textos: str, pasta_hint: str = "") -> str | None:
         if not blob:
             continue
         # Só o cabeçalho (evita 'revoga a Portaria X' no corpo do decreto)
-        cabeca = blob[:280]
+        cabeca = blob[:320]
         for tipo, rx in _RE_TIPO_PRIORIDADE:
             if rx.search(cabeca):
                 return tipo
-    hint = (pasta_hint or "").lower()
-    if "portaria" in hint:
-        return "Portaria"
-    if "decreto" in hint:
-        return "Decreto"
-    if "moç" in hint or "moc" in hint:
-        return "Moção"
-    if "requerimento" in hint:
-        return "Requerimento"
-    if "lei" in hint:
-        return "Lei"
+    hint = limpar_nome_pasta(pasta_hint or "")
+    if hint:
+        for tipo, rx in _RE_TIPO_PRIORIDADE:
+            if rx.search(hint):
+                return tipo
+        # Fora do catálogo: pasta/título da fonte vira o tipo
+        return hint
+    # Sem pasta do catálogo: usa o título/item mais descritivo
+    for texto in textos:
+        if not texto:
+            continue
+        if _LINK_GENERICO.match((texto or "").strip()):
+            continue
+        t = limpar_nome_pasta(_normalizar_texto(texto))
+        if not t or len(t) < 3:
+            continue
+        t = re.split(
+            r"\s*[-|–]\s*(?:Prefeitura|C[aâ]mara|Portal)\b",
+            t,
+            maxsplit=1,
+            flags=re.I,
+        )[0].strip()
+        if t:
+            return t[:100]
     return None
+
+
+def _tipos_catalogo() -> list[str]:
+    return [nome for nome, _ in _RE_TIPO_PRIORIDADE]
+
+
+def _aplicar_ia_nome(nome: str, textos: list[str]) -> str:
+    """Opcional: corrige tipo/número/ano com Ollama quando as regras falham."""
+    if not REFINAR_IA:
+        return nome
+    auto = Path(__file__).resolve().parents[1]
+    if str(auto) not in sys.path:
+        sys.path.insert(0, str(auto))
+    try:
+        from _comum import refinar_nome_documento
+    except ImportError as exc:
+        print("    [IA]      pacote _comum indisponível ({0})".format(exc))
+        return nome
+    return refinar_nome_documento(
+        nome_regras=nome,
+        textos=textos,
+        tipos_catalogo=_tipos_catalogo(),
+        modelo=MODELO_IA,
+        ollama_url=OLLAMA_URL,
+        forcar=IA_SEMPRE,
+    )
 
 
 def montar_nome_documento(
@@ -258,13 +432,13 @@ def montar_nome_documento(
 ) -> str:
     """
     Retorna nome lógico sem extensão, ex.: 'Portaria Nº010/2025'
+    Se não estiver no catálogo, usa o título/item da página.
     """
     basename = os.path.basename(urlparse(url_pdf).path) if url_pdf else ""
     link_util = ""
     if texto_link and not _LINK_GENERICO.match(texto_link.strip()):
         link_util = texto_link
 
-    # Ordem: link explícito → título → início do PDF → nome do arquivo → pasta
     tipo = _detectar_tipo(
         link_util,
         titulo_post,
@@ -274,18 +448,26 @@ def montar_nome_documento(
     )
     num, ano = _extrair_numero_ano(link_util, titulo_post, texto_pdf, basename)
 
-    if tipo and num is not None and ano is not None:
+    nomes_catalogo = {nome for nome, _ in _RE_TIPO_PRIORIDADE}
+    tipo_catalogo = bool(tipo and tipo in nomes_catalogo)
+
+    if tipo_catalogo and num is not None and ano is not None:
         return f"{tipo} Nº{str(num).zfill(3)}/{ano}"
 
-    if tipo and num is not None and ano_fallback:
+    if tipo_catalogo and num is not None and ano_fallback:
         return f"{tipo} Nº{str(num).zfill(3)}/{ano_fallback}"
 
-    # Sem número/ano claros: limpa título ou link
-    candidato = link_util
-    if not candidato:
-        candidato = titulo_post or basename or "Documento"
+    # Fora do catálogo (ou sem número): nome do item / título
+    candidato = link_util or titulo_post or tipo or basename or "Documento"
     candidato = _normalizar_texto(candidato)
+    candidato = re.split(
+        r"\s*[-|–]\s*(?:Prefeitura|C[aâ]mara|Portal)\b",
+        candidato,
+        maxsplit=1,
+        flags=re.I,
+    )[0].strip()
     candidato = re.sub(r"\s*\(.*?\)\s*$", "", candidato)
+    candidato = limpar_nome_pasta(candidato) or "Documento"
     candidato = candidato[:120].strip(" .-_")
     if not candidato:
         candidato = "Documento"
@@ -309,6 +491,88 @@ def ler_texto_pdf_bytes(data: bytes, max_paginas: int = MAX_PAGINAS_PDF) -> str:
         return _normalizar_texto("\n".join(partes))
     except Exception:
         return ""
+
+
+def _carregar_modulo_local(nome: str):
+    """Carrega extrair_diarias / ia_diarias do mesmo diretório do script."""
+    import importlib.util
+
+    caminho = Path(__file__).resolve().parent / f"{nome}.py"
+    spec = importlib.util.spec_from_file_location(nome, caminho)
+    if not spec or not spec.loader:
+        raise ImportError(nome)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _tentar_extrair_diarias(
+    data: bytes,
+    *,
+    texto_pdf: str,
+    arquivo: str,
+    pasta_hint: str,
+    ler_pdf: bool,
+    url_fonte: str = "",
+) -> None:
+    """Regra geral: se a fonte/PDF for de diárias, extrai campos → planilha."""
+    if not EXTRAI_DIARIAS:
+        return
+    try:
+        mod_ext = _carregar_modulo_local("extrair_diarias")
+        extrair_diarias = mod_ext.extrair_diarias
+        parece_diarias = mod_ext.parece_diarias
+    except Exception as exc:
+        print("    [DIARIAS] módulo indisponível ({0})".format(exc))
+        return
+
+    texto = texto_pdf or ""
+    # Relê com mais páginas se ainda não há sinal claro de diárias
+    if ler_pdf and LER_PDF and (
+        not texto
+        or not parece_diarias(
+            texto, pasta_hint=pasta_hint, nome_arquivo=arquivo, url=url_fonte
+        )
+    ):
+        texto = ler_texto_pdf_bytes(data, max_paginas=MAX_PAGINAS_DIARIAS) or texto
+
+    # Sempre preferir texto mais completo para diárias + IA
+    if ler_pdf and LER_PDF and texto:
+        texto_largo = ler_texto_pdf_bytes(data, max_paginas=MAX_PAGINAS_DIARIAS)
+        if texto_largo and len(texto_largo) > len(texto):
+            texto = texto_largo
+
+    reg = extrair_diarias(
+        texto, arquivo=arquivo, pasta_hint=pasta_hint, url=url_fonte
+    )
+    if not reg:
+        return
+
+    # IA lê o documento e confirma/corrige os campos (mesmo toggle do Ollama)
+    if REFINAR_IA:
+        try:
+            mod_ia = _carregar_modulo_local("ia_diarias")
+            reg = mod_ia.confirmar_diarias_ia(
+                reg,
+                texto,
+                modelo=MODELO_IA,
+                ollama_url=OLLAMA_URL,
+            )
+        except Exception as exc:
+            print("    [IA-DIARIAS] erro: {0}".format(str(exc)[:120]))
+
+    # remove meta se sobrou
+    reg.pop("_ia_alterou", None)
+
+    REGISTROS_DIARIAS.append(reg)
+    preenchidos = sum(1 for k, v in reg.items() if k != "arquivo" and v)
+    print(
+        "    [DIARIAS]  {0} — {1}/10 campos ({2})".format(
+            reg.get("numero_portaria") or "?",
+            preenchidos,
+            reg.get("nome") or "sem nome",
+        )
+    )
 
 
 def _podar_conteudo_relacionado(root) -> None:
@@ -682,11 +946,22 @@ def baixar_e_salvar(
     textos_extras: list[str],
     pasta_hint: str,
     ano_fallback: int | None,
+    url_fonte: str = "",
 ) -> str:
     """
     Baixa o PDF, opcionalmente relê o texto para renomear, salva.
     Retorna: ok | pulado | erro
     """
+    # URL da página/fonte + hint: detecta Diárias (ex. /diarias-ate-2023/)
+    url_ctx = " ".join(
+        [
+            url_fonte or "",
+            url_pdf or "",
+            pasta_hint or "",
+            textos_extras[1] if len(textos_extras) > 1 else "",
+            textos_extras[0] if textos_extras else "",
+        ]
+    )
     criar_pasta(pasta)
     try:
         resp = _SESSION.get(url_pdf, timeout=60, stream=True)
@@ -718,19 +993,80 @@ def baixar_e_salvar(
         if nome == "Documento" and nome_logico:
             nome = nome_logico
 
+        # Regra geral: Pautas/Atas/Presença/Votações → pasta por sessão
+        pasta_destino = pasta
+        org = None
+        try:
+            mod_sess = _carregar_modulo_local("organizar_sessao")
+            org = mod_sess.organizar_destino_sessao(
+                pasta_base=PASTA_BASE,
+                pasta_hint=pasta_hint,
+                ano_fallback=ano_fallback,
+                textos=[
+                    textos_extras[0] if textos_extras else "",
+                    textos_extras[1] if len(textos_extras) > 1 else "",
+                    (texto_pdf or "")[:4000],
+                ],
+                url_fonte=url_ctx,
+            )
+            if org:
+                pasta_destino = org["pasta"]
+                nome = org["nome_logico"]
+                meta = org["meta"]
+                if meta.get("doc_tipo") == "declaracao":
+                    print(
+                        "    [SESSAO]   Declarações → {0}".format(meta.get("doc_nome"))
+                    )
+                else:
+                    rotulo = mod_sess.prefixo_pasta_sessao(
+                        meta.get("numero"),
+                        meta.get("tipo") or "",
+                        meta.get("evento") or "",
+                    )
+                    print(
+                        "    [SESSAO]   {0} ({1}) → {2}".format(
+                            rotulo,
+                            meta.get("data") or "s/data",
+                            meta.get("doc_nome"),
+                        )
+                    )
+        except Exception as exc:
+            print("    [SESSAO]   organização indisponível ({0})".format(str(exc)[:80]))
+            org = None
+
+        # IA só no nome genérico — não sobrescreve Pauta/Ata da pasta de sessão
+        if not org:
+            nome = _aplicar_ia_nome(
+                nome,
+                [
+                    textos_extras[0] if textos_extras else "",
+                    textos_extras[1] if len(textos_extras) > 1 else "",
+                    (texto_pdf or "")[:3500],
+                ],
+            )
+
+        criar_pasta(pasta_destino)
         arquivo = nome_arquivo_final(nome)
-        caminho = os.path.join(pasta, arquivo)
+        caminho = os.path.join(pasta_destino, arquivo)
 
         # colisão: mesmo nome, outro conteúdo → sufixo
         if os.path.exists(caminho):
             if os.path.getsize(caminho) == len(data):
                 print(f"    [PULADO]  {arquivo} (já existe)")
+                _tentar_extrair_diarias(
+                    data,
+                    texto_pdf=texto_pdf,
+                    arquivo=arquivo,
+                    pasta_hint=pasta_hint,
+                    ler_pdf=ler_pdf,
+                    url_fonte=url_ctx,
+                )
                 return "pulado"
             stem = arquivo[:-4]
             n = 2
             while True:
                 alt = f"{stem} ({n}).pdf"
-                alt_path = os.path.join(pasta, alt)
+                alt_path = os.path.join(pasta_destino, alt)
                 if not os.path.exists(alt_path):
                     arquivo = alt
                     caminho = alt_path
@@ -742,8 +1078,19 @@ def baixar_e_salvar(
         kb = len(data) / 1024
         try:
             print(f"    [OK]      {arquivo} ({round(kb, 1)} KB) <- {nome}")
+            if pasta_destino != pasta:
+                print(f"             em {pasta_destino}")
         except UnicodeEncodeError:
             print(f"    [OK]      {arquivo} ({round(kb, 1)} KB)")
+
+        _tentar_extrair_diarias(
+            data,
+            texto_pdf=texto_pdf,
+            arquivo=arquivo,
+            pasta_hint=pasta_hint,
+            ler_pdf=ler_pdf,
+            url_fonte=url_ctx,
+        )
         return "ok"
     except UnicodeEncodeError:
         # Log/console Windows (cp1252) — nao e falha de download
@@ -759,11 +1106,14 @@ def baixar_e_salvar(
 
 def processar_categoria(fonte: dict, contadores: dict) -> None:
     url = fonte["url"]
-    pasta_hint = fonte.get("pasta") or "Documentos"
+    titulo_fonte = ""
+    if not (fonte.get("pasta") or "").strip():
+        titulo_fonte = obter_titulo_fonte(url)
+    pasta_hint = resolver_pasta_hint(fonte, titulo_fonte)
     print("")
     print("=" * 60)
     print(f"  FONTE (categoria): {url}")
-    print(f"  Pasta: {pasta_hint}")
+    print(f"  Pasta: {pasta_hint}" + (f" (de: {titulo_fonte})" if titulo_fonte and not (fonte.get("pasta") or "").strip() else ""))
     print("=" * 60)
 
     posts = coletar_posts_categoria(url)
@@ -815,6 +1165,7 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
                 textos_extras=[texto_link, titulo],
                 pasta_hint=pasta_hint,
                 ano_fallback=ano,
+                url_fonte=url,
             )
             contadores[resultado] = contadores.get(resultado, 0) + 1
         time.sleep(0.35)
@@ -822,11 +1173,14 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
 
 def processar_hub_anos(fonte: dict, contadores: dict) -> None:
     url = fonte["url"]
-    pasta_hint = fonte.get("pasta") or "Decretos"
+    titulo_fonte = ""
+    if not (fonte.get("pasta") or "").strip():
+        titulo_fonte = obter_titulo_fonte(url)
+    pasta_hint = resolver_pasta_hint(fonte, titulo_fonte)
     print("")
     print("=" * 60)
     print(f"  FONTE (hub anos): {url}")
-    print(f"  Pasta: {pasta_hint}")
+    print(f"  Pasta: {pasta_hint}" + (f" (de: {titulo_fonte})" if titulo_fonte and not (fonte.get("pasta") or "").strip() else ""))
     print("=" * 60)
 
     paginas = coletar_paginas_hub_anos(url)
@@ -886,6 +1240,7 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
                 textos_extras=[texto_link, titulo],
                 pasta_hint=pasta_hint,
                 ano_fallback=ano,
+                url_fonte=url,
             )
             contadores[resultado] = contadores.get(resultado, 0) + 1
         time.sleep(0.4)
@@ -893,7 +1248,6 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
 
 def processar_pagina(fonte: dict, contadores: dict) -> None:
     url = fonte["url"]
-    pasta_hint = fonte.get("pasta") or "Documentos"
     print("")
     print("=" * 60)
     print(f"  FONTE (página): {url}")
@@ -907,6 +1261,9 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
         print(f"  [ERRO] {e}")
         contadores["erros"] += 1
         return
+
+    pasta_hint = resolver_pasta_hint(fonte, titulo)
+    print(f"  Pasta: {pasta_hint}")
 
     ano = extrair_ano(titulo, url)
     if not ano_permitido(ano):
@@ -932,6 +1289,7 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
             textos_extras=[texto_link, titulo],
             pasta_hint=pasta_hint,
             ano_fallback=ano,
+            url_fonte=url,
         )
         contadores[resultado] = contadores.get(resultado, 0) + 1
 
@@ -941,11 +1299,16 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
 # =============================================================
 
 def main():
+    global REGISTROS_DIARIAS
+    REGISTROS_DIARIAS = []
+
     print("=" * 60)
     print("  DOWNLOAD DE NORMAS MUNICIPAIS")
     print(f"  Site: {urlparse(SITE).netloc}")
     print(f"  Destino: {PASTA_BASE}")
     print(f"  Leitura PDF: {'sim' if LER_PDF and PdfReader else 'não'}")
+    print(f"  Diárias → planilha: {'sim' if EXTRAI_DIARIAS else 'não'}")
+    print(f"  IA local: {'sim ({0})'.format(MODELO_IA) if REFINAR_IA else 'não'}")
     filtro = _anos_filtro_norm()
     print(f"  Anos: {', '.join(filtro) if filtro else 'todos'}")
     if LER_PDF and not PdfReader:
@@ -972,6 +1335,43 @@ def main():
     except Cancelado:
         cancelado = True
 
+    planilha_diarias = ""
+    if EXTRAI_DIARIAS and REGISTROS_DIARIAS:
+        try:
+            from extrair_diarias import salvar_planilha_diarias
+        except ImportError:
+            import importlib.util
+
+            caminho = Path(__file__).resolve().parent / "extrair_diarias.py"
+            spec = importlib.util.spec_from_file_location("extrair_diarias", caminho)
+            salvar_planilha_diarias = None
+            if spec and spec.loader:
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                salvar_planilha_diarias = mod.salvar_planilha_diarias
+        if salvar_planilha_diarias:
+            saida = salvar_planilha_diarias(REGISTROS_DIARIAS, PASTA_BASE)
+            if saida:
+                planilha_diarias = str(saida)
+                print(f"  [DIARIAS] Planilha: {planilha_diarias} ({len(REGISTROS_DIARIAS)} linhas)")
+
+    planilha_sessoes = ""
+    try:
+        pub_sess = Path(__file__).resolve().parents[1] / "publicacao-sessao" / "script.py"
+        if pub_sess.is_file():
+            import importlib.util
+
+            spec = importlib.util.spec_from_file_location("publicacao_sessao_planilha", pub_sess)
+            if spec and spec.loader:
+                mod_ps = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod_ps)
+                saida_s = mod_ps.gerar_planilha_da_pasta(PASTA_BASE)
+                if saida_s:
+                    planilha_sessoes = str(saida_s)
+                    print(f"  [SESSAO] Planilha publicação: {planilha_sessoes}")
+    except Exception as exc:
+        print("  [SESSAO] Planilha não gerada ({0})".format(str(exc)[:80]))
+
     print("")
     print("=" * 60)
     print("  RESUMO FINAL" + (" (CANCELADO)" if cancelado else ""))
@@ -981,6 +1381,11 @@ def main():
     print(f"  Posts fora do filtro ano   : {contadores.get('pulado_ano', 0)}")
     print(f"  Erros download             : {contadores.get('erro', 0) + contadores.get('erros', 0)}")
     print(f"  Posts/paginas sem PDF      : {contadores.get('sem_pdf', 0)}")
+    print(f"  Diárias extraídas          : {len(REGISTROS_DIARIAS)}")
+    if planilha_diarias:
+        print(f"  Planilha Diárias           : {planilha_diarias}")
+    if planilha_sessoes:
+        print(f"  Planilha Sessões           : {planilha_sessoes}")
     print(f"  Pasta base                 : {PASTA_BASE}")
     print("=" * 60)
     if cancelado:

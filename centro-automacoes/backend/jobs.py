@@ -41,6 +41,10 @@ class Job:
     result: dict[str, Any] = field(default_factory=dict)
     logs: list[dict[str, str]] = field(default_factory=list)
     cancel_requested: bool = False
+    # Progresso da fila: done/total → percent (0–100)
+    progress_done: int = 0
+    progress_total: int = 0
+    progress_label: str = ""
     _subscribers: list[queue.Queue] = field(default_factory=list, repr=False)
 
     @property
@@ -48,6 +52,26 @@ class Job:
         p = DATA / self.id
         p.mkdir(parents=True, exist_ok=True)
         return p
+
+    @property
+    def progress_percent(self) -> int | None:
+        if self.progress_total > 0:
+            pct = int(round(100.0 * self.progress_done / self.progress_total))
+            return max(0, min(100, pct))
+        return None
+
+    def set_progress(
+        self,
+        done: int | None = None,
+        total: int | None = None,
+        label: str | None = None,
+    ) -> None:
+        if total is not None and total >= 0:
+            self.progress_total = int(total)
+        if done is not None and done >= 0:
+            self.progress_done = int(done)
+        if label is not None:
+            self.progress_label = str(label).strip()[:80]
 
     def emit(self, level: str, msg: str) -> None:
         entry = {"t": time.strftime("%H:%M:%S"), "level": level, "msg": str(msg)}
@@ -90,13 +114,43 @@ class Job:
             "result": self.result,
             "has_download": bool(self.result.get("zip")),
             "cancel_requested": self.cancel_requested,
+            "progress": {
+                "done": self.progress_done,
+                "total": self.progress_total,
+                "percent": self.progress_percent,
+                "label": self.progress_label,
+            },
         }
 
 
 class JobManager:
+    """Fila local: no máximo MAX_ATIVOS processos em execução ao mesmo tempo."""
+
+    MAX_ATIVOS = 1
+
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
+
+    def ativos(self) -> int:
+        with self._lock:
+            return sum(
+                1
+                for j in self._jobs.values()
+                if j.status in (JobStatus.PENDING, JobStatus.RUNNING)
+            )
+
+    def job_ativo(self) -> Job | None:
+        """Processo pending/running mais recente (para o pill do painel)."""
+        with self._lock:
+            vivos = [
+                j
+                for j in self._jobs.values()
+                if j.status in (JobStatus.PENDING, JobStatus.RUNNING)
+            ]
+        if not vivos:
+            return None
+        return max(vivos, key=lambda j: j.created_at)
 
     def create(self, service_id: str, config: dict[str, Any]) -> Job:
         job = Job(id=uuid.uuid4().hex[:12], service_id=service_id, config=config)
@@ -125,7 +179,7 @@ class JobManager:
     def start(self, job: Job, runner: Callable[[Job], None]) -> None:
         def _worker() -> None:
             job.status = JobStatus.RUNNING
-            job.emit("info", "Job iniciado — {0}".format(job.service_id))
+            job.emit("info", "Processo iniciado — {0}".format(job.service_id))
             try:
                 runner(job)
                 if job.cancel_requested:
@@ -186,5 +240,13 @@ class JobManager:
         return dest
 
     def save_config(self, job: Job) -> None:
+        sensiveis = ("senha", "password", "app_password", "token", "api_key", "secret")
+        limpo: dict[str, Any] = {}
+        for k, v in (job.config or {}).items():
+            kl = str(k).lower()
+            if any(s in kl for s in sensiveis):
+                limpo[k] = "***" if v else ""
+            else:
+                limpo[k] = v
         with open(job.dir / "config.json", "w", encoding="utf-8") as fh:
-            json.dump(job.config, fh, ensure_ascii=False, indent=2)
+            json.dump(limpo, fh, ensure_ascii=False, indent=2)

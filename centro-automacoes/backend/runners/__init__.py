@@ -1,10 +1,20 @@
-from backend.runners import categorias, documentos, licitacoes, mapa, normas, publicacao, sessao
+from backend.runners import (
+    categorias,
+    contratos,
+    documentos,
+    licitacoes,
+    mapa,
+    normas,
+    publicacao,
+    sessao,
+)
 
 RUNNERS = {
     "documentos": documentos.run,
     "categorias": categorias.run,
     "normas": normas.run,
     "licitacoes": licitacoes.run,
+    "contratos": contratos.run,
     "publicacao": publicacao.run,
     "sessao": sessao.run,
     "mapa": mapa.run,

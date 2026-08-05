@@ -364,7 +364,7 @@
   async function restoreSession() {
     try {
       const st = await api("/api/status");
-      apiPill.textContent = "API online";
+      apiPill.textContent = "Servidor online";
       apiPill.classList.add("ok");
       apiPill.classList.remove("err");
 
@@ -397,7 +397,7 @@
       }
       return true;
     } catch (_) {
-      apiPill.textContent = "API offline";
+      apiPill.textContent = "Servidor offline";
       apiPill.classList.add("err");
       apiPill.classList.remove("ok");
       return false;
@@ -576,7 +576,7 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(data.erro || "Falha na API (" + res.status + ")");
+      const err = new Error(data.erro || "Falha no servidor (" + res.status + ")");
       err.status = res.status;
       err.data = data;
       throw err;
@@ -587,12 +587,12 @@
   async function pingApi() {
     try {
       await api("/api/status");
-      apiPill.textContent = "API online";
+      apiPill.textContent = "Servidor online";
       apiPill.classList.add("ok");
       apiPill.classList.remove("err");
       return true;
     } catch (_) {
-      apiPill.textContent = "API offline";
+      apiPill.textContent = "Servidor offline";
       apiPill.classList.add("err");
       apiPill.classList.remove("ok");
       return false;
@@ -664,7 +664,7 @@
       showErros([
         { text: "Servidor offline. Rode centro-automacoes\\run.bat" },
       ]);
-      setStatus("API offline.", true);
+      setStatus("Servidor offline.", true);
       return false;
     }
 
@@ -735,7 +735,7 @@
       showErros([
         { text: "Servidor offline. Rode centro-automacoes\\run.bat" },
       ]);
-      setStatus("API offline.", true);
+      setStatus("Servidor offline.", true);
       return;
     }
 
@@ -783,7 +783,7 @@
 
   async function onCancelarLiberar() {
     if (!(await pingApi())) {
-      setStatus("API offline. Reinicie: centro-automacoes\\run.bat", true);
+      setStatus("Servidor offline. Reinicie: centro-automacoes\\run.bat", true);
       return;
     }
     const btn = el("btn-cancelar");

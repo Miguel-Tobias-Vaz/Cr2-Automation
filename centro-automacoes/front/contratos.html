@@ -1,0 +1,176 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contratos — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css?v=home20" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill">Servidor …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero">
+        <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Contratos / Aditivos</h1>
+            <p class="lede">
+              Varre a listagem do Governo Transparente, abre cada detalhe,
+              baixa os PDFs e monta a planilha de contratos e aditivos.
+            </p>
+          </header>
+          <article class="stream is-in">
+            <span class="stream-index">09</span>
+            <h3>O que faz</h3>
+            <ul>
+              <li>Listagem paginada no portal Governo Transparente</li>
+              <li>Extração dos dados de cada contrato/aditivo</li>
+              <li>Baixa dos anexos por pasta</li>
+              <li>Planilha <code>Relacao de contratos e aditivos.xlsx</code></li>
+              <li>Retomada automática via checkpoint</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="painel">
+        <header class="section-head"><h2>Painel</h2></header>
+        <form class="painel-form" id="form-contratos">
+          <fieldset class="bloco">
+            <legend>Fonte e destino</legend>
+            <label class="field">
+              <span class="field-label"><em>ID do órgão *</em></span>
+              <input type="text" id="orgao" value="43559588" required />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Número na URL do portal, ex.:
+                <code>.../acessoinfo/<strong>43559588</strong>/consultarcontratoaditivo</code>
+              </small>
+            </label>
+            <div class="opcoes-grid" style="grid-template-columns:1fr 1fr;gap:1rem">
+              <label class="field">
+                <span class="field-label"><em>Data início *</em></span>
+                <input type="text" id="inicio" value="01/01/2023" placeholder="dd/mm/aaaa" required />
+              </label>
+              <label class="field">
+                <span class="field-label"><em>Data fim *</em></span>
+                <input type="text" id="fim" value="31/12/2023" placeholder="dd/mm/aaaa" required />
+              </label>
+            </div>
+            <label class="field">
+              <span class="field-label"><em>Pasta de saída</em></span>
+              <input type="text" id="pasta_saida" value="C:\Downloads\Contratos" />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Cria <code>contratos/</code>, <code>dados/</code>, <code>logs/</code> e <code>checkpoint/</code> dentro desta pasta.
+              </small>
+            </label>
+            <label class="field">
+              <span class="field-label"><em>Limite de registros (opcional)</em></span>
+              <input type="number" id="limite" min="0" step="1" value="0" placeholder="0 = todos" />
+            </label>
+          </fieldset>
+
+          <fieldset class="bloco bloco-opcoes">
+            <legend>Opções</legend>
+            <div class="opcoes-grid">
+              <label class="check-row" for="headed">
+                <input type="checkbox" id="headed" />
+                <span class="check-copy">
+                  <strong>Mostrar navegador</strong>
+                  <small>Abre o Chromium visível (útil para depurar)</small>
+                </span>
+              </label>
+              <label class="check-row" for="apenas_listagem">
+                <input type="checkbox" id="apenas_listagem" />
+                <span class="check-copy">
+                  <strong>Apenas listagem</strong>
+                  <small>Só varre a tabela — sem detalhes nem downloads</small>
+                </span>
+              </label>
+              <label class="check-row" for="reset_checkpoint">
+                <input type="checkbox" id="reset_checkpoint" />
+                <span class="check-copy">
+                  <strong>Resetar checkpoint</strong>
+                  <small>Recomeça do zero (ignora retomada)</small>
+                </span>
+              </label>
+              <label class="check-row" for="sem_retry_erros">
+                <input type="checkbox" id="sem_retry_erros" />
+                <span class="check-copy">
+                  <strong>Não retentar erros</strong>
+                  <small>Pula registros que falharam em execuções anteriores</small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="acao-row">
+            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar</button>
+            <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
+            <a class="btn btn-ghost" href="#log">Ver log</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="log-wrap" id="log">
+        <header class="section-head">
+          <h2>Log</h2>
+          <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
+        </header>
+        <div class="log-console" id="log-console"></div>
+      </section>
+    </main>
+
+    <script src="/assets/fluid-particles.js?v=home20"></script>
+    <script src="/assets/shared.js?v=home20"></script>
+    <script>
+      CR2Centro.injectNav("contratos");
+      CR2Centro.pingApi();
+
+      const fields = [
+        "orgao",
+        "inicio",
+        "fim",
+        "pasta_saida",
+        "limite",
+        "headed",
+        "apenas_listagem",
+        "reset_checkpoint",
+        "sem_retry_erros",
+      ];
+
+      CR2Centro.bindRun("contratos", "form-contratos", fields, () => {
+        const limiteVal = document.getElementById("limite").value.trim();
+        return {
+          orgao: document.getElementById("orgao").value.trim(),
+          inicio: document.getElementById("inicio").value.trim(),
+          fim: document.getElementById("fim").value.trim(),
+          pasta_saida: document.getElementById("pasta_saida").value.trim(),
+          limite: limiteVal === "" ? 0 : Number(limiteVal),
+          headed: document.getElementById("headed").checked,
+          apenas_listagem: document.getElementById("apenas_listagem").checked,
+          reset_checkpoint: document.getElementById("reset_checkpoint").checked,
+          sem_retry_erros: document.getElementById("sem_retry_erros").checked,
+        };
+      }, false);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,37 @@
+20:45:14 [info] Processo iniciado — sessao
+20:45:14 [info] Iniciando publicação de Sessão (pasta)...
+20:45:14 [info] [INFO] 75 sessao(oes) na pasta C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua
+20:45:14 [info] [INFO] Planilha: C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua\Sessoes.xlsx (75 linhas)
+20:45:14 [info] [INFO] Modo teste: 1 sessao.
+20:45:14 [info] ============================================================
+20:45:14 [info]   PUBLICACAO DE SESSAO — portal CR2
+20:45:14 [info]   Total: 1
+20:45:14 [info]   Pasta: C:\Downloads\novatembo\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua
+20:45:14 [info]   URL: https://www.portalcr2.com.br/sessoes/sessoes-cm-nova-timboteua
+20:45:14 [info]   Ritmo: Criar Publicação → Cadastrar Sessão → Publicar
+20:45:14 [info] ============================================================
+20:45:14 [info] [INFO] Abrindo Opera: C:\Users\tobia\AppData\Local\Programs\Opera GX\opera.exe
+20:45:19 [info] [INFO] Carregando login...
+20:45:35 [info] [INFO] Formulario de login enviado.
+20:45:37 [info] [INFO] Carregando Sessao...
+20:45:39 [info] [INFO] URL atual: https://www.portalcr2.com.br/sessoes/sessoes-cm-nova-timboteua
+20:45:39 [info] [INFO] Botao Criar Publicacao visivel.
+20:45:39 [info] [-> SESSAO] [1/1] Ordinária | 25/02/2021 | 1ª Sessão Ordinária
+20:45:43 [info]     Tipo (select): Ordinária
+20:45:46 [info]     Data (CSS placeholder): 25/02/2021
+20:46:06 [info]     Numero (placeholder): 1ª Sessão Ordinária
+20:46:06 [info]     Inputs file: pauta=#0, ata=#1, presenca=#2, votacoes_arquivo=#3
+20:46:06 [info]     Upload Pauta: Pauta.pdf
+20:46:06 [info]     Aguardando confirmacao do upload (Pauta.pdf)...
+20:46:07 [info]     Upload confirmado (arquivo na UI).
+20:46:09 [info]     Upload Ata: Ata.pdf
+20:46:09 [info]     Aguardando confirmacao do upload (Ata.pdf)...
+20:46:09 [info]     Upload confirmado (arquivo na UI).
+20:46:10 [info]     [INFO] Arquivo omitido (Lista de Presença)
+20:46:10 [info]     [INFO] Arquivo omitido (Votações Nominais (arquivo))
+20:47:21 [error]     [ERRO] Sem confirmacao apos Publicar (55s). Ultimo texto: Cadastrar Sessão + Cadastrar Link Externo Selecione Audiência Pública Especial Extraordinária Itinerante Ordinária Preparatória Solene Tribuna Popular Declaração: não houve sessão Tipo * Não houve pub
+20:47:33 [info] ============================================================
+20:47:33 [ok]   CONCLUIDO! OK: 0 | Erros: 1 | Total: 1
+20:47:33 [info] ============================================================
+20:47:33 [error] Publicacao de sessao com 1 erro(s).
+20:47:33 [info] — fim —

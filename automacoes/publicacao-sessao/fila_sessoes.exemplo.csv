@@ -1,2 +1,4 @@
-tipo;data;numero;pauta;ata;presenca;votacoes_arquivo;votacoes_link
-Sessão Ordinária;01/01/2024;1ª Sessão Ordinária;C:\Downloads\pauta.pdf;C:\Downloads\ata.pdf;C:\Downloads\presenca.pdf;C:\Downloads\votacoes.pdf;https://exemplo.com/votacoes
+Tipo;Data;Número;Pauta;Ata;Lista de Presença;Votações Nominais (arquivo);Votações Nominais (Link);Não houve publicações
+Ordinária;01/01/2024;1ª Sessão Ordinária;C:\Downloads\pauta.pdf;C:\Downloads\ata.pdf;C:\Downloads\presenca.pdf;C:\Downloads\votacoes.pdf;https://exemplo.com/votacoes;
+Especial;12/08/2023;Sessão Especial - Dia dos Pais;C:\Downloads\pauta_especial.pdf;C:\Downloads\ata_especial.pdf;;;;
+Declaração: não houve sessão;15/12/2023;Declaração - recesso;;;;;sim

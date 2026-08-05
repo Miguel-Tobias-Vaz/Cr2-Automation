@@ -21,8 +21,10 @@ import io
 import json
 import os
 import re
+import sys
 import time
 import unicodedata
+from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -48,6 +50,12 @@ LIMITE_POSTS = 0
 # Lê as primeiras páginas do PDF para refinar o nome (recomendado).
 LER_PDF = True
 MAX_PAGINAS_PDF = 2
+
+# IA local (Ollama) — corrige nome quando regras falham.
+REFINAR_IA = False
+MODELO_IA = "llama3.2:3b"
+OLLAMA_URL = "http://127.0.0.1:11434"
+IA_SEMPRE = False
 
 HEADERS = {
     "User-Agent": (
@@ -244,6 +252,31 @@ def _detectar_tipo(*textos: str, pasta_hint: str = "") -> str | None:
     if "lei" in hint:
         return "Lei"
     return None
+
+
+def _tipos_catalogo() -> list:
+    return [nome for nome, _ in _RE_TIPO_PRIORIDADE]
+
+
+def _aplicar_ia_nome(nome, textos):
+    if not REFINAR_IA:
+        return nome
+    auto = Path(__file__).resolve().parents[1]
+    if str(auto) not in sys.path:
+        sys.path.insert(0, str(auto))
+    try:
+        from _comum import refinar_nome_documento
+    except ImportError as exc:
+        print("    [IA]      pacote _comum indisponivel ({0})".format(exc))
+        return nome
+    return refinar_nome_documento(
+        nome_regras=nome,
+        textos=textos,
+        tipos_catalogo=_tipos_catalogo(),
+        modelo=MODELO_IA,
+        ollama_url=OLLAMA_URL,
+        forcar=IA_SEMPRE,
+    )
 
 
 def montar_nome_documento(
@@ -741,6 +774,15 @@ def baixar_e_salvar(
         )
         if nome == "Documento" and nome_logico:
             nome = nome_logico
+
+        nome = _aplicar_ia_nome(
+            nome,
+            [
+                textos_extras[0] if textos_extras else "",
+                textos_extras[1] if len(textos_extras) > 1 else "",
+                (texto_pdf or "")[:3500],
+            ],
+        )
 
         arquivo = nome_arquivo_final(nome)
         caminho = os.path.join(pasta, arquivo)
