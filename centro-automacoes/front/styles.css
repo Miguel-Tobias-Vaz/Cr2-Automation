@@ -1108,6 +1108,24 @@ main {
   box-shadow: 0 0 0 3px rgba(196, 80, 60, 0.18);
 }
 
+.nav-logout {
+  flex-shrink: 0;
+  margin-left: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--mist);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.nav-logout:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.admin-topbar-actions .nav-logout {
+  margin-left: 0;
+}
+
 .field-hint {
   min-height: 0.9em;
   font-family: var(--font-display);
@@ -2965,6 +2983,47 @@ body.admin-sidebar-collapsed .admin-toggle-icon {
   padding: 1rem 1.15rem;
 }
 
+.admin-cleanup-total {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.admin-cleanup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+
+.admin-cleanup-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.86rem;
+  color: var(--fog);
+  cursor: pointer;
+}
+
+.admin-cleanup-row input {
+  margin-top: 0.15rem;
+}
+
+.admin-cleanup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.admin-cleanup-result {
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: rgba(46, 234, 122, 0.12);
+  color: var(--accent-soft);
+  font-size: 0.86rem;
+}
+
 .admin-muted {
   margin: 0;
   color: var(--mist);
@@ -3435,5 +3494,9 @@ body.login-page {
   margin: 0 0 0.75rem;
   font-size: 0.8rem;
   color: var(--mist);
+}
+
+.field--path-server-hidden {
+  display: none !important;
 }
 

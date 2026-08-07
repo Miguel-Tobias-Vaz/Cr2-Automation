@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Baixar por Categoria — Opto Automações</title>
+    <title>Baixar por Categoria â€” Opto AutomaÃ§Ãµes</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home45" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home49" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -21,10 +21,10 @@
     <header class="top">
       <a class="brand-mark" href="/">
         <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
-        <span>Opto Automações</span>
+        <span>Opto AutomaÃ§Ãµes</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">Servidor …</span>
+      <span class="api-pill" id="api-pill">Servidor â€¦</span>
     </header>
 
     <main class="page-shell">
@@ -34,7 +34,7 @@
           <header class="hero-copy">
             <h1>Baixar por Categoria</h1>
             <p class="lede">
-              Varre a listagem WordPress (com paginação), abre cada post e baixa
+              Varre a listagem WordPress (com paginaÃ§Ã£o), abre cada post e baixa
               todos os PDFs do corpo do artigo.
             </p>
           </header>
@@ -42,7 +42,7 @@
             <span class="stream-index">02</span>
             <h3>Campos</h3>
             <ul>
-              <li>Domínio do site</li>
+              <li>DomÃ­nio do site</li>
               <li>URL da categoria (com / no final)</li>
               <li>Pasta de destino</li>
             </ul>
@@ -56,7 +56,7 @@
           <fieldset class="bloco">
             <legend>WordPress</legend>
             <label class="field">
-              <span class="field-label"><em>Site (domínio) *</em></span>
+              <span class="field-label"><em>Site (domÃ­nio) *</em></span>
               <input type="url" id="site" placeholder="https://camaraparagominas.pa.gov.br" required />
             </label>
             <label class="field">
@@ -69,23 +69,23 @@
             </label>
             <label class="field">
               <span class="field-label"><em>Anos a baixar</em></span>
-              <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
+              <input type="text" id="anos" placeholder="Ex.: 2023  Â·  2023,2024  Â·  vazio = todos" />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
-                Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
+                Um ano (<code>2023</code>), vÃ¡rios (<code>2022,2023,2024</code>) ou vazio para todos.
               </small>
             </label>
             <label class="check-row" for="ler_pdf">
               <input type="checkbox" id="ler_pdf" checked />
               <span class="check-copy">
                 <strong>Ler texto do PDF para nomear</strong>
-                <small>Ex.: Lei Nº738-2023.pdf</small>
+                <small>Ex.: Lei NÂº738-2023.pdf</small>
               </span>
             </label>
             <label class="check-row" for="refinar_ia">
               <input type="checkbox" id="refinar_ia" checked />
               <span class="check-copy">
                 <strong>Refinar nome com IA local (Ollama)</strong>
-                <small>Corrige tipo/número/ano quando as regras falham.</small>
+                <small>Corrige tipo/nÃºmero/ano quando as regras falham.</small>
               </span>
             </label>
             <label class="field">
@@ -104,14 +104,14 @@
       <section class="log-wrap" id="log">
         <header class="section-head">
           <h2>Log</h2>
-          <p>Situação: <strong id="log-state">Parado</strong></p>
+          <p>SituaÃ§Ã£o: <strong id="log-state">Parado</strong></p>
         </header>
         <div class="log-console" id="log-console"></div>
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home45"></script>
-    <script src="/assets/shared.js?v=home45"></script>
+    <script src="/assets/fluid-particles.js?v=home49"></script>
+    <script src="/assets/shared.js?v=home49"></script>
     <script>
       CR2Centro.injectNav("categorias");
       CR2Centro.pingApi();

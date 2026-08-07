@@ -22,6 +22,7 @@ from backend.config import JOB_TIMEOUT_S  # noqa: E402
 from backend.deps import get_optional_user, require_admin, require_user  # noqa: E402
 from backend.jobs import JobManager, JobStatus, QueueFullError  # noqa: E402
 from backend.job_output import build_download_zip  # noqa: E402
+from backend import cleanup  # noqa: E402
 from backend.milagre_routes import router as milagre_router  # noqa: E402
 from backend.runners import dispatch  # noqa: E402
 from backend.state import jobs  # noqa: E402
@@ -136,6 +137,15 @@ class QueueReorderBody(BaseModel):
     order: list[str]
 
 
+class CleanupBody(BaseModel):
+    job_dirs: bool = True
+    job_days: int = 0
+    screenshots: bool = True
+    ia_cache: bool = True
+    upload_temp: bool = False
+    upload_days: int = 7
+
+
 SERVICE_LABELS = {
     "documentos": "Documentos",
     "categorias": "Categorias",
@@ -196,9 +206,11 @@ def auth_me(user=Depends(get_optional_user)):
         return {"auth_required": False, "user": None}
     if not user:
         return {"auth_required": True, "user": None}
+    pub = user.to_public()
+    pub["panel_admin"] = auth.is_panel_admin(user)
     return {
         "auth_required": True,
-        "user": user.to_public(),
+        "user": pub,
     }
 
 
@@ -280,7 +292,7 @@ def cancel_active_job(user=Depends(require_user)):
             for j in jobs._jobs.values()
             if j.status in (JobStatus.PENDING, JobStatus.RUNNING)
         ]
-    if auth.is_enabled() and user.role != "admin":
+    if auth.is_enabled() and user.role != "admin" and not auth.is_panel_admin(user):
         alive = [j for j in alive if j.owner in (None, user.username)]
     alive.sort(key=lambda j: j.started_at or j.created_at, reverse=True)
     job = alive[0] if alive else None
@@ -332,7 +344,7 @@ def _startup_resume_queue():
 def _assert_can_access_job(job, user) -> None:
     if not auth.is_enabled():
         return
-    if user.role == "admin":
+    if user.role == "admin" or auth.is_panel_admin(user):
         return
     if job.owner not in (None, user.username):
         raise HTTPException(403, "Sem permissão para acessar este processo.")
@@ -576,7 +588,36 @@ def admin_overview(_admin=Depends(require_admin)):
     }
     if ativo is not None:
         payload["ativo"] = _job_summary(ativo)
+    payload["cleanup_preview"] = cleanup.preview(jobs)
     return payload
+
+
+@app.get("/api/admin/cleanup/preview")
+def admin_cleanup_preview(
+    job_days: int = 0,
+    upload_days: int = 7,
+    _admin=Depends(require_admin),
+):
+    return cleanup.preview(jobs, job_days=job_days, upload_days=upload_days)
+
+
+@app.post("/api/admin/cleanup")
+def admin_cleanup_run(body: CleanupBody, _admin=Depends(require_admin)):
+    """Remove jobs antigos, screenshots, cache IA, etc."""
+    result = cleanup.run_cleanup(
+        jobs,
+        job_dirs=body.job_dirs,
+        job_days=body.job_days,
+        screenshots=body.screenshots,
+        ia_cache=body.ia_cache,
+        upload_temp=body.upload_temp,
+        upload_days=body.upload_days,
+    )
+    result["disk"] = jobs.disk_usage_jobs()
+    result["cleanup_preview"] = cleanup.preview(
+        jobs, job_days=body.job_days, upload_days=body.upload_days
+    )
+    return result
 
 
 @app.get("/login.html")

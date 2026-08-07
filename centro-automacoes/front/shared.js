@@ -37,6 +37,49 @@
     } catch (_) {}
   }
 
+  async function supabaseSignOutIfNeeded() {
+    try {
+      const cfg = await fetch(`${API}/api/auth/config`).then((r) => r.json());
+      if (cfg.mode !== "supabase") return;
+      const url = window.SUPABASE_URL || cfg.supabase_url;
+      const key = window.SUPABASE_ANON_KEY || cfg.supabase_anon_key;
+      if (!url || !key) return;
+      if (!window.supabase) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      await window.supabase.createClient(url, key).auth.signOut();
+    } catch (_) {}
+  }
+
+  async function logout() {
+    try {
+      await authFetch(`${API}/api/auth/logout`, { method: "POST" });
+    } catch (_) {}
+    setAuthToken(null);
+    await supabaseSignOutIfNeeded();
+    location.href = "/login.html";
+  }
+
+  function ensureLogoutButton() {
+    if (el("btn-logout")) return;
+    const pill = el("api-pill");
+    if (!pill || !pill.parentNode) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "btn-logout";
+    btn.className = "btn btn-ghost btn-sm nav-logout";
+    btn.textContent = "Sair";
+    btn.hidden = true;
+    btn.addEventListener("click", () => logout());
+    pill.insertAdjacentElement("afterend", btn);
+  }
+
   /** Ferramentas por id (páginas de automação). */
   const TOOLS = {
     documentos: {
@@ -265,10 +308,33 @@
         const on =
           n.key === hubActive || (n.key === "hub" && activeKey === "hub");
         const adminCls = n.key === "admin" ? " nav-admin" : "";
-        return `<a href="${n.href}" class="${on ? "is-active" : ""}${adminCls}">${n.label}</a>`;
+        return `<a href="${n.href}" class="${on ? "is-active" : ""}${adminCls}" data-nav-key="${n.key}"${n.key === "admin" ? " hidden" : ""}>${n.label}</a>`;
       }).join("");
     }
     injectSubnav(activeKey);
+    applyNavAuth();
+  }
+
+  async function applyNavAuth() {
+    const nav = el("site-nav");
+    try {
+      const r = await authFetch(`${API}/api/auth/me`);
+      if (!r.ok) return;
+      const d = await r.json();
+      const showAdmin = !d.auth_required || (d.user && d.user.panel_admin);
+      const logoutBtn = el("btn-logout");
+      if (logoutBtn) {
+        logoutBtn.hidden = !d.auth_required || !d.user;
+      }
+      if (!nav) return;
+      nav.querySelectorAll('[data-nav-key="admin"]').forEach((a) => {
+        a.hidden = !showAdmin;
+      });
+      if (!showAdmin) {
+        const adminCard = document.querySelector('.hub-card[href="/admin.html"]');
+        if (adminCard) adminCard.remove();
+      }
+    } catch (_) {}
   }
 
   function renderHubCards(targetId, items) {
@@ -325,7 +391,7 @@
   }
 
   function renderHomeHubs() {
-    renderHubCards("hub-grid", [
+    const cards = [
       ...HUBS.map((h) => ({
         href: h.href,
         pagina: h.href,
@@ -334,15 +400,29 @@
         descricao: h.descricao,
         cta: h.cta,
       })),
-      {
-        href: "/admin.html",
-        pagina: "/admin.html",
-        icon: "table",
-        nome: "Admin",
-        descricao: "Monitoramento, processos, logs e status do servidor.",
-        cta: "Abrir painel",
-      },
-    ]);
+    ];
+    renderHubCards("hub-grid", cards);
+    authFetch(`${API}/api/auth/me`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d || d.auth_required && !(d.user && d.user.panel_admin)) return;
+        const grid = el("hub-grid");
+        if (!grid) return;
+        const adminHtml = `
+      <a class="hub-card" href="/admin.html" data-glow>
+        <span class="hub-card-glow" data-glow aria-hidden="true"></span>
+        <span class="hub-card-icon">${iconSvg("table")}</span>
+        <h3>Admin</h3>
+        <p>Monitoramento, processos, logs e status do servidor.</p>
+        <div class="hub-card-foot">
+          <span>Abrir painel</span>
+          <span aria-hidden="true">→</span>
+        </div>
+      </a>`;
+        grid.insertAdjacentHTML("beforeend", adminHtml);
+        enableSpotlightCards();
+      })
+      .catch(() => {});
   }
 
   function renderHubTools(hubKey) {
@@ -1117,13 +1197,46 @@
   let workspaceCache = null;
   let resumedOnce = false;
 
+  const _PATH_FIELD_IDS = new Set([
+    "pasta_base",
+    "pasta_saida",
+    "pasta_rgf",
+    "pasta_rreo",
+    "pasta_balancete",
+    "pasta_balanco",
+  ]);
+
+  function _pathFieldWrap(node) {
+    return node.closest(".field") || node.closest("label.field");
+  }
+
+  function _setPathFieldVisible(node, visible) {
+    const wrap = _pathFieldWrap(node);
+    if (wrap) {
+      wrap.hidden = !visible;
+      wrap.classList.toggle("field--path-server-hidden", !visible);
+    }
+    if (!visible) node.removeAttribute("required");
+  }
+
+  function _ensureWorkspaceHint(nearNode) {
+    let hint = el("workspace-hint");
+    if (hint || !nearNode) return hint;
+    const fs = nearNode.closest("fieldset") || nearNode.closest("form");
+    if (!fs) return null;
+    hint = document.createElement("p");
+    hint.id = "workspace-hint";
+    hint.className = "field-hint workspace-hint";
+    fs.insertBefore(hint, fs.firstChild);
+    return hint;
+  }
+
   async function loadWorkspace(fieldIds) {
     try {
       const r = await authFetch(`${API}/api/workspace`);
       if (!r.ok) return null;
       const ws = await r.json();
       workspaceCache = ws;
-      if (ws.local_mode) return ws;
       const ids = fieldIds || [
         "pasta_base",
         "pasta_saida",
@@ -1132,18 +1245,30 @@
         "pasta_balancete",
         "pasta_balanco",
       ];
+
+      if (ws.local_mode) {
+        ids.forEach((id) => {
+          const node = el(id);
+          if (node) _setPathFieldVisible(node, true);
+        });
+        return ws;
+      }
+
+      const serverHint =
+        "Os arquivos ficam no servidor enquanto roda. Ao terminar, o ZIP baixa no seu PC.";
+
       ids.forEach((id) => {
         const node = el(id);
         if (!node) return;
-        const v = (node.value || "").trim();
-        if (!v || /^c:\\downloads/i.test(v.replace(/\//g, "\\"))) {
-          node.value = ws.output_dir;
-        }
+        node.value = ws.output_dir;
         if (!node.placeholder) node.placeholder = ws.output_dir;
+        if (_PATH_FIELD_IDS.has(id)) _setPathFieldVisible(node, false);
       });
-      const hint = el("workspace-hint");
+
+      const anchor = ids.map((id) => el(id)).find(Boolean);
+      const hint = el("workspace-hint") || _ensureWorkspaceHint(anchor);
       if (hint) {
-        hint.textContent = `Pasta do usuário «${ws.username}»: ${ws.output_dir}`;
+        hint.textContent = serverHint;
         hint.hidden = false;
       }
       return ws;
@@ -1727,6 +1852,7 @@
     authFetch,
     authHeaders,
     setAuthToken,
+    logout,
     guardAuth,
     loadWorkspace,
     uploadFile,
@@ -1738,11 +1864,13 @@
   window.CR2Centro = window.OptoAutomacoes;
 
   guardAuth().catch(() => {});
+  ensureLogoutButton();
+  applyNavAuth().catch(() => {});
 
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home45";
+    s.src = "/assets/shader-background.js?v=home49";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {

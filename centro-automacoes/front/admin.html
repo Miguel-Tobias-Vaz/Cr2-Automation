@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Admin — Opto Automações</title>
+    <title>Admin ? Opto Automa��es</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home45" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home49" />
   </head>
   <body class="admin-page">
     <div class="noise" aria-hidden="true"></div>
@@ -22,7 +22,7 @@
           <a class="admin-brand" href="/">
             <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="32" height="32" />
             <span class="admin-brand-text">
-              <strong>Opto Automações</strong>
+              <strong>Opto Automa��es</strong>
               <small>Painel Admin</small>
             </span>
           </a>
@@ -30,31 +30,31 @@
 
         <nav class="admin-nav">
           <button type="button" class="admin-nav-item is-active" data-panel="overview">
-            <span class="admin-nav-icon" aria-hidden="true">◉</span>
-            <span class="admin-nav-label">Visão geral</span>
+            <span class="admin-nav-icon" aria-hidden="true">?</span>
+            <span class="admin-nav-label">Vis�o geral</span>
           </button>
           <button type="button" class="admin-nav-item" data-panel="jobs">
-            <span class="admin-nav-icon" aria-hidden="true">▤</span>
+            <span class="admin-nav-icon" aria-hidden="true">?</span>
             <span class="admin-nav-label">Processos</span>
             <span class="admin-nav-badge" id="badge-jobs" hidden>0</span>
           </button>
           <button type="button" class="admin-nav-item" data-panel="services">
-            <span class="admin-nav-icon" aria-hidden="true">⚙</span>
+            <span class="admin-nav-icon" aria-hidden="true">?</span>
             <span class="admin-nav-label">Ferramentas</span>
           </button>
           <button type="button" class="admin-nav-item" data-panel="system">
-            <span class="admin-nav-icon" aria-hidden="true">⬡</span>
+            <span class="admin-nav-icon" aria-hidden="true">?</span>
             <span class="admin-nav-label">Sistema</span>
           </button>
         </nav>
 
         <div class="admin-sidebar-foot">
           <a class="admin-nav-item admin-nav-link" href="/">
-            <span class="admin-nav-icon" aria-hidden="true">←</span>
+            <span class="admin-nav-icon" aria-hidden="true">?</span>
             <span class="admin-nav-label">Voltar ao painel</span>
           </a>
           <button type="button" class="admin-toggle" id="admin-sidebar-toggle" title="Recolher menu">
-            <span class="admin-toggle-icon" aria-hidden="true">›</span>
+            <span class="admin-toggle-icon" aria-hidden="true">?</span>
             <span class="admin-nav-label">Recolher</span>
           </button>
         </div>
@@ -63,11 +63,11 @@
       <div class="admin-main">
         <header class="admin-topbar">
           <div>
-            <h1 class="admin-title" id="admin-page-title">Visão geral</h1>
+            <h1 class="admin-title" id="admin-page-title">Vis�o geral</h1>
             <p class="admin-subtitle" id="admin-page-sub">Monitoramento em tempo real</p>
           </div>
           <div class="admin-topbar-actions">
-            <span class="api-pill" id="api-pill">…</span>
+            <span class="api-pill" id="api-pill">?</span>
             <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">Atualizar</button>
             <button type="button" class="btn btn-stop btn-sm" id="btn-cancel-active" hidden>
               Cancelar processo
@@ -124,7 +124,7 @@
             <article class="admin-card">
               <header class="admin-card-head">
                 <h2>Todos os processos</h2>
-                <p class="admin-muted">Últimos jobs na memória do servidor</p>
+                <p class="admin-muted">�ltimos jobs na mem�ria do servidor</p>
               </header>
               <div class="admin-table-wrap">
                 <table class="admin-table" id="jobs-table">
@@ -134,9 +134,9 @@
                       <th>Ferramenta</th>
                       <th>Status</th>
                       <th>Fila</th>
-                      <th>Usuário</th>
+                      <th>Usu�rio</th>
                       <th>Progresso</th>
-                      <th>Início</th>
+                      <th>In�cio</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -170,7 +170,16 @@
               </article>
             </div>
             <article class="admin-card">
-              <header class="admin-card-head"><h2>Fila de execução</h2></header>
+              <header class="admin-card-head">
+                <h2>Limpeza de arquivos</h2>
+                <p class="admin-muted">Remove logs, prints de tela, jobs antigos e cache ? n?o mexe na fila ativa</p>
+              </header>
+              <div class="admin-card-body" id="cleanup-panel">
+                <p class="admin-muted">Carregando?</p>
+              </div>
+            </article>
+            <article class="admin-card">
+              <header class="admin-card-head"><h2>Fila de execu??o</h2></header>
               <div class="admin-card-body" id="queue-info"></div>
             </article>
           </section>
@@ -178,8 +187,8 @@
       </div>
     </div>
 
-    <script src="/assets/shader-background.js?v=home45"></script>
-    <script src="/assets/shared.js?v=home45"></script>
-    <script src="/assets/admin.js?v=home45"></script>
+    <script src="/assets/shader-background.js?v=home49"></script>
+    <script src="/assets/shared.js?v=home49"></script>
+    <script src="/assets/admin.js?v=home50"></script>
   </body>
 </html>

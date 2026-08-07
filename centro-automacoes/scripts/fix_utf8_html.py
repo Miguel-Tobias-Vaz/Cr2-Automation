@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 FRONT = Path(__file__).resolve().parent.parent / "front"
-CACHE = "home44"
+CACHE = "home49"
 
 ADMIN_HTML = """<!DOCTYPE html>
 <html lang="pt-BR">
@@ -198,10 +198,15 @@ ADMIN_HTML = """<!DOCTYPE html>
 
 def read_text(path: Path) -> str:
     raw = path.read_bytes()
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
     try:
-        return raw.decode("utf-8")
+        text = raw.decode("utf-8")
+        if "\ufffd" not in text:
+            return text
     except UnicodeDecodeError:
-        return raw.decode("cp1252")
+        pass
+    return raw.decode("cp1252")
 
 
 def bump_cache(text: str) -> str:

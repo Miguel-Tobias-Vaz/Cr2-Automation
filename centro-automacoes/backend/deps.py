@@ -29,6 +29,6 @@ def require_user(authorization: str | None = Header(None)) -> auth.Session:
 
 
 def require_admin(user: auth.Session = Depends(require_user)) -> auth.Session:
-    if auth.is_enabled() and user.role != "admin":
-        raise HTTPException(403, "Acesso restrito a administradores.")
+    if auth.is_enabled() and not auth.is_panel_admin(user):
+        raise HTTPException(403, "Acesso restrito ao administrador principal.")
     return user

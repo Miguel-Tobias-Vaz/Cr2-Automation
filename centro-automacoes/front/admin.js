@@ -54,7 +54,7 @@
       throw new Error("Login necessário");
     }
     if (r.status === 403) {
-      throw new Error("Acesso restrito a administradores.");
+      throw new Error("Acesso restrito ao administrador principal.");
     }
     if (!r.ok) throw new Error("Falha ao carregar admin");
     return r.json();
@@ -416,6 +416,123 @@
         <p class="admin-muted">Playwright (${["publicacao", "sessao", "pub_repasses", "contratos", "dic_est_ter"].join(", ")}) roda em <strong>subprocesso isolado</strong> por job.</p>
         <p class="admin-muted">A fila persiste em disco — jobs pending sobrevivem a reinício do servidor.</p>
         <p class="admin-muted">Variáveis: <code>OPTO_MAX_JOBS</code>, <code>OPTO_MAX_QUEUE</code>, <code>OPTO_JOB_TIMEOUT_S</code>, <code>OPTO_USERS</code></p>`;
+    }
+    renderCleanup(data.cleanup_preview);
+  }
+
+  function adminFetch(url, opts) {
+    const fn =
+      window.OptoAutomacoes && OptoAutomacoes.authFetch
+        ? OptoAutomacoes.authFetch
+        : fetch;
+    return fn(url, opts);
+  }
+
+  function renderCleanup(preview) {
+    const panel = $("cleanup-panel");
+    if (!panel) return;
+    const p = preview || {};
+    const buckets = p.buckets || [];
+    if (!buckets.length) {
+      panel.innerHTML = '<p class="admin-muted">Nada para limpar no momento.</p>';
+      return;
+    }
+    const rows = buckets
+      .map((b) => {
+        const checked =
+          b.key === "upload_temp" ? "" : " checked";
+        return `<label class="admin-cleanup-row">
+          <input type="checkbox" data-cleanup-key="${b.key}"${checked} />
+          <span><strong>${b.label}</strong> — ${b.files} arquivo(s), ${b.mb} MB</span>
+        </label>`;
+      })
+      .join("");
+    panel.innerHTML = `
+      <p class="admin-cleanup-total">Total recuperável: <strong>${p.total_mb || 0} MB</strong> (${p.total_files || 0} arquivos)</p>
+      <div class="admin-cleanup-list">${rows}</div>
+      <div class="admin-cleanup-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-cleanup-preview">Atualizar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-cleanup-run">Apagar selecionados</button>
+      </div>
+      <p class="admin-muted">Jobs na fila ou rodando <strong>nunca</strong> são apagados.</p>
+      <p id="cleanup-result" class="admin-cleanup-result" hidden></p>`;
+    $("btn-cleanup-preview")?.addEventListener("click", () => refreshCleanupPreview());
+    $("btn-cleanup-run")?.addEventListener("click", () => runCleanup());
+  }
+
+  async function refreshCleanupPreview() {
+    try {
+      const r = await adminFetch(API + "/api/admin/cleanup/preview");
+      if (!r.ok) throw new Error("Falha ao analisar");
+      const data = await r.json();
+      renderCleanup(data);
+    } catch (e) {
+      const panel = $("cleanup-panel");
+      if (panel) {
+        panel.innerHTML =
+          '<p class="admin-error">' + (e.message || e) + "</p>";
+      }
+    }
+  }
+
+  async function runCleanup() {
+    const panel = $("cleanup-panel");
+    if (!panel) return;
+    const keys = new Set(
+      [...panel.querySelectorAll("[data-cleanup-key]:checked")].map(
+        (n) => n.getAttribute("data-cleanup-key")
+      )
+    );
+    if (!keys.size) {
+      alert("Marque pelo menos um tipo de arquivo.");
+      return;
+    }
+    if (
+      !confirm(
+        "Apagar os itens selecionados? Esta ação não pode ser desfeita."
+      )
+    ) {
+      return;
+    }
+    const body = {
+      job_dirs: keys.has("job_dirs"),
+      job_days: 0,
+      screenshots: keys.has("screenshots"),
+      ia_cache: keys.has("ia_cache"),
+      upload_temp: keys.has("upload_temp"),
+      upload_days: 7,
+    };
+    const btn = $("btn-cleanup-run");
+    if (btn) btn.disabled = true;
+    try {
+      const r = await adminFetch(API + "/api/admin/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(data.detail || "Falha na limpeza");
+      }
+      const msg = document.getElementById("cleanup-result");
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = `Removidos ${data.deleted_mb || 0} MB (${data.deleted_files || 0} arquivos, ${data.removed_dirs || 0} pastas).`;
+        if (data.errors && data.errors.length) {
+          msg.textContent += " Avisos: " + data.errors.join("; ");
+        }
+      }
+      if (overviewData) {
+        overviewData.disk = data.disk || overviewData.disk;
+        overviewData.cleanup_preview = data.cleanup_preview;
+        renderSystem(overviewData);
+      } else {
+        renderCleanup(data.cleanup_preview);
+      }
+    } catch (e) {
+      alert(String(e.message || e));
+    } finally {
+      if (btn) btn.disabled = false;
     }
   }
 

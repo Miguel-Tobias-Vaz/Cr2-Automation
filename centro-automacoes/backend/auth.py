@@ -223,7 +223,28 @@ def bearer_token(authorization: str | None) -> str | None:
     return parts[1].strip() or None
 
 
+def principal_admin_users() -> set[str]:
+    """E-mails/usuários que podem abrir o painel Admin (OPTO_PRINCIPAL_ADMIN)."""
+    raw = (os.getenv("OPTO_PRINCIPAL_ADMIN") or "").strip()
+    if not raw:
+        return set()
+    return {x.strip().lower() for x in raw.split(",") if x.strip()}
+
+
+def is_panel_admin(sess: Session | None) -> bool:
+    """Painel Admin + fila global — só o administrador principal."""
+    if not sess:
+        return False
+    principals = principal_admin_users()
+    if principals:
+        return sess.username.strip().lower() in principals
+    return bool(sess.role == "admin")
+
+
 def is_admin(sess: Session | None) -> bool:
+    """Privilégios operacionais (cancelar job alheio, etc.)."""
+    if principal_admin_users():
+        return is_panel_admin(sess)
     return bool(sess and sess.role == "admin")
 
 
@@ -232,7 +253,7 @@ def can_cancel_job(sess: Session | None, owner: str | None) -> bool:
         return True
     if not sess:
         return False
-    if sess.role == "admin":
+    if is_admin(sess):
         return True
     if not owner:
         return True
