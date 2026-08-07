@@ -79,11 +79,17 @@ def _is_blank_or_win_default(value: str | None) -> bool:
     return norm in _WIN_DEFAULTS or norm.startswith(r"c:\downloads\\")
 
 
+def is_local_mode() -> bool:
+    return os.getenv("OPTO_LOCAL", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def apply_user_defaults(
     config: dict[str, Any] | None, owner: str | None
 ) -> dict[str, Any]:
     """Preenche pastas vazias ou defaults Windows com a pasta output do usuário."""
     cfg = dict(config or {})
+    if is_local_mode():
+        return cfg
     dirs = ensure_user_dirs(owner)
     out = str(dirs["output"].resolve())
     for key in _PASTA_KEYS:

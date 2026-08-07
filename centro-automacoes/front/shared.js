@@ -1123,6 +1123,7 @@
       if (!r.ok) return null;
       const ws = await r.json();
       workspaceCache = ws;
+      if (ws.local_mode) return ws;
       const ids = fieldIds || [
         "pasta_base",
         "pasta_saida",
@@ -1624,7 +1625,7 @@
           );
         }
         const dlKey = `opto-dl-${jobId}`;
-        if (!sessionStorage.getItem(dlKey)) {
+        if (!workspaceCache?.local_mode && !sessionStorage.getItem(dlKey)) {
           sessionStorage.setItem(dlKey, "1");
           downloadJobArtifact(jobId).then((ok) => {
             if (!ok) return;

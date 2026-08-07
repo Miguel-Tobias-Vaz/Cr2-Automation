@@ -1,0 +1,32 @@
+================================================================================
+  OPTO AUTOMACOES — VERSAO LOCAL (Windows)
+================================================================================
+
+Esta pasta e a copia para usar NO SEU PC, como antes:
+  - Arquivos vao para C:\Downloads (ou a pasta que voce digitar)
+  - Sem login obrigatorio
+  - Sem pastas por usuario no servidor
+  - Sem download automatico de ZIP (abra a pasta de destino)
+
+A pasta  Cr2-Automation  (sem -Local) pode ser usada para VPS/servidor.
+
+
+COMO ABRIR
+----------
+  Duplo clique em:  COMECE_AQUI.bat
+  Navegador:        http://127.0.0.1:8765
+
+
+ATUALIZAR ESTA COPIA
+--------------------
+  Na pasta  Cr2-Automation  (original), rode:
+    CRIAR_COPIA_LOCAL.bat
+
+
+DIFERENCA DA VERSAO SERVIDOR
+----------------------------
+  Local (esta pasta):     OPTO_LOCAL=1  no run.bat
+  Servidor/VPS:           OPTO_USERS, Nginx, pastas em data/users/
+
+
+================================================================================

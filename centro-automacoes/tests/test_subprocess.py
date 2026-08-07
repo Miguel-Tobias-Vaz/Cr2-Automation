@@ -65,12 +65,23 @@ def test_handle_worker_line_parses_progress():
     assert job.progress["total"] == 10
 
 
+def test_isolated_root_is_centro_automacoes():
+    from backend.runners.isolated import ROOT
+
+    assert (ROOT / "backend" / "job_worker.py").is_file()
+    assert ROOT.name == "centro-automacoes"
+
+
 def test_job_worker_module_importable():
+    from backend.runners.isolated import ROOT
+
     r = subprocess.run(
         [sys.executable, "-m", "backend.job_worker"],
-        cwd=str(Path(__file__).resolve().parent.parent),
+        cwd=str(ROOT),
         capture_output=True,
         text=True,
     )
     assert r.returncode == 1
     assert "Uso:" in r.stderr or "Uso:" in r.stdout
+    assert "No module named" not in (r.stderr or "")
+    assert "No module named" not in (r.stdout or "")

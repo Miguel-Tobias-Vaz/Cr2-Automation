@@ -25,7 +25,7 @@ from backend.job_output import build_download_zip  # noqa: E402
 from backend.milagre_routes import router as milagre_router  # noqa: E402
 from backend.runners import dispatch  # noqa: E402
 from backend.state import jobs  # noqa: E402
-from backend.user_storage import apply_user_defaults, save_upload, workspace_info  # noqa: E402
+from backend.user_storage import apply_user_defaults, is_local_mode, save_upload, workspace_info  # noqa: E402
 
 FRONT = ROOT / "front"
 
@@ -214,6 +214,7 @@ def health(user=Depends(get_optional_user)):
     payload = {
         "ok": True,
         "auth_required": auth.is_enabled(),
+        "local_mode": is_local_mode(),
         "user": (
             {"username": user.username, "role": user.role} if user else None
         ),
@@ -318,9 +319,18 @@ def _assert_can_access_job(job, user) -> None:
 
 @app.get("/api/workspace")
 def get_workspace(user=Depends(require_user)):
-    """Pastas do usuário (uploads + saída padrão)."""
+    """Pastas do usuário (uploads + saída padrão). Modo local: pastas Windows."""
     owner = user.username if auth.is_enabled() else None
-    return {"ok": True, **workspace_info(owner)}
+    if is_local_mode():
+        return {
+            "ok": True,
+            "local_mode": True,
+            "username": "local",
+            "output_dir": r"C:\Downloads",
+            "uploads_dir": "",
+            "root_dir": "",
+        }
+    return {"ok": True, "local_mode": False, **workspace_info(owner)}
 
 
 @app.post("/api/uploads")

@@ -13,7 +13,9 @@ from backend.config import BROWSER_SERVICES, USE_SUBPROCESS
 from backend.jobs import JobCancelled
 from backend.runners.base import PROJECT_ROOT, _limpar_linha_log
 
-ROOT = Path(__file__).resolve().parent.parent
+# centro-automacoes/ (contém o pacote backend/) — NÃO usar parent.parent:
+# este arquivo está em backend/runners/, então parent.parent seria só backend/.
+ROOT = Path(__file__).resolve().parents[2]
 CANCEL_WAIT_S = 12.0
 
 
