@@ -1,0 +1,8 @@
+[
+  {
+    "username": "admin",
+    "role": "admin",
+    "salt": "SUBSTITUA_PELO_SALT_GERADO",
+    "password_hash": "SUBSTITUA_PELO_HASH_GERADO"
+  }
+]

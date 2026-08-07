@@ -1,9 +1,0 @@
-{
-  "usuario": "tobiasmiguel007@gmail.com",
-  "senha": "***",
-  "url_portal_sessao": "https://www.portalcr2.com.br/sessoes/sessoes-cm-nova-timboteua",
-  "pasta_sessoes": "C:\\Downloads\\novatembo\\Pautas e Atas das Sessões Arquivos - Câmara Municipal de Nova Timboteua",
-  "modo_teste": true,
-  "auto_confirm": true,
-  "headless": false
-}

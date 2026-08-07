@@ -1,0 +1,19 @@
+{
+  "numero": "001/2023",
+  "ano": "2023",
+  "objeto": "Prestação de serviços de segurança desarmada, serviços de transmissão, geração de imagens, fotos e vídeos e serviço de fornecimento de internet",
+  "situacao": "",
+  "valor_estimado": "768468.00",
+  "valor_homologado": "",
+  "confianca": "baixa",
+  "trecho_numero": "",
+  "trecho_objeto": "",
+  "motivo_situacao": "",
+  "observacao": "",
+  "mudancas": [],
+  "cache": false,
+  "origem": "ia_local",
+  "provedor": "ollama",
+  "modelo": "llama3.2:3b",
+  "chave_cache": "cf57433ac79b7757e35fdec7"
+}

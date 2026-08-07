@@ -1,0 +1,20 @@
+[Unit]
+Description=Opto Automações (painel FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=opto
+Group=opto
+WorkingDirectory=/opt/opto-automacoes/centro-automacoes
+EnvironmentFile=/opt/opto-automacoes/centro-automacoes/deploy/opto.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONUTF8=1
+ExecStart=/opt/opto-automacoes/centro-automacoes/venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=5
+# Playwright + OCR podem usar RAM
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

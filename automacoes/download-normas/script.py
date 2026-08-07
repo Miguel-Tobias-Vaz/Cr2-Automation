@@ -97,6 +97,10 @@ ANOS_FILTRO = []
 # Ex.: https://camaracachoeiradopiria.pa.gov.br/diarias-ate-2023/
 EXTRAI_DIARIAS = True
 
+# OCR multi-motor (_comum): Auto = Paddle → Tesseract
+USAR_OCR = True
+MOTOR_OCR = "auto"  # auto | paddleocr | tesseract
+
 # IA local (Ollama) — só corrige nome quando regras falham (tipo/número/ano).
 REFINAR_IA = False
 MODELO_IA = "llama3.2:3b"
@@ -105,6 +109,8 @@ IA_SEMPRE = False
 
 # Acumulador de linhas da planilha de Diárias (preenchido em baixar_e_salvar).
 REGISTROS_DIARIAS: list[dict] = []
+# Acumulador do relatório por categoria + auditoria (Extração Pro).
+REGISTROS_NORMAS: list[dict] = []
 
 HEADERS = {
     "User-Agent": (
@@ -399,6 +405,157 @@ def _tipos_catalogo() -> list[str]:
     return [nome for nome, _ in _RE_TIPO_PRIORIDADE]
 
 
+def _origem_campo_tipo(*pares: tuple[str, str], pasta_hint: str = "") -> tuple[str, str, str]:
+    """Retorna (tipo, origem, trecho)."""
+    for rotulo, texto in pares:
+        blob = _normalizar_texto(texto)
+        if not blob:
+            continue
+        cabeca = blob[:320]
+        for tipo, rx in _RE_TIPO_PRIORIDADE:
+            m = rx.search(cabeca)
+            if m:
+                return tipo, rotulo, m.group(0)[:120]
+    hint = limpar_nome_pasta(pasta_hint or "")
+    if hint:
+        for tipo, rx in _RE_TIPO_PRIORIDADE:
+            if rx.search(hint):
+                return tipo, "categoria", hint
+        return hint, "categoria", hint
+    for rotulo, texto in pares:
+        if not texto or _LINK_GENERICO.match((texto or "").strip()):
+            continue
+        t = limpar_nome_pasta(_normalizar_texto(texto))
+        if t and len(t) >= 3:
+            return t[:100], rotulo, t[:120]
+    return "", "", ""
+
+
+def _registrar_norma_planilha(
+    *,
+    status: str,
+    pasta_hint: str,
+    nome: str,
+    arquivo: str,
+    caminho: str,
+    url_pdf: str,
+    url_fonte: str,
+    textos_extras: list[str],
+    texto_pdf: str = "",
+    ano_fallback: int | None = None,
+    observacao: str = "",
+) -> None:
+    """Acumula linha do relatório + auditoria (não grava disco ainda)."""
+    try:
+        mod = _carregar_modulo_local("planilha_normas")
+    except Exception:
+        return
+    if not mod:
+        return
+
+    texto_link = textos_extras[0] if textos_extras else ""
+    titulo = textos_extras[1] if len(textos_extras) > 1 else ""
+    basename = os.path.basename(urlparse(url_pdf).path) if url_pdf else ""
+
+    tipo, tipo_origem, tipo_trecho = _origem_campo_tipo(
+        ("listagem", texto_link),
+        ("titulo", titulo),
+        ("pdf", (texto_pdf or "")[:500]),
+        ("arquivo", nome or arquivo or basename),
+        pasta_hint=pasta_hint,
+    )
+    if not tipo and nome:
+        # fallback: "Portaria Nº010/2025" → Portaria
+        m = re.match(r"^(.+?)\s+N[º°o]", nome, re.I)
+        if m:
+            tipo = m.group(1).strip()
+            tipo_origem = "nome_arquivo"
+            tipo_trecho = nome[:120]
+
+    num, ano, num_origem, num_metodo, num_trecho = mod.extrair_numero_ano_com_origem(
+        ("listagem", texto_link),
+        ("titulo", titulo),
+        ("pdf", (texto_pdf or "")[:800]),
+        ("arquivo", nome or arquivo or basename),
+        ("url", url_pdf or ""),
+    )
+    if not ano and ano_fallback:
+        ano = str(ano_fallback)
+        if not num_origem:
+            num_origem = "filtro/pasta"
+            num_metodo = "ano_fallback"
+
+    data, data_origem, data_trecho = mod.extrair_data(
+        texto_link, titulo, (texto_pdf or "")[:800], url_pdf or ""
+    )
+
+    titulo_limpo = _normalizar_texto(titulo or "")
+    link_limpo = _normalizar_texto(texto_link or "")
+    # Prefere ementa longa da listagem (card do site) ao título curto da página
+    if link_limpo and (
+        not titulo_limpo
+        or len(link_limpo) > len(titulo_limpo) + 15
+        or (
+            re.search(r"\bN[º°o]\s*\d", link_limpo, re.I)
+            and not re.search(r"\bN[º°o]\s*\d", titulo_limpo, re.I)
+        )
+    ):
+        titulo_limpo = link_limpo
+    if not titulo_limpo:
+        titulo_limpo = _normalizar_texto(nome or "")
+    titulo_limpo = re.split(
+        r"\s*[-|–]\s*(?:Prefeitura|C[aâ]mara|Portal)\b",
+        titulo_limpo,
+        maxsplit=1,
+        flags=re.I,
+    )[0].strip()[:500]
+
+    descricao, desc_origem, desc_trecho = mod.extrair_descricao(titulo_limpo, tipo)
+    autoria, aut_origem, aut_trecho = mod.extrair_autoria(
+        texto_link, titulo, (texto_pdf or "")[:1200]
+    )
+    situacao, sit_origem, sit_trecho = mod.extrair_situacao(
+        texto_link, titulo, (texto_pdf or "")[:1200]
+    )
+
+    try:
+        caminho_rel = os.path.relpath(caminho, PASTA_BASE) if caminho else ""
+    except ValueError:
+        caminho_rel = caminho or ""
+
+    reg = mod.montar_registro(
+        categoria=pasta_hint or "Geral",
+        tipo=tipo or "",
+        tipo_origem=tipo_origem,
+        tipo_trecho=tipo_trecho,
+        numero=num or "",
+        ano=str(ano or ""),
+        num_origem=num_origem,
+        num_metodo=num_metodo,
+        num_trecho=num_trecho,
+        data=data,
+        data_origem=data_origem,
+        data_trecho=data_trecho,
+        titulo=titulo_limpo,
+        arquivo=arquivo or "",
+        caminho=caminho_rel,
+        url_pdf=url_pdf or "",
+        url_fonte=(url_fonte or "").split()[0] if url_fonte else "",
+        status=status,
+        observacao=observacao,
+        descricao=descricao,
+        descricao_origem=desc_origem,
+        descricao_trecho=desc_trecho,
+        autoria=autoria,
+        autoria_origem=aut_origem,
+        autoria_trecho=aut_trecho,
+        situacao=situacao,
+        situacao_origem=sit_origem,
+        situacao_trecho=sit_trecho,
+    )
+    REGISTROS_NORMAS.append(reg)
+
+
 def _aplicar_ia_nome(nome: str, textos: list[str]) -> str:
     """Opcional: corrige tipo/número/ano com Ollama quando as regras falham."""
     if not REFINAR_IA:
@@ -493,6 +650,33 @@ def ler_texto_pdf_bytes(data: bytes, max_paginas: int = MAX_PAGINAS_PDF) -> str:
         return ""
 
 
+def _texto_pdf_com_ocr(data: bytes, max_paginas: int = MAX_PAGINAS_PDF) -> str:
+    """Nativo + OCR multi-motor compartilhado quando o PDF é escaneado."""
+    texto = ler_texto_pdf_bytes(data, max_paginas=max_paginas)
+    util = re.sub(r"\s+", "", texto or "")
+    if len(util) >= 40 or not USAR_OCR:
+        return texto
+    try:
+        auto = Path(__file__).resolve().parent.parent
+        if str(auto) not in sys.path:
+            sys.path.insert(0, str(auto))
+        from _comum.ocr_multi import obter_texto_de_bytes
+
+        ocr, origem = obter_texto_de_bytes(
+            data,
+            usar_ocr=True,
+            motor=MOTOR_OCR or "auto",
+            min_nativo=40,
+            max_paginas_nativo=max_paginas,
+        )
+        if ocr and len(re.sub(r"\s+", "", ocr)) > len(util):
+            print(f"    [OCR]    texto via {origem} ({len(ocr)} chars)")
+            return _normalizar_texto(ocr)
+    except Exception as e:
+        print(f"    [AVISO]    OCR multi-motor: {str(e)[:90]}")
+    return texto
+
+
 def _carregar_modulo_local(nome: str):
     """Carrega extrair_diarias / ia_diarias do mesmo diretório do script."""
     import importlib.util
@@ -514,6 +698,7 @@ def _tentar_extrair_diarias(
     pasta_hint: str,
     ler_pdf: bool,
     url_fonte: str = "",
+    texto_link: str = "",
 ) -> None:
     """Regra geral: se a fonte/PDF for de diárias, extrai campos → planilha."""
     if not EXTRAI_DIARIAS:
@@ -527,26 +712,32 @@ def _tentar_extrair_diarias(
         return
 
     texto = texto_pdf or ""
-    # Relê com mais páginas se ainda não há sinal claro de diárias
+    # Relê com mais páginas / OCR se ainda não há sinal claro de diárias
     if ler_pdf and LER_PDF and (
         not texto
         or not parece_diarias(
             texto, pasta_hint=pasta_hint, nome_arquivo=arquivo, url=url_fonte
         )
     ):
-        texto = ler_texto_pdf_bytes(data, max_paginas=MAX_PAGINAS_DIARIAS) or texto
+        texto = _texto_pdf_com_ocr(data, max_paginas=MAX_PAGINAS_DIARIAS) or texto
 
     # Sempre preferir texto mais completo para diárias + IA
-    if ler_pdf and LER_PDF and texto:
-        texto_largo = ler_texto_pdf_bytes(data, max_paginas=MAX_PAGINAS_DIARIAS)
-        if texto_largo and len(texto_largo) > len(texto):
+    if ler_pdf and LER_PDF:
+        texto_largo = _texto_pdf_com_ocr(data, max_paginas=MAX_PAGINAS_DIARIAS)
+        if texto_largo and len(texto_largo) > len(texto or ""):
             texto = texto_largo
 
     reg = extrair_diarias(
-        texto, arquivo=arquivo, pasta_hint=pasta_hint, url=url_fonte
+        texto,
+        arquivo=arquivo,
+        pasta_hint=pasta_hint,
+        url=url_fonte,
+        texto_link=texto_link or "",
     )
     if not reg:
         return
+
+    num_link = (reg.get("numero_portaria") or "").strip()
 
     # IA lê o documento e confirma/corrige os campos (mesmo toggle do Ollama)
     if REFINAR_IA:
@@ -560,6 +751,13 @@ def _tentar_extrair_diarias(
             )
         except Exception as exc:
             print("    [IA-DIARIAS] erro: {0}".format(str(exc)[:120]))
+
+    # PDF escaneado / OCR fraco: não deixar a IA apagar ou trocar o nº do link
+    if num_link and (
+        not (reg.get("numero_portaria") or "").strip()
+        or len(re.sub(r"\s+", "", texto or "")) < 40
+    ):
+        reg["numero_portaria"] = num_link
 
     # remove meta se sobrou
     reg.pop("_ia_alterou", None)
@@ -638,7 +836,11 @@ def titulo_da_pagina(soup: BeautifulSoup) -> str:
 
 
 def coletar_pdfs_do_soup(soup: BeautifulSoup, base_url: str) -> list[tuple[str, str]]:
-    """Lista [(texto_link, url_pdf)] únicos, só do domínio do SITE."""
+    """Lista [(texto_link, url_pdf)] únicos.
+
+    Aceita o domínio do SITE **ou** o da própria página (evita perder
+    PDFs quando o campo Site do painel difere da URL da fonte).
+    """
     scope = corpo_principal(soup)
     vistos = set()
     saida = []
@@ -647,7 +849,10 @@ def coletar_pdfs_do_soup(soup: BeautifulSoup, base_url: str) -> list[tuple[str, 
         if not _eh_pdf_href(href):
             continue
         abs_url = _absolutizar(base_url, href)
-        if not _mesmo_dominio(abs_url, SITE):
+        if not (
+            _mesmo_dominio(abs_url, SITE)
+            or _mesmo_dominio(abs_url, base_url)
+        ):
             continue
         if abs_url in vistos:
             continue
@@ -761,8 +966,9 @@ def _ajax_url_wordpress(base_url: str) -> str:
 
 def _posts_de_soup_categoria(
     soup: BeautifulSoup, base_url: str, url_categoria: str, vistos: set[str]
-) -> list[str]:
-    novos: list[str] = []
+) -> list[tuple[str, str]]:
+    """Retorna [(url_post, texto_listagem), ...] — texto da card/listagem do site."""
+    novos: list[tuple[str, str]] = []
     candidatos: list[tuple[str, str]] = []
     for art in soup.select("article"):
         if art.find_parent("footer") or art.find_parent("nav"):
@@ -789,19 +995,19 @@ def _posts_de_soup_categoria(
         if abs_url in vistos:
             continue
         vistos.add(abs_url)
-        novos.append(abs_url)
+        novos.append((abs_url, _normalizar_texto(texto or "")))
     return novos
 
 
-def coletar_posts_categoria(url_categoria: str) -> list[str]:
-    """Coleta URLs únicas de posts.
+def coletar_posts_categoria(url_categoria: str) -> list[tuple[str, str]]:
+    """Coleta [(url, texto_listagem)] únicos de posts.
 
     Preferência:
       1) AJAX Bunyad (Carregar Mais / infinite) — /page/N/ nesses temas
          costuma repetir os mesmos posts.
       2) Paginação clássica /page/2/, /page/3/...
     """
-    posts: list[str] = []
+    posts: list[tuple[str, str]] = []
     vistos: set[str] = set()
 
     try:
@@ -910,6 +1116,25 @@ def coletar_paginas_hub_anos(url_hub: str) -> list[tuple[str, str]]:
 
 
 def extrair_ano(*textos: str, fallback: int | None = None) -> int | None:
+    """
+    Extrai ano preferindo padrões de documento (Nº 009/2022) ao primeiro ano
+    genérico da página (ex.: 'Diárias até 2023').
+    """
+    # 1) Nº xxx/AAAA ou /AAAA no fim do nome do arquivo
+    for t in textos:
+        if not t:
+            continue
+        m = re.search(
+            r"(?:n[º°o\.]\s*)?\d{1,4}\s*/\s*(20\d{2}|19\d{2})\b",
+            t,
+            re.I,
+        )
+        if m:
+            return int(m.group(1))
+        m = re.search(r"[-_/](20\d{2}|19\d{2})(?:\.pdf)?\b", t, re.I)
+        if m:
+            return int(m.group(1))
+    # 2) qualquer ano (último recurso)
     for t in textos:
         if not t:
             continue
@@ -973,11 +1198,23 @@ def baixar_e_salvar(
         data = b"".join(chunks)
         if data[:4] != b"%PDF":
             print(f"    [ERRO]    Resposta não é PDF: {url_pdf}")
+            _registrar_norma_planilha(
+                status="erro",
+                pasta_hint=pasta_hint,
+                nome=nome_logico or "",
+                arquivo="",
+                caminho="",
+                url_pdf=url_pdf,
+                url_fonte=url_fonte or url_ctx,
+                textos_extras=textos_extras,
+                ano_fallback=ano_fallback,
+                observacao="Resposta não é PDF",
+            )
             return "erro"
 
         texto_pdf = ""
         if ler_pdf and LER_PDF:
-            texto_pdf = ler_texto_pdf_bytes(data)
+            texto_pdf = _texto_pdf_com_ocr(data)
             if not texto_pdf:
                 print("    [AVISO]    PDF sem texto extraivel (escaneado/imagem) — nome pelo titulo/link")
 
@@ -1060,6 +1297,20 @@ def baixar_e_salvar(
                     pasta_hint=pasta_hint,
                     ler_pdf=ler_pdf,
                     url_fonte=url_ctx,
+                    texto_link=textos_extras[0] if textos_extras else "",
+                )
+                _registrar_norma_planilha(
+                    status="pulado",
+                    pasta_hint=pasta_hint,
+                    nome=nome,
+                    arquivo=arquivo,
+                    caminho=caminho,
+                    url_pdf=url_pdf,
+                    url_fonte=url_fonte or url_ctx,
+                    textos_extras=textos_extras,
+                    texto_pdf=texto_pdf,
+                    ano_fallback=ano_fallback,
+                    observacao="Arquivo já existia",
                 )
                 return "pulado"
             stem = arquivo[:-4]
@@ -1090,6 +1341,19 @@ def baixar_e_salvar(
             pasta_hint=pasta_hint,
             ler_pdf=ler_pdf,
             url_fonte=url_ctx,
+            texto_link=textos_extras[0] if textos_extras else "",
+        )
+        _registrar_norma_planilha(
+            status="ok",
+            pasta_hint=pasta_hint,
+            nome=nome,
+            arquivo=arquivo,
+            caminho=caminho,
+            url_pdf=url_pdf,
+            url_fonte=url_fonte or url_ctx,
+            textos_extras=textos_extras,
+            texto_pdf=texto_pdf,
+            ano_fallback=ano_fallback,
         )
         return "ok"
     except UnicodeEncodeError:
@@ -1097,7 +1361,31 @@ def baixar_e_salvar(
         return "ok"
     except Exception as e:
         print(f"    [ERRO]    {url_pdf} - {e}")
+        _registrar_norma_planilha(
+            status="erro",
+            pasta_hint=pasta_hint,
+            nome=nome_logico or "",
+            arquivo="",
+            caminho="",
+            url_pdf=url_pdf,
+            url_fonte=url_fonte,
+            textos_extras=textos_extras,
+            ano_fallback=ano_fallback,
+            observacao=str(e)[:200],
+        )
         return "erro"
+
+
+def _salvar_planilhas_normas_agora() -> dict[str, str]:
+    """Grava Relatorio.xlsx por categoria + Normas.xlsx + Auditoria_Normas.xlsx."""
+    if not REGISTROS_NORMAS:
+        return {}
+    try:
+        mod = _carregar_modulo_local("planilha_normas")
+        return mod.salvar_planilhas_normas(REGISTROS_NORMAS, PASTA_BASE) or {}
+    except Exception as exc:
+        print("  [PLANILHA] Falha ao gravar ({0})".format(str(exc)[:100]))
+        return {}
 
 
 # =============================================================
@@ -1121,8 +1409,27 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
         posts = posts[:LIMITE_POSTS]
         print(f"  Limite de teste: {len(posts)} posts")
 
-    total = len(posts)
-    for i, url_post in enumerate(posts, 1):
+    # Filtra pelo texto/URL da listagem ANTES de abrir cada post (evita lentidão)
+    filtro = _anos_filtro_norm()
+    fila: list[tuple[str, str, int | None]] = []
+    if filtro:
+        antes = len(posts)
+        for url_post, texto_lista in posts:
+            ano = extrair_ano(texto_lista, url_post)
+            if ano_permitido(ano):
+                fila.append((url_post, texto_lista, ano))
+            else:
+                contadores["pulado_ano"] = contadores.get("pulado_ano", 0) + 1
+        print(
+            f"  Filtro de anos ({', '.join(filtro)}): {len(fila)}/{antes} posts "
+            f"(fora do filtro ignorados sem abrir página)."
+        )
+    else:
+        for url_post, texto_lista in posts:
+            fila.append((url_post, texto_lista, extrair_ano(texto_lista, url_post)))
+
+    total = len(fila)
+    for i, (url_post, texto_lista, ano_lista) in enumerate(fila, 1):
         _abortar_se_cancelado()
         prefix = f"[{str(i).zfill(3)}/{total}]"
         slug = url_post.rstrip("/").split("/")[-1][:60]
@@ -1134,25 +1441,36 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
             contadores["erros"] += 1
             continue
 
+        # Prefere título da página; usa texto da listagem (card do site) como apoio
+        if not (titulo or "").strip() or len((titulo or "").strip()) < 12:
+            titulo = texto_lista or titulo
+        elif texto_lista and len(texto_lista) > len(titulo or ""):
+            # Listagem costuma trazer "Nº 001/2024, DE 08 DE JANEIRO..." completo
+            if re.search(r"\bN[º°o]\s*\d", texto_lista, re.I) and not re.search(
+                r"\bN[º°o]\s*\d", titulo or "", re.I
+            ):
+                titulo = texto_lista
+
         if not pdfs:
             print("    [SEM PDF] Nenhum PDF no corpo do post.")
             contadores["sem_pdf"] += 1
             time.sleep(0.25)
             continue
 
-        ano = extrair_ano(titulo, url_post)
+        ano = extrair_ano(titulo, texto_lista, url_post) or ano_lista
         if not ano_permitido(ano):
-            print(f"    [PULADO]  Ano {ano or 'desconhecido'} fora do filtro.")
+            # Segurança: raramente o ano da página diverge da listagem
             contadores["pulado_ano"] = contadores.get("pulado_ano", 0) + 1
             continue
         pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
-        print(f"    {len(pdfs)} PDF(s) | titulo: {titulo[:80]}")
+        print(f"    {len(pdfs)} PDF(s) | titulo: {(titulo or '')[:80]}")
 
         for texto_link, url_pdf in pdfs:
             _abortar_se_cancelado()
+            # texto_link do PDF + título/listagem do card do site
             nome_previo = montar_nome_documento(
-                texto_link=texto_link,
-                titulo_post=titulo,
+                texto_link=texto_link or texto_lista,
+                titulo_post=titulo or texto_lista,
                 url_pdf=url_pdf,
                 pasta_hint=pasta_hint,
                 ano_fallback=ano,
@@ -1162,13 +1480,15 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
                 pasta,
                 nome_previo,
                 ler_pdf=True,
-                textos_extras=[texto_link, titulo],
+                textos_extras=[texto_link or texto_lista, titulo or texto_lista],
                 pasta_hint=pasta_hint,
                 ano_fallback=ano,
                 url_fonte=url,
             )
             contadores[resultado] = contadores.get(resultado, 0) + 1
         time.sleep(0.35)
+
+    _salvar_planilhas_normas_agora()
 
 
 def processar_hub_anos(fonte: dict, contadores: dict) -> None:
@@ -1217,7 +1537,6 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
 
         ano = extrair_ano(rotulo, titulo, url_ano)
         if not ano_permitido(ano):
-            print(f"    [PULADO]  Ano {ano or 'desconhecido'} fora do filtro.")
             contadores["pulado_ano"] = contadores.get("pulado_ano", 0) + 1
             continue
         pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
@@ -1245,6 +1564,8 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
             contadores[resultado] = contadores.get(resultado, 0) + 1
         time.sleep(0.4)
 
+    _salvar_planilhas_normas_agora()
+
 
 def processar_pagina(fonte: dict, contadores: dict) -> None:
     url = fonte["url"]
@@ -1265,15 +1586,64 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
     pasta_hint = resolver_pasta_hint(fonte, titulo)
     print(f"  Pasta: {pasta_hint}")
 
-    ano = extrair_ano(titulo, url)
-    if not ano_permitido(ano):
-        print(f"  [PULADO] Ano {ano or 'desconhecido'} fora do filtro.")
-        contadores["pulado_ano"] = contadores.get("pulado_ano", 0) + 1
-        return
-    pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
-    print(f"  {len(pdfs)} PDF(s)")
-    for texto_link, url_pdf in pdfs:
+    ano_pagina = extrair_ano(titulo, url)
+    filtro = _anos_filtro_norm()
+    # Página agregada (ex. diarias-ate-2023 com 2017–2023): filtra PDF a PDF
+    if filtro:
+        antes = len(pdfs)
+        pdfs_ok = []
+        for texto_link, url_pdf in pdfs:
+            ano_item = extrair_ano(texto_link, url_pdf)
+            if ano_item is None:
+                # sem ano no link: só aceita se a página inteira for daquele ano
+                # e o filtro tiver um único ano coincidente com a página
+                if (
+                    ano_pagina is not None
+                    and len(filtro) == 1
+                    and str(ano_pagina) == filtro[0]
+                    and "ate-" not in (url or "").lower()
+                    and "até-" not in (titulo or "").lower()
+                ):
+                    ano_item = ano_pagina
+                else:
+                    contadores["pulado_ano"] = contadores.get("pulado_ano", 0) + 1
+                    continue
+            if not ano_permitido(ano_item):
+                contadores["pulado_ano"] = contadores.get("pulado_ano", 0) + 1
+                continue
+            pdfs_ok.append((texto_link, url_pdf, ano_item))
+        print(
+            f"  Filtro de anos ({', '.join(filtro)}): {len(pdfs_ok)}/{antes} PDF(s) "
+            f"(fora do filtro ignorados)."
+        )
+        pdfs = pdfs_ok
+    else:
+        pdfs = [
+            (t, u, extrair_ano(t, u, titulo, url) or ano_pagina)
+            for t, u in pdfs
+        ]
+
+    print(f"  {len(pdfs)} PDF(s) na fila")
+    # Log rápido dos números (ajuda a ver se 022/025 entraram)
+    nums_fila = []
+    for item in pdfs:
+        t = item[0] if item else ""
+        m = re.search(r"(\d{1,4})\s*/\s*((?:20|19)\d{2})", t or "")
+        if m:
+            nums_fila.append("{0}/{1}".format(m.group(1).zfill(3), m.group(2)))
+    if nums_fila:
+        print("  Portarias na fila: {0}".format(", ".join(nums_fila[:40])))
+        if len(nums_fila) > 40:
+            print("  ... +{0} outras".format(len(nums_fila) - 40))
+
+    for item in pdfs:
         _abortar_se_cancelado()
+        if len(item) == 3:
+            texto_link, url_pdf, ano = item
+        else:
+            texto_link, url_pdf = item
+            ano = extrair_ano(texto_link, url_pdf, titulo, url) or ano_pagina
+        pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
         nome_previo = montar_nome_documento(
             texto_link=texto_link,
             titulo_post=titulo,
@@ -1293,21 +1663,26 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
         )
         contadores[resultado] = contadores.get(resultado, 0) + 1
 
+    _salvar_planilhas_normas_agora()
+
 
 # =============================================================
 # Main
 # =============================================================
 
 def main():
-    global REGISTROS_DIARIAS
-    REGISTROS_DIARIAS = []
+    # Mutação (sem `global`) — evita "assigned to before global declaration"
+    REGISTROS_DIARIAS.clear()
+    REGISTROS_NORMAS.clear()
 
     print("=" * 60)
     print("  DOWNLOAD DE NORMAS MUNICIPAIS")
     print(f"  Site: {urlparse(SITE).netloc}")
     print(f"  Destino: {PASTA_BASE}")
     print(f"  Leitura PDF: {'sim' if LER_PDF and PdfReader else 'não'}")
+    print(f"  OCR multi-motor: {'sim ({0})'.format(MOTOR_OCR) if USAR_OCR else 'não'}")
     print(f"  Diárias → planilha: {'sim' if EXTRAI_DIARIAS else 'não'}")
+    print(f"  Relatório XLSX + auditoria: sim")
     print(f"  IA local: {'sim ({0})'.format(MODELO_IA) if REFINAR_IA else 'não'}")
     filtro = _anos_filtro_norm()
     print(f"  Anos: {', '.join(filtro) if filtro else 'todos'}")
@@ -1372,6 +1747,8 @@ def main():
     except Exception as exc:
         print("  [SESSAO] Planilha não gerada ({0})".format(str(exc)[:80]))
 
+    planilhas_normas = _salvar_planilhas_normas_agora()
+
     print("")
     print("=" * 60)
     print("  RESUMO FINAL" + (" (CANCELADO)" if cancelado else ""))
@@ -1382,10 +1759,20 @@ def main():
     print(f"  Erros download             : {contadores.get('erro', 0) + contadores.get('erros', 0)}")
     print(f"  Posts/paginas sem PDF      : {contadores.get('sem_pdf', 0)}")
     print(f"  Diárias extraídas          : {len(REGISTROS_DIARIAS)}")
+    print(f"  Docs no relatório XLSX     : {len(REGISTROS_NORMAS)}")
     if planilha_diarias:
         print(f"  Planilha Diárias           : {planilha_diarias}")
     if planilha_sessoes:
         print(f"  Planilha Sessões           : {planilha_sessoes}")
+    if planilhas_normas.get("normas"):
+        print(f"  Planilha Normas            : {planilhas_normas['normas']}")
+    if planilhas_normas.get("materias"):
+        print(f"  Planilha Matérias (upload) : {planilhas_normas['materias']}")
+    if planilhas_normas.get("auditoria"):
+        print(f"  Planilha Auditoria         : {planilhas_normas['auditoria']}")
+    n_cat = sum(1 for k in planilhas_normas if k.startswith("categoria:"))
+    if n_cat:
+        print(f"  Relatórios por categoria   : {n_cat}")
     print(f"  Pasta base                 : {PASTA_BASE}")
     print("=" * 60)
     if cancelado:

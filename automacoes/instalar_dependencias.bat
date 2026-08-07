@@ -34,9 +34,9 @@ echo Instalando navegador Chromium para o Playwright ...
 playwright install chromium
 
 echo.
-echo OCR: use o INSTALAR.bat da raiz do projeto ^(Tesseract + Poppler via winget^).
-echo      Neste venv ja entraram pytesseract + pdf2image.
-
+echo OCR: pytesseract + pdf2image + pymupdf ^(leve^).
+echo No painel, o COMECE_AQUI.bat tambem instala Tesseract + Poppler + Ollama.
+echo EasyOCR e PaddleOCR NAO sao mais instalados.
 echo.
 echo ============================================================
 echo  Pronto! Exemplo:

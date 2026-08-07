@@ -26,7 +26,7 @@ MODALIDADES_VALIDAS = [
 ]
 
 # Ate 10 digitos: portais como Altamira usam 1123002/2023 (nao so 001/2023)
-_RE_NUMERO = re.compile(r"^\s*(\d{1,10})\s*/\s*(\d{4})\s*(?:-\s*[A-Za-z]+)?\s*$")
+_RE_NUMERO = re.compile(r"^\s*(\d{1,10})\s*/\s*(\d{4})(?:\s*-.*)?\s*$")
 _RE_NUMERO_BUSCA = re.compile(r"(?<!\d)(\d{1,10})\s*/\s*(\d{4})")
 _RE_DATA = re.compile(r"\b(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{4})\b")
 _RE_DATA_ISO = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
@@ -49,18 +49,15 @@ def sigla(modalidade: str) -> str:
 
 
 def numero_front(reg: dict) -> str:
-    bruto = str(reg.get("numero", "") or "")
-    m = _RE_NUMERO.match(bruto)
-    if not m:
-        # "003/2025", "Nº 003/2025-PE" ou codigos longos tipo "1123002/2023"
-        m = _RE_NUMERO_BUSCA.search(bruto)
-        if not m:
-            return ""
-    seq = m.group(1)
-    # Padroniza so numeros curtos (001/2023); nao corta 1123002
-    base = "%s/%s" % (seq.zfill(3) if len(seq) <= 3 else seq, m.group(2))
-    s = sigla(reg.get("modalidade", ""))
-    return "%s-%s" % (base, s) if s else base
+    """Número Front: preserva dígitos/códigos; só troca/ acrescenta a sigla."""
+    bruto = str(reg.get("numero", "") or "").strip()
+    if not bruto:
+        return ""
+    if not _RE_NUMERO_BUSCA.search(bruto):
+        return ""
+    # Evita import cíclico no carregamento do pacote
+    from ia_local.regras_titulo import numero_com_sigla
+    return numero_com_sigla(bruto, reg.get("modalidade", ""))
 
 
 def ano_front(reg: dict) -> str:

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Publicação Repasses — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css?v=home44" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill">Servidor …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero">
+        <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Publicação de Repasses</h1>
+            <p class="lede">
+              Mesmo ritmo da Sessão: <em>Criar Publicação</em> ? modal
+              <em>Cadastrar Repasse</em> (Mês/Ano, Data, valores, descrição, arquivo) ? Publicar.
+              Usa a planilha <code>Repasses.xlsx</code> gerada na Extração.
+            </p>
+          </header>
+          <article class="stream is-in">
+            <span class="stream-index">01</span>
+            <h3>Campos do portal</h3>
+            <ul>
+              <li>Mês e Ano · Data (último dia do mês)</li>
+              <li>Valor previsto / realizado</li>
+              <li>Descrição · Arquivo (PDF) · Link opcional</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="painel">
+        <header class="section-head"><h2>Painel</h2></header>
+        <form class="painel-form" id="form-pub-repasses">
+          <fieldset class="bloco">
+            <legend>Portal CR2</legend>
+            <div class="grid-2">
+              <label class="field">
+                <span class="field-label"><em>Usuário *</em></span>
+                <input type="email" id="usuario" autocomplete="username" required />
+              </label>
+              <label class="field">
+                <span class="field-label"><em>Senha *</em></span>
+                <input type="password" id="senha" autocomplete="current-password" required />
+              </label>
+            </div>
+            <label class="field">
+              <span class="field-label"><em>URL admin Repasse *</em></span>
+              <input
+                type="url"
+                id="url_portal_repasse"
+                placeholder="https://www.portalcr2.com.br/.../repasses"
+                required
+              />
+            </label>
+          </fieldset>
+
+          <fieldset class="bloco">
+            <legend>Pasta da extração *</legend>
+            <p class="field-hint workspace-hint" id="workspace-hint" hidden></p>
+            <div class="upload-zone" id="upload-pasta">
+              <input type="file" id="file-pasta" hidden />
+              <p class="upload-zone-title">Enviar pasta compactada (ZIP)</p>
+              <p class="upload-zone-desc">ZIP com <code>Repasses.xlsx</code> e pasta <code>Repasses/ANO/</code></p>
+              <button type="button" class="btn btn-ghost btn-sm" data-upload-pick>Escolher ZIP</button>
+              <p class="upload-status" id="upload-pasta-status" hidden></p>
+            </div>
+            <label class="field">
+              <span class="field-label"><em>Pasta base</em></span>
+              <input type="text" id="pasta_base" value="" placeholder="Preenchida automaticamente" required />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Caminho no servidor onde estão os arquivos da extração.
+              </small>
+            </label>
+          </fieldset>
+
+          <fieldset class="bloco">
+            <legend>Opções</legend>
+            <label class="check-row"><input type="checkbox" id="modo_teste" checked /> Modo teste (1 repasse)</label>
+            <label class="check-row"><input type="checkbox" id="auto_confirm" checked /> Confirmar login automaticamente</label>
+            <label class="check-row"><input type="checkbox" id="headless" /> Navegador invisível</label>
+          </fieldset>
+
+          <div class="acao-row">
+            <button type="submit" class="btn btn-primary" id="btn-run">Publicar repasses</button>
+            <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
+            <a class="btn btn-ghost" href="#log">Ver log</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="log-wrap" id="log">
+        <header class="section-head">
+          <h2>Log</h2>
+          <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
+        </header>
+        <div class="log-console" id="log-console"></div>
+      </section>
+    </main>
+
+    <script src="/assets/shader-background.js?v=home44"></script>
+    <script src="/assets/shared.js?v=home44"></script>
+    <script>
+      CR2Centro.injectNav("pub_repasses");
+      CR2Centro.pingApi();
+      CR2Centro.bindFileUpload({
+        zoneId: "upload-pasta",
+        inputId: "file-pasta",
+        targetFieldId: "pasta_base",
+        statusId: "upload-pasta-status",
+        accept: ".zip",
+        extractZip: true,
+      });
+      const fields = [
+        "usuario", "senha", "url_portal_repasse", "pasta_base",
+        "modo_teste", "auto_confirm", "headless",
+      ];
+      CR2Centro.bindRun("pub_repasses", "form-pub-repasses", fields, () => ({
+        usuario: document.getElementById("usuario").value.trim(),
+        senha: document.getElementById("senha").value,
+        url_portal_repasse: document.getElementById("url_portal_repasse").value.trim(),
+        pasta_base: document.getElementById("pasta_base").value.trim(),
+        modo_teste: document.getElementById("modo_teste").checked,
+        auto_confirm: document.getElementById("auto_confirm").checked,
+        headless: document.getElementById("headless").checked,
+      }), true);
+    </script>
+  </body>
+</html>

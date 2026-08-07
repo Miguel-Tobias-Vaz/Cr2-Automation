@@ -1,5 +1,6 @@
 (() => {
   const KEY = "opto-dic-est-ter-v1";
+  const JOB_KEY = "opto-dic-job-id";
   const API = "";
 
   const el = (id) => document.getElementById(id);
@@ -50,6 +51,7 @@
 
   let publishing = false;
   let es = null;
+  let queuePollTimer = null;
 
   const labelsFluxo = {
     estagiario: "Estagiários",
@@ -361,6 +363,44 @@
     );
   }
 
+  function rememberJobId(id) {
+    try {
+      if (id) sessionStorage.setItem(JOB_KEY, id);
+      else sessionStorage.removeItem(JOB_KEY);
+    } catch (_) {}
+  }
+
+  function stopQueuePoll() {
+    if (queuePollTimer) {
+      clearInterval(queuePollTimer);
+      queuePollTimer = null;
+    }
+  }
+
+  function pollQueueStatus(jobId) {
+    stopQueuePoll();
+    queuePollTimer = setInterval(async () => {
+      try {
+        const st = await api("/api/status");
+        if (st.global_job_id !== jobId && st.job_id !== jobId) return;
+        if (st.pending || st.status === "pending") {
+          const pos = (st.queue && st.queue.position) || "?";
+          setStatus(
+            "Na fila — posição " +
+              pos +
+              " (até 4 rodando ao mesmo tempo no painel)."
+          );
+          return;
+        }
+        stopQueuePoll();
+        if (st.running) {
+          setLogState("running");
+          setStatus("Publicação em andamento — acompanhe o log.");
+        }
+      } catch (_) {}
+    }, 3000);
+  }
+
   async function restoreSession() {
     try {
       const st = await api("/api/status");
@@ -374,13 +414,28 @@
       }
       if (st.progresso) renderDashboard(st.progresso);
 
-      if (st.running) {
+      if (st.global_job_id) rememberJobId(st.global_job_id);
+
+      if (st.pending || st.status === "pending") {
+        publishing = true;
+        el("btn-publicar").disabled = true;
+        setLogState("running");
+        const pos = (st.queue && st.queue.position) || "?";
+        setStatus(
+          "Na fila — posição " +
+            pos +
+            " (até 4 processos simultâneos no painel)."
+        );
+        ensureEventSource();
+        pollQueueStatus(st.global_job_id || st.job_id);
+      } else if (st.running) {
         publishing = true;
         el("btn-publicar").disabled = true;
         setLogState("running");
         setStatus(
           "Worker em andamento (pode fechar o navegador). Acompanhe o dashboard."
         );
+        ensureEventSource();
       } else if (st.resumo) {
         applyResumoPublicacao(st.resumo);
         const np = (st.resumo.nao_publicadas || []).length;
@@ -394,6 +449,7 @@
         } else if (logs.length) {
           setLogState("done");
         }
+        rememberJobId(null);
       }
       return true;
     } catch (_) {
@@ -570,15 +626,24 @@
   }
 
   async function api(path, opts) {
+    const headers = { "Content-Type": "application/json" };
+    if (window.OptoAutomacoes && OptoAutomacoes.authHeaders) {
+      Object.assign(headers, OptoAutomacoes.authHeaders());
+    }
     const res = await fetch(API + path, {
-      headers: { "Content-Type": "application/json" },
+      headers,
       ...opts,
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(data.erro || "Falha no servidor (" + res.status + ")");
+      const detail = data.detail;
+      const msg =
+        data.erro ||
+        (typeof detail === "string" ? detail : detail && detail.erro) ||
+        "Falha no servidor (" + res.status + ")";
+      const err = new Error(msg);
       err.status = res.status;
-      err.data = data;
+      err.data = typeof detail === "object" && detail ? detail : data;
       throw err;
     }
     return data;
@@ -747,25 +812,34 @@
     el("log").scrollIntoView({ behavior: "smooth" });
 
     try {
-      await api("/api/publicar", {
+      const resp = await api("/api/publicar", {
         method: "POST",
         body: JSON.stringify(data),
       });
+      const jobId = resp.job_id || resp.global_job_id;
+      if (jobId) rememberJobId(jobId);
+      if (resp.status === "pending") {
+        const q = resp.queue || {};
+        setStatus(
+          "Na fila — posição " +
+            (q.position || "?") +
+            " (" +
+            (q.running_slots ?? 0) +
+            "/" +
+            (q.max_slots || 4) +
+            " rodando)."
+        );
+        pollQueueStatus(jobId);
+      } else {
+        setStatus("Publicação iniciada — acompanhe o log.");
+      }
     } catch (e) {
       publishing = false;
       el("btn-publicar").disabled = false;
       setLogState("parado");
-      if (e.status === 409 || /andamento/i.test(e.message || "")) {
-        setStatus(
-          "Já há uma publicação em andamento. Use Cancelar fila e tente de novo.",
-          true
-        );
-        showErros([
-          {
-            text:
-              "Publicação travada ou ainda rodando. Clique em Cancelar fila (ou reinicie o servidor).",
-          },
-        ]);
+      if (e.status === 503) {
+        setStatus("Fila cheia — aguarde algum processo terminar.", true);
+        showErros([{ text: e.message }]);
       } else if (e.data && e.data.validacao) {
         renderValidacao(e.data.validacao);
         setStatus("Publicação bloqueada pela validação.", true);

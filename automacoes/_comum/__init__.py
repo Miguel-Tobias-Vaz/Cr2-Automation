@@ -7,6 +7,12 @@ import os
 
 from .ia_nome import nome_fraco, refinar_nome_documento
 from .ia_ollama import MODELO_PADRAO, OLLAMA_URL_PADRAO, ollama_disponivel
+from .ocr_multi import (
+    motores_disponiveis,
+    ocr_pdf,
+    obter_texto_de_bytes,
+    obter_texto_pdf,
+)
 
 
 def env_limpo(*nomes: str, padrao: str = "") -> str:
@@ -22,7 +28,11 @@ __all__ = [
     "MODELO_PADRAO",
     "OLLAMA_URL_PADRAO",
     "env_limpo",
+    "motores_disponiveis",
     "nome_fraco",
+    "ocr_pdf",
+    "obter_texto_de_bytes",
+    "obter_texto_pdf",
     "ollama_disponivel",
     "refinar_nome_documento",
 ]

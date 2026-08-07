@@ -23,6 +23,16 @@ _RE_CONTRATO = re.compile(
     r")(?:$|[\s_\-.)\d])",
     re.I,
 )
+# Portaria de designação / nomeação de fiscal (ou gestor) do contrato.
+_RE_PORTARIA_FISCAL = re.compile(
+    r"portaria.{0,40}(?:fiscal|gestor)|"
+    r"(?:fiscal|gestor).{0,40}portaria|"
+    r"designa(?:cao|ção)?\s+(?:d[oe]\s+)?fiscal|"
+    r"nomea(?:cao|ção)?\s+(?:d[oe]\s+)?fiscal|"
+    r"fiscal\s+d[oe]\s+contrato|"
+    r"portaria.*designa",
+    re.I,
+)
 
 
 def eh_arquivo_contrato(nome: str) -> bool:
@@ -35,6 +45,21 @@ def eh_arquivo_contrato(nome: str) -> bool:
     if re.search(r"minuta|contrato\s*social|modelo\s+de\s+contrato", base, re.I):
         return False
     return bool(_RE_CONTRATO.search(base))
+
+
+def eh_arquivo_portaria_fiscal(nome: str) -> bool:
+    """True se o nome parece portaria de fiscal/gestor do contrato."""
+    base = os.path.splitext(os.path.basename(nome or ""))[0]
+    if not base:
+        return False
+    if _RE_ADITIVO.search(base):
+        return False
+    return bool(_RE_PORTARIA_FISCAL.search(base))
+
+
+def eh_arquivo_relevante_contrato(nome: str) -> bool:
+    """Contrato assinado/extrato ou portaria de fiscal — o que entra na extração."""
+    return eh_arquivo_contrato(nome) or eh_arquivo_portaria_fiscal(nome)
 
 
 def nome_pasta_contrato(lf: dict[str, Any]) -> str:
@@ -83,7 +108,7 @@ def separar_contratos_da_pasta(
     lf: dict[str, Any],
 ) -> list[str]:
     """
-    Move arquivos de contrato de pasta_licitacao para:
+    Move arquivos de contrato e portaria de fiscal de pasta_licitacao para:
         <pasta_saida>/Contratos/<003-2025-RPPE>/
 
     Retorna lista de caminhos de destino (vazia se nada movido).
@@ -106,7 +131,7 @@ def separar_contratos_da_pasta(
         origem = os.path.join(pasta_licitacao, nome)
         if not os.path.isfile(origem):
             continue
-        if not eh_arquivo_contrato(nome):
+        if not eh_arquivo_relevante_contrato(nome):
             continue
         destino = _destino_livre(dest_dir, nome)
         try:

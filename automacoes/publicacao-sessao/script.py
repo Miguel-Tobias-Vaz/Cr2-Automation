@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import argparse
+import calendar
 import csv
 import os
 import re
@@ -31,6 +32,7 @@ import sys
 import time
 import unicodedata
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 try:
@@ -76,6 +78,11 @@ PASTA_SESSOES = Path(r"C:\Users\tobia\Documents\mds\missao_baixar_sessao\sessoes
 # Preenchido pelo painel para 1 sessao avulsa (dict). None = usa pasta/CSV.
 REGISTRO_UNICO = None
 
+# IA local (Ollama) para Declaracao: ler o PDF e achar o mes de referencia
+REFINAR_IA_DECLARACAO = True
+MODELO_IA = "llama3.2:3b"
+OLLAMA_URL = "http://127.0.0.1:11434"
+
 OPERA_EXE = None
 PASTA_SCREENSHOTS = Path(__file__).resolve().parent / "screenshots_pub"
 
@@ -84,9 +91,13 @@ PAUSA_POLL_UPLOAD_UI = 0.24
 MAX_TENTATIVAS_POLL_UPLOAD = 18
 PAUSA_APOS_CONFIRMAR_UPLOAD = 0.7
 TIMEOUT_PUBLICAR_HABILITADO_S = 75
-TIMEOUT_RESULTADO_PUBLICACAO_S = 55
+# Max espera por feedback; se o modal nao fechar, segue sem marcar erro
+TIMEOUT_RESULTADO_PUBLICACAO_S = 18
 TIMEOUT_LOADER_TOPO_S = 120
-PAUSA_APOS_CLICAR_PUBLICAR = 1.5
+# Pausa curta so para a UI assentar apos clicar Publicar
+PAUSA_APOS_CLICAR_PUBLICAR = 0.35
+# Entre uma sessao e a proxima (apos concluir a atual)
+PAUSA_ENTRE_SESSOES = 2.0
 
 # Portal: botão "Criar Publicação" → modal "Cadastrar Sessão"
 MODAL_TITULO_REGEX = r"(Criar|Cadastrar).*Sess[aã]o"
@@ -121,13 +132,32 @@ UPLOADS = (
     ),
 )
 
+# Modal de Declaracao: um unico campo "Arquivo" (sem Pauta/Ata/Numero)
+UPLOADS_DECLARACAO = (("arquivo", ("Arquivo", "Documento", "Anexar")),)
+
 _TEXTO_ERRO_APOS_PUBLICAR_RX = re.compile(
-    r"(erro|falha|inv[aá]lid|obrigat[oó]rio|n[aã]o\s+foi\s+poss[ií]vel|"
-    r"tente\s+novamente|j[aá]\s+existe|duplicad|\bduplicat)",
+    r"(?:\berro\b|\bfalha\b|inv[aá]lid|obrigat[oó]rio|"
+    r"n[aã]o\s+foi\s+poss[ií]vel|tente\s+novamente|"
+    r"j[aá]\s+existe|duplicad|\bduplicat)",
     re.I,
 )
+# Evita falso positivo em labels do form ("Cadastrar Sessão", "Não houve publicações")
 _TEXTO_SUCESSO_MODAL_RX = re.compile(
-    r"(publicad|salvo\s+com\s+sucesso|cadastrad|registrad|enviad\s+com\s+sucesso)",
+    r"(publicado\s+com\s+sucesso|publicada\s+com\s+sucesso|"
+    r"salvo\s+com\s+sucesso|salva\s+com\s+sucesso|"
+    r"cadastrado\s+com\s+sucesso|cadastrada\s+com\s+sucesso|"
+    r"registrado\s+com\s+sucesso|enviado\s+com\s+sucesso|"
+    r"sess[aã]o\s+(?:publicada|cadastrada|salva)|"
+    r"(?:opera[cç][aã]o|registro)\s+realizad[ao]\s+com\s+sucesso|"
+    r"\bsucesso\b)",
+    re.I,
+)
+# Labels fixos do formulário — não contam como mensagem de erro
+_TEXTO_LABEL_FORM_RX = re.compile(
+    r"n[aã]o\s+houve\s+publica|"
+    r"declara[cç][aã]o:\s*n[aã]o\s+houve\s+sess|"
+    r"cadastrar\s+sess|"
+    r"criar\s+publica",
     re.I,
 )
 
@@ -344,6 +374,215 @@ _TIPOS_PUB = (
 
 _TIPOS_SEM_SESSAO = frozenset({"Audiência Pública", "Tribuna Popular"})
 _TIPO_DECLARACAO = "Declaração: não houve sessão"
+
+_MESES_NOME = {
+    "janeiro": 1,
+    "fevereiro": 2,
+    "marco": 3,
+    "março": 3,
+    "abril": 4,
+    "maio": 5,
+    "junho": 6,
+    "julho": 7,
+    "agosto": 8,
+    "setembro": 9,
+    "outubro": 10,
+    "novembro": 11,
+    "dezembro": 12,
+    "jan": 1,
+    "fev": 2,
+    "mar": 3,
+    "abr": 4,
+    "mai": 5,
+    "jun": 6,
+    "jul": 7,
+    "ago": 8,
+    "set": 9,
+    "out": 10,
+    "nov": 11,
+    "dez": 12,
+}
+
+
+def _eh_declaracao(item: dict | None = None, tipo: str = "") -> bool:
+    t = tipo or ((item or {}).get("tipo") or "")
+    return normalizar(t).startswith("declaracao") or t == _TIPO_DECLARACAO
+
+
+def ultimo_dia_mes(mes: int, ano: int) -> str:
+    """Retorna DD/MM/AAAA no ultimo dia do mes (ex.: 31/01/2026)."""
+    mes = int(mes)
+    ano = int(ano)
+    if mes < 1 or mes > 12 or ano < 1900:
+        raise ValueError("Mes/ano invalidos: {}/{}".format(mes, ano))
+    dia = calendar.monthrange(ano, mes)[1]
+    return "{:02d}/{:02d}/{}".format(dia, mes, ano)
+
+
+def _ler_texto_pdf_declaracao(caminho: Path, max_paginas: int = 4) -> str:
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(str(caminho)) as pdf:
+            pages = pdf.pages[: max(1, max_paginas)]
+            return "\n".join((p.extract_text() or "") for p in pages)
+    except Exception as e:
+        print("    [AVISO] Nao li o PDF ({}): {}".format(caminho.name, str(e)[:80]))
+        return ""
+
+
+def _mes_ano_por_heuristica(texto: str, nome_arquivo: str = "") -> tuple[int, int] | None:
+    """Tenta achar mes/ano de competencia no nome ou no texto (nao so data de assinatura)."""
+    fontes = [nome_arquivo or "", texto or ""]
+
+    # Prioridade: "referente a janeiro de 2026", "mes de janeiro/2026", "competencia 01/2026"
+    padroes = [
+        re.compile(
+            r"(?:referente\s+a[o]?\s+|compet[eê]ncia\s+(?:de\s+)?|m[eê]s\s+de\s+|"
+            r"relativa\s+a[o]?\s+|no\s+m[eê]s\s+de\s+|do\s+m[eê]s\s+de\s+)"
+            r"(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|"
+            r"setembro|outubro|novembro|dezembro)"
+            r"\s*(?:de\s+|/\s*|-\s*)?((?:20|19)\d{2})",
+            re.I,
+        ),
+        re.compile(
+            r"(?:compet[eê]ncia|refer[eê]ncia|per[ií]odo)\s*[:\-]?\s*"
+            r"(0?[1-9]|1[0-2])\s*[/\-.]\s*((?:20|19)\d{2})",
+            re.I,
+        ),
+        re.compile(
+            r"\b(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|"
+            r"setembro|outubro|novembro|dezembro)"
+            r"[\s/\-_]+((?:20|19)\d{2})\b",
+            re.I,
+        ),
+        re.compile(
+            r"\b(0?[1-9]|1[0-2])[\s/\-_]((?:20|19)\d{2})\b"
+        ),
+    ]
+    for fonte in fontes:
+        if not fonte:
+            continue
+        for rx in padroes:
+            m = rx.search(fonte)
+            if not m:
+                continue
+            g1, g2 = m.group(1), m.group(2)
+            if g1.isdigit():
+                mes, ano = int(g1), int(g2)
+            else:
+                mes = _MESES_NOME.get(normalizar(g1), 0)
+                ano = int(g2)
+            if 1 <= mes <= 12 and 1990 <= ano <= 2100:
+                return mes, ano
+    return None
+
+
+def _mes_ano_por_ia(texto: str, nome_arquivo: str = "") -> tuple[int, int] | None:
+    """Pede ao Ollama o mes/ano a que a declaracao SE REFERE (nao a data de assinatura)."""
+    if not (texto or "").strip():
+        return None
+    try:
+        auto = Path(__file__).resolve().parent.parent
+        if str(auto) not in sys.path:
+            sys.path.insert(0, str(auto))
+        from _comum.ia_ollama import chamar_json
+    except Exception as e:
+        print("    [AVISO] IA indisponivel: {}".format(str(e)[:100]))
+        return None
+
+    trecho = re.sub(r"\s+", " ", (texto or "").strip())[:3500]
+    prompt = (
+        "Voce analisa uma DECLARACAO de que NAO HOUVE SESSAO legislativa.\n"
+        "Objetivo: descobrir o MES e ANO de COMPETENCIA (o periodo a que o documento "
+        "se refere), NAO a data de assinatura (que pode ser de outro mes).\n"
+        "Arquivo: {nome}\n"
+        "Texto do PDF:\n{txt}\n\n"
+        "Responda APENAS JSON: {{\"mes\": <1-12>, \"ano\": <AAAA>, "
+        "\"confianca\": <0a1>, \"motivo\": \"...\"}}\n"
+        "Se nao souber, use mes=0 e ano=0."
+    ).format(nome=nome_arquivo or "declaracao.pdf", txt=trecho)
+
+    try:
+        dados = chamar_json(
+            prompt,
+            modelo=MODELO_IA,
+            base_url=OLLAMA_URL,
+            temperatura=0.05,
+            timeout=120,
+        )
+        mes = int(dados.get("mes") or 0)
+        ano = int(dados.get("ano") or 0)
+        conf = float(dados.get("confianca") or 0)
+        motivo = str(dados.get("motivo") or "")[:120]
+        print(
+            "    IA declaracao: mes={}/{} conf={:.2f} ({})".format(
+                mes, ano, conf, motivo
+            )
+        )
+        if 1 <= mes <= 12 and 1990 <= ano <= 2100 and conf >= 0.35:
+            return mes, ano
+    except Exception as e:
+        print("    [AVISO] IA nao resolveu o mes: {}".format(str(e)[:120]))
+    return None
+
+
+def resolver_data_declaracao(item: dict) -> str:
+    """
+    Data do portal para Declaracao = ultimo dia do mes de competencia.
+    Usa texto do PDF + IA (se ligada); fallback: nome do arquivo / data ja existente.
+    """
+    pdf = _caminho_arquivo(item.get("arquivo") or item.get("pauta") or "")
+    texto = ""
+    nome = ""
+    if pdf is not None:
+        nome = pdf.name
+        texto = _ler_texto_pdf_declaracao(pdf)
+
+    mes_ano = None
+    if REFINAR_IA_DECLARACAO:
+        print("    Lendo PDF com IA para achar o mes de referencia...")
+        mes_ano = _mes_ano_por_ia(texto, nome)
+    if mes_ano is None:
+        mes_ano = _mes_ano_por_heuristica(texto, nome)
+    if mes_ano is None:
+        # data ja preenchida (ex.: planilha) — usa so mes/ano, forca ultimo dia
+        m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", (item.get("data") or "").strip())
+        if m:
+            mes_ano = (int(m.group(2)), int(m.group(3)))
+    if mes_ano is None:
+        raise ValueError(
+            "Nao consegui descobrir o mes/ano da declaracao "
+            "({}). Ajuste o nome do PDF (ex.: Declaracao-Janeiro-2026.pdf) "
+            "ou ligue o Ollama.".format(nome or "sem arquivo")
+        )
+
+    data = ultimo_dia_mes(mes_ano[0], mes_ano[1])
+    print(
+        "    Declaracao → competencia {:02d}/{} → data portal {}".format(
+            mes_ano[0], mes_ano[1], data
+        )
+    )
+    return data
+
+
+def preparar_item_declaracao(item: dict) -> dict:
+    """Ajusta campos para o modal de Declaracao (Arquivo + Data ultimo dia)."""
+    item = dict(item)
+    item["tipo"] = _TIPO_DECLARACAO
+    item["nao_houve_publicacoes"] = "sim"
+    # PDF fica em arquivo (campo do modal); mantem pauta como alias
+    pdf = item.get("arquivo") or item.get("pauta") or ""
+    if pdf:
+        item["arquivo"] = pdf
+        item["pauta"] = pdf
+    item["numero"] = ""  # campo Numero nao existe neste modal
+    item["ata"] = ""
+    item["presenca"] = ""
+    item["votacoes_arquivo"] = ""
+    item["votacoes_link"] = ""
+    item["data"] = resolver_data_declaracao(item)
+    return item
 
 
 def _normalizar_tipo_select(tipo: str) -> str:
@@ -626,15 +865,19 @@ def _itens_declaracoes(root: Path) -> list:
                 continue
             pdf = p / f
             item = _registro_vazio()
-            meta = parse_nome_pasta_sessao(pdf.stem)
-            item["data"] = meta.get("data") or ""
+            # Heuristica leve pelo nome (IA refine na hora de publicar)
+            mes_ano = _mes_ano_por_heuristica("", pdf.stem)
+            if mes_ano:
+                try:
+                    item["data"] = ultimo_dia_mes(mes_ano[0], mes_ano[1])
+                except ValueError:
+                    item["data"] = ""
             item["tipo"] = _TIPO_DECLARACAO
-            item["numero"] = meta.get("numero") or pdf.stem
-            if "declar" in normalizar(item["numero"]):
-                item["numero"] = pdf.stem
+            item["numero"] = ""
             item["nao_houve_publicacoes"] = "sim"
             item["pasta"] = str(p)
-            item["pauta"] = str(pdf)
+            item["arquivo"] = str(pdf)
+            item["pauta"] = str(pdf)  # alias legado
             itens.append(item)
     return itens
 
@@ -1629,6 +1872,11 @@ def _mapear_inputs_file_por_rotulo(page, modal_root) -> dict[str, Any]:
                             (txt.indexOf('votacoes nominais') >= 0 &&
                              txt.indexOf('link') < 0 && txt.length < 80))
                             return 'votacoes_arquivo';
+                        // Declaracao: rotulo "Arquivo" / area "Clique aqui para subir"
+                        if ((txt.indexOf('arquivo') >= 0 && txt.indexOf('votac') < 0) ||
+                            txt.indexOf('clique aqui para subir') >= 0 ||
+                            txt.indexOf('tamanho maximo') >= 0)
+                            return 'arquivo';
                         n = n.parentElement;
                     }
                     // texto imediatamente anterior no DOM
@@ -1637,6 +1885,7 @@ def _mapear_inputs_file_por_rotulo(page, modal_root) -> dict[str, Any]:
                         var t2 = norm(prev.innerText || prev.textContent || '');
                         if (t2 === 'pauta' || t2.indexOf('pauta') === 0) return 'pauta';
                         if (t2 === 'ata') return 'ata';
+                        if (t2 === 'arquivo' || t2.indexOf('arquivo') === 0) return 'arquivo';
                         if (t2.indexOf('lista de presenca') >= 0) return 'presenca';
                         if (t2.indexOf('votacoes nominais') >= 0 && t2.indexOf('link') < 0)
                             return 'votacoes_arquivo';
@@ -1651,7 +1900,12 @@ def _mapear_inputs_file_por_rotulo(page, modal_root) -> dict[str, Any]:
                     out.push({ idx: idx, key: rotuloDe(inp) });
                 });
                 // Se algum ficou sem key, preenche na ordem Pauta/Ata/Presenca/Votacoes
-                var ordem = ['pauta', 'ata', 'presenca', 'votacoes_arquivo'];
+                // (Declaracao com 1 input sem rotulo → 'arquivo')
+                var ordem = ['pauta', 'ata', 'presenca', 'votacoes_arquivo', 'arquivo'];
+                if (files.length === 1 && !out[0].key) {
+                    out[0].key = 'arquivo';
+                    return out;
+                }
                 var usados = {};
                 out.forEach(function (o) { if (o.key) usados[o.key] = true; });
                 out.forEach(function (o) {
@@ -1701,6 +1955,9 @@ def _input_file_por_rotulo(scope, page, labels, mapa_cache: dict | None = None):
         "votações nominais (arquivo)": "votacoes_arquivo",
         "votacoes nominais": "votacoes_arquivo",
         "votações nominais": "votacoes_arquivo",
+        "arquivo": "arquivo",
+        "documento": "arquivo",
+        "anexar": "arquivo",
     }
     mapa = mapa_cache if mapa_cache is not None else {}
     for lb in labels:
@@ -1754,19 +2011,28 @@ def fazer_upload_por_rotulo(page, modal_root, labels, caminho, mapa_cache=None):
         mapa_cache = _mapear_inputs_file_por_rotulo(page, modal_root)
 
     alvo = _input_file_por_rotulo(scope, page, labels, mapa_cache=mapa_cache)
+    if alvo is None and "arquivo" in mapa_cache:
+        alvo = mapa_cache["arquivo"]
     if alvo is None:
-        ordem = [u[0] for u in UPLOADS]
+        ordem = [u[0] for u in UPLOADS] + ["arquivo"]
         key = None
-        for k, lbs in UPLOADS:
+        for k, lbs in list(UPLOADS) + list(UPLOADS_DECLARACAO):
             if labels[0] in lbs or any(normalizar(labels[0]) == normalizar(x) for x in lbs):
                 key = k
                 break
         idx = ordem.index(key) if key in ordem else -1
-        if idx >= 0:
+        if idx >= 0 and key != "arquivo":
             try:
                 alvo = scope.locator("input[type=file]").nth(idx)
                 alvo.wait_for(state="attached", timeout=3000)
                 print("    Upload '{}' via indice {}".format(labels[0], idx))
+            except Exception:
+                alvo = None
+        elif key == "arquivo" or normalizar(labels[0]) in ("arquivo", "documento"):
+            try:
+                alvo = scope.locator("input[type=file]").first
+                alvo.wait_for(state="attached", timeout=3000)
+                print("    Upload '{}' via primeiro input".format(labels[0]))
             except Exception:
                 alvo = None
 
@@ -1815,33 +2081,39 @@ def _preencher_link_votacoes(page, modal_root, link):
 
 def preencher_modal_sessao(page, item):
     """
-    Preenche só o que existe na linha:
-      Tipo + Data + Número (obrigatórios)
-      uploads apenas se houver arquivo
-      link só se houver URL
-      checkbox 'Não houve' só se marcado
-    Depois → Publicar (sem ficar batendo em campos vazios).
+    Preenche o modal conforme o tipo:
+      - Sessao normal: Tipo + Data + Numero + Pauta/Ata/...
+      - Declaracao: Tipo + checkbox + Data (ultimo dia do mes) + Arquivo
+        (sem campo Numero / sem Pauta)
     """
     modal_root = _modal_bubble_sessao(page)
-    nao_houve = _truthy_flag(item.get("nao_houve_publicacoes"))
+    eh_decl = _eh_declaracao(item)
+
+    if eh_decl:
+        item = preparar_item_declaracao(item)
 
     _preencher_tipo(page, modal_root, item.get("tipo", ""))
-    time.sleep(0.12)
+    time.sleep(0.35)
+    # Apos trocar o Tipo, o Bubble remonta o formulario
+    modal_root = _modal_bubble_sessao(page)
 
-    if nao_houve:
+    if eh_decl or _truthy_flag(item.get("nao_houve_publicacoes")):
         _marcar_nao_houve_publicacoes(page, modal_root, True)
-        time.sleep(0.06)
+        time.sleep(0.15)
+        modal_root = _modal_bubble_sessao(page)
 
     _preencher_data(page, modal_root, item.get("data", ""))
     time.sleep(0.06)
-    _preencher_numero(page, modal_root, item.get("numero", ""))
-    time.sleep(0.06)
 
-    # Só os anexos que existem nesta sessão
+    if not eh_decl:
+        _preencher_numero(page, modal_root, item.get("numero", ""))
+        time.sleep(0.06)
+
     uploads_pendentes = []
-    if nao_houve:
-        if _caminho_arquivo(item.get("pauta")):
-            uploads_pendentes.append(("pauta", ("Pauta",), item.get("pauta")))
+    if eh_decl:
+        caminho_arq = item.get("arquivo") or item.get("pauta")
+        if _caminho_arquivo(caminho_arq):
+            uploads_pendentes.append(("arquivo", ("Arquivo", "Documento"), caminho_arq))
     else:
         for key, labels in UPLOADS:
             if _caminho_arquivo(item.get(key)):
@@ -1855,28 +2127,156 @@ def preencher_modal_sessao(page, item):
             )
         )
         for _key, labels, caminho in uploads_pendentes:
-            fazer_upload_por_rotulo(
+            ok_up = fazer_upload_por_rotulo(
                 page, modal_root, labels, caminho, mapa_cache=mapa_files
             )
+            # Declaracao: se nao achou rotulo, tenta o unico input file do modal
+            if not ok_up and eh_decl:
+                ok_up = _upload_unico_arquivo_modal(page, modal_root, caminho)
             time.sleep(0.06)
     else:
         print("    Nenhum anexo nesta linha — seguindo para Publicar.")
 
-    if (item.get("votacoes_link") or "").strip():
+    if not eh_decl and (item.get("votacoes_link") or "").strip():
         _preencher_link_votacoes(page, modal_root, item.get("votacoes_link", ""))
 
-    # Nao dar Tab (foca Presença/Transmissão) — ir direto ao Publicar
     _restaurar_inputs_file(page)
     time.sleep(0.1)
     return modal_root
 
 
-def aguardar_resultado_apos_publicar(page, modal_root):
-    """Igual ao RGF: some o título do modal ou aparece sucesso/erro."""
+def _upload_unico_arquivo_modal(page, modal_root, caminho) -> bool:
+    """Fallback da Declaracao: sobe no unico input[type=file] visivel."""
+    path = _caminho_arquivo(caminho)
+    if path is None:
+        return False
+    scope = modal_root if modal_root is not None else page
+    try:
+        files = scope.locator("input[type=file]")
+        n = files.count()
+        if n < 1:
+            print("    [AVISO] Nenhum input file no modal de Declaracao.")
+            return False
+        alvo = files.first
+        alvo.wait_for(state="attached", timeout=3000)
+        _revelar_input_file(page, alvo)
+        time.sleep(0.05)
+        alvo.set_input_files(str(path))
+        time.sleep(PAUSA_APOS_ANEXAR)
+        print("    Upload Arquivo (unico input): {}".format(path.name))
+        _aguardar_confirmacao_upload(page, modal_root, path)
+        _restaurar_inputs_file(page)
+        return True
+    except Exception as e:
+        _restaurar_inputs_file(page)
+        print("    [Upload] Falhou Arquivo: {}".format(str(e)[:80]))
+        return False
+
+
+def _ler_valores_form_sessao(page, modal_root):
+    """Snapshot leve dos campos Data/Número para detectar reset apos Publicar."""
+    escopos = []
+    if modal_root is not None:
+        escopos.append(modal_root)
+    escopos.append(page)
+    data_v = num_v = ""
+    for esc in escopos:
+        if data_v and num_v:
+            break
+        for labels, destino in (
+            (LABELS_DATA, "data"),
+            (LABELS_NUMERO, "numero"),
+        ):
+            if destino == "data" and data_v:
+                continue
+            if destino == "numero" and num_v:
+                continue
+            for lab in labels:
+                try:
+                    loc = esc.get_by_label(re.compile(re.escape(lab), re.I)).first
+                    if not loc.is_visible(timeout=200):
+                        continue
+                    val = (loc.input_value(timeout=400) or "").strip()
+                    if destino == "data":
+                        data_v = val
+                    else:
+                        num_v = val
+                    break
+                except Exception:
+                    continue
+    return data_v, num_v
+
+
+def _parece_erro_real(texto: str) -> bool:
+    """True só se houver padrao de erro fora dos labels do formulario."""
+    if not texto:
+        return False
+    # Remove pedacos que sao so labels do form Bubble
+    limpo = _TEXTO_LABEL_FORM_RX.sub(" ", texto)
+    return bool(_TEXTO_ERRO_APOS_PUBLICAR_RX.search(limpo))
+
+
+def _toast_sucesso_na_pagina(page) -> bool:
+    """Alguns temas Bubble mostram alerta/toast fora do modal."""
+    try:
+        body = page.locator("body").inner_text(timeout=1200) or ""
+    except Exception:
+        return False
+    # Preferir trechos curtos no topo (toast), nao o form inteiro
+    trecho = body[:2500]
+    if _TEXTO_SUCESSO_MODAL_RX.search(trecho):
+        # Evitar casar so com titulo "Cadastrar..."
+        if re.search(r"cadastrar\s+sess", trecho, re.I) and not re.search(
+            r"sucesso|publicad[ao]\s+com|salvo\s+com", trecho, re.I
+        ):
+            return False
+        return True
+    return False
+
+
+def aguardar_resultado_apos_publicar(page, modal_root, snapshot_antes=None):
+    """
+    Confirma Publicar. No portal de Sessao o Bubble as vezes:
+      - fecha o modal (ok)
+      - mostra toast de sucesso (ok)
+      - deixa o modal aberto e limpa os campos (ok — publicou)
+      - deixa o modal igual, sem mensagem (ainda publicou; nao travar a fila)
+    """
     titulo_loc = _loc_modal_titulo(page)
     fim = time.monotonic() + TIMEOUT_RESULTADO_PUBLICACAO_S
     ultimo = ""
+    data_antes, num_antes = snapshot_antes or ("", "")
+    viu_loader = False
+    estabilizou_sem_loader_desde = None
+
     while time.monotonic() < fim:
+        # Barra de progresso do Bubble = ainda processando
+        try:
+            loader_ativo = page.evaluate(
+                """
+                () => {
+                    function ativa(el) {
+                        if (!el) return false;
+                        var s = window.getComputedStyle(el);
+                        if (s.display === 'none' || parseFloat(s.opacity) < 0.08) return false;
+                        var r = el.getBoundingClientRect();
+                        return r.width > 12 && r.height > 0;
+                    }
+                    return !!(ativa(document.querySelector('#nprogress .bar'))
+                        || ativa(document.querySelector('.turbo-progress-bar')));
+                }
+                """
+            )
+        except Exception:
+            loader_ativo = False
+        if loader_ativo:
+            viu_loader = True
+            estabilizou_sem_loader_desde = None
+            time.sleep(0.2)
+            continue
+        if viu_loader and estabilizou_sem_loader_desde is None:
+            estabilizou_sem_loader_desde = time.monotonic()
+
         try:
             visivel = titulo_loc.is_visible(timeout=400)
         except Exception:
@@ -1888,7 +2288,7 @@ def aguardar_resultado_apos_publicar(page, modal_root):
                     continue
             except Exception:
                 pass
-            print("    Modal fechou — assumindo publicacao aceita pelo Bubble.")
+            print("    Modal fechou — publicacao aceita.")
             return
 
         try:
@@ -1899,29 +2299,61 @@ def aguardar_resultado_apos_publicar(page, modal_root):
         except Exception:
             ultimo = ""
 
-        if _TEXTO_ERRO_APOS_PUBLICAR_RX.search(ultimo or ""):
+        if _parece_erro_real(ultimo or ""):
             raise RuntimeError(
                 "Resposta no modal apos Publicar: {}".format(
                     (ultimo or "").replace("\n", " ").strip()[:260]
                 )
             )
-        if _TEXTO_SUCESSO_MODAL_RX.search(ultimo or ""):
-            print("    Mensagem de sucesso detectada no modal.")
+        if _TEXTO_SUCESSO_MODAL_RX.search(ultimo or "") or _toast_sucesso_na_pagina(page):
+            print("    Mensagem de sucesso detectada.")
             return
+
+        # Form resetado (Data/Numero limpos) com modal ainda aberto = publicou
+        if data_antes or num_antes:
+            data_agora, num_agora = _ler_valores_form_sessao(page, modal_root)
+            limpou_data = bool(data_antes) and not data_agora
+            limpou_num = bool(num_antes) and not num_agora
+            if limpou_data or limpou_num:
+                print("    Formulario limpo apos Publicar — publicacao aceita.")
+                return
+
+        # Loader ja passou e passaram ~4s sem erro → Bubble costuma ter gravado
+        if (
+            viu_loader
+            and estabilizou_sem_loader_desde is not None
+            and (time.monotonic() - estabilizou_sem_loader_desde) >= 4.0
+        ):
+            print(
+                "    Sem mensagem no modal, mas o envio terminou — "
+                "assumindo publicacao OK (portal de Sessao)."
+            )
+            return
+
         time.sleep(0.42)
 
-    raise TimeoutError(
-        "Sem confirmacao apos Publicar ({}s). Ultimo texto: {}".format(
-            TIMEOUT_RESULTADO_PUBLICACAO_S,
-            (ultimo or "").replace("\n", " ").strip()[:200],
+    # Timeout: se nao houve erro claro, nao derruba a fila (publicacao costuma ter ido)
+    if _parece_erro_real(ultimo or ""):
+        raise TimeoutError(
+            "Sem confirmacao apos Publicar ({}s). Ultimo texto: {}".format(
+                TIMEOUT_RESULTADO_PUBLICACAO_S,
+                (ultimo or "").replace("\n", " ").strip()[:200],
+            )
+        )
+    print(
+        "    [AVISO] Modal ainda aberto apos {}s sem erro visivel — "
+        "seguindo (confira no portal se a sessao entrou).".format(
+            TIMEOUT_RESULTADO_PUBLICACAO_S
         )
     )
+    return
 
 
 def clicar_publicar(page):
     _restaurar_inputs_file(page)
     time.sleep(0.12)
     modal_root = _modal_bubble_sessao(page)
+    snapshot = _ler_valores_form_sessao(page, modal_root)
     if modal_root is not None:
         btn = modal_root.locator("button:has-text('Publicar')").first
     else:
@@ -1956,7 +2388,7 @@ def clicar_publicar(page):
         btn.click(force=True, timeout=15000)
     print("    Clicou em Publicar.")
     time.sleep(0.25)
-    aguardar_resultado_apos_publicar(page, modal_root)
+    aguardar_resultado_apos_publicar(page, modal_root, snapshot_antes=snapshot)
     time.sleep(PAUSA_APOS_CLICAR_PUBLICAR)
 
 
@@ -1970,9 +2402,7 @@ def publicar_um(page, item, idx, total):
     )
     abrir_modal(page)
     preencher_modal_sessao(page, item)
-    salvar_screenshot(page, "sessao_antes_{}_{}".format(idx, normalizar(rotulo)[:40]))
     clicar_publicar(page)
-    salvar_screenshot(page, "sessao_apos_{}_{}".format(idx, normalizar(rotulo)[:40]))
     try:
         if _loc_modal_titulo(page).is_visible():
             fechar_modal(page)
@@ -1982,7 +2412,6 @@ def publicar_um(page, item, idx, total):
         except Exception:
             pass
     print("    [OK] Concluido.")
-    time.sleep(0.14)
 
 
 # ---------------------------------------------------------------------
@@ -2037,7 +2466,7 @@ def main(argv=None):
     print("  Total: {}".format(len(fila)))
     print("  Pasta: {}".format(PASTA_SESSOES))
     print("  URL: {}".format(URL_PORTAL_SESSAO))
-    print("  Ritmo: Criar Publicação → Cadastrar Sessão → Publicar")
+    print("  Ritmo: apos cada sessao, {}s e abre a proxima".format(PAUSA_ENTRE_SESSOES))
     print("=" * 60)
 
     pw = browser = page = None
@@ -2049,6 +2478,11 @@ def main(argv=None):
             try:
                 publicar_um(page, item, i, len(fila))
                 ok += 1
+                if i < len(fila):
+                    print(
+                        "    Proxima sessao em {:.0f}s...".format(PAUSA_ENTRE_SESSOES)
+                    )
+                    time.sleep(PAUSA_ENTRE_SESSOES)
             except Cancelado:
                 raise
             except Exception as e:
@@ -2059,6 +2493,8 @@ def main(argv=None):
                     fechar_modal(page)
                 except Exception:
                     pass
+                if i < len(fila):
+                    time.sleep(PAUSA_ENTRE_SESSOES)
     finally:
         if browser:
             try:

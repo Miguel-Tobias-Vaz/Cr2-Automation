@@ -1,0 +1,19 @@
+{
+  "numero": "002/2023",
+  "ano": "2023",
+  "objeto": "Material de expediente, gêneros alimentícios, material de limpeza e higienização, material descartável, utensílios de cozinha e material de informática",
+  "situacao": "Finalizado",
+  "valor_estimado": "447303.12",
+  "valor_homologado": "",
+  "confianca": "baixa",
+  "trecho_numero": "",
+  "trecho_objeto": "",
+  "motivo_situacao": "",
+  "observacao": "",
+  "mudancas": [],
+  "cache": false,
+  "origem": "ia_local",
+  "provedor": "ollama",
+  "modelo": "llama3.2:3b",
+  "chave_cache": "3281af98b7590dad1eb5b68a"
+}

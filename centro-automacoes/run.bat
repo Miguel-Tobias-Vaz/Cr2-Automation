@@ -1,8 +1,17 @@
 @echo off
+if /i not "%~1"=="KEEP" (
+  start "Opto Automacoes - painel" cmd /k call "%~f0" KEEP
+  exit /b 0
+)
+
 chcp 65001 >nul
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 title Opto Automacoes - painel
+
+for %%I in ("%~dp0..") do set "ROOT=%%~fI"
+set "LOG=%ROOT%\iniciar-log.txt"
+echo ---- run.bat %DATE% %TIME% ---->>"%LOG%"
 
 if not exist "front\brand-icon.png" (
   if exist "icon.png" (
@@ -58,9 +67,26 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8765.*LISTENING"') do (
 if errorlevel 1 (
   color 0C
   echo.
-  echo  [ERRO] Instalacao incompleta.
+  echo  [ERRO] Instalacao incompleta ^(falta uvicorn^).
   echo  Clique de novo em COMECE_AQUI.bat
   echo  Se falhar, envie instalacao-log.txt
+  echo.
+  echo [ERRO] uvicorn ausente>>"%LOG%"
+  pause
+  exit /b 1
+)
+
+echo Testando import do painel...
+"%VPY%" -c "import backend.main" 2>"%TEMP%\opto-import-err.txt"
+if errorlevel 1 (
+  color 0C
+  echo.
+  echo  [ERRO] O painel nao conseguiu iniciar ^(erro ao importar^).
+  echo.
+  type "%TEMP%\opto-import-err.txt"
+  type "%TEMP%\opto-import-err.txt">>"%LOG%"
+  echo.
+  echo  Rode DIAGNOSTICO.bat na pasta do COMECE_AQUI e envie diagnostico-log.txt
   echo.
   pause
   exit /b 1
@@ -81,10 +107,21 @@ echo   Para PARAR: feche esta janela ^(ou Ctrl+C^)
 echo  ========================================================
 echo.
 
-REM Abre o navegador quando o painel responder (em segundo plano)
-start "" /B powershell -NoProfile -WindowStyle Hidden -Command ^
-  "for($i=0;$i -lt 60;$i++){ try { $r = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8765/api/health -TimeoutSec 2; if($r.StatusCode -eq 200){ Start-Process 'http://127.0.0.1:8765'; break } } catch {} Start-Sleep -Seconds 1 }"
+REM Abre o navegador quando o painel responder (PowerShell + fallback cmd)
+start "" /B powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command ^
+  "for($i=0;$i -lt 90;$i++){ try { $r = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8765/api/health -TimeoutSec 2; if($r.StatusCode -eq 200){ Start-Process 'http://127.0.0.1:8765'; exit 0 } } catch {} Start-Sleep -Seconds 1 }; Start-Process 'http://127.0.0.1:8765'" 2>nul
+start "" /MIN cmd /c "ping -n 12 127.0.0.1 >nul & start http://127.0.0.1:8765"
 
+echo Iniciando uvicorn...>>"%LOG%"
 "%VPY%" -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+set "UV_RC=!ERRORLEVEL!"
+echo uvicorn saiu com codigo !UV_RC!>>"%LOG%"
+if not "!UV_RC!"=="0" (
+  color 0C
+  echo.
+  echo  [ERRO] O painel parou sozinho ^(codigo !UV_RC!^).
+  echo  Rode DIAGNOSTICO.bat se nao souber o motivo.
+  echo.
+)
 echo.
 pause

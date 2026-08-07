@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home44" />
+  </head>
+  <body class="login-page">
+    <div class="noise" aria-hidden="true"></div>
+    <main class="login-card">
+      <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="48" height="48" />
+      <h1>Opto Automações</h1>
+      <p class="login-lede">Entre com seu usuário para usar o painel.</p>
+      <form id="login-form" class="login-form">
+        <label>
+          Usuário
+          <input type="text" id="login-user" autocomplete="username" required />
+        </label>
+        <label>
+          Senha
+          <input type="password" id="login-pass" autocomplete="current-password" required />
+        </label>
+        <p id="login-error" class="login-error" hidden></p>
+        <button type="submit" class="btn btn-primary" id="login-btn">Entrar</button>
+      </form>
+      <p class="login-hint admin-muted">
+        Sem usuários configurados? O painel funciona sem login (modo local).
+      </p>
+    </main>
+    <script src="/assets/shared.js?v=home44"></script>
+    <script>
+      (function () {
+        const params = new URLSearchParams(location.search);
+        const next = params.get("next") || "/";
+        const form = document.getElementById("login-form");
+        const err = document.getElementById("login-error");
+        form.addEventListener("submit", async (ev) => {
+          ev.preventDefault();
+          err.hidden = true;
+          const btn = document.getElementById("login-btn");
+          btn.disabled = true;
+          try {
+            const r = await fetch("/api/auth/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                username: document.getElementById("login-user").value.trim(),
+                password: document.getElementById("login-pass").value,
+              }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+              throw new Error(
+                (typeof data.detail === "string" && data.detail) ||
+                  data.detail ||
+                  "Falha no login"
+              );
+            }
+            if (window.OptoAutomacoes && OptoAutomacoes.setAuthToken) {
+              OptoAutomacoes.setAuthToken(data.token);
+            }
+            location.href = next;
+          } catch (e) {
+            err.textContent = e.message || "Erro ao entrar";
+            err.hidden = false;
+            btn.disabled = false;
+          }
+        });
+        fetch("/api/auth/me")
+          .then((r) => r.json())
+          .then((d) => {
+            if (!d.auth_required) location.href = next;
+            else if (d.user) location.href = next;
+          })
+          .catch(() => {});
+      })();
+    </script>
+  </body>
+</html>

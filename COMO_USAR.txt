@@ -1,0 +1,228 @@
+================================================================================
+  OPTO AUTOMACOES — COMO USAR (guia simples)
+================================================================================
+
+Este programa baixa documentos de sites de Prefeitura/Camara, organiza em pastas
+e (quando for o caso) gera planilhas Excel (.xlsx).
+
+Voce NAO precisa saber programar. Tudo roda por um painel no navegador.
+
+
+--------------------------------------------------------------------------------
+1) INSTALAR E ABRIR (primeira vez neste PC)
+--------------------------------------------------------------------------------
+
+1. Botao direito no arquivo ZIP -> "Extrair Tudo..."
+2. Entre na pasta que foi criada
+3. Clique duas vezes em:  COMECE_AQUI.bat
+4. Espere a janela preta terminar (na 1a vez pode levar de 5 a 20 minutos)
+5. O navegador abre sozinho em:  http://127.0.0.1:8765
+
+IMPORTANTE:
+- Deixe a internet ligada
+- Nao feche a janela preta enquanto estiver instalando ou usando
+- Nao precisa instalar Python na mao — o programa faz isso
+
+Para abrir de novo no dia seguinte: so clique de novo em COMECE_AQUI.bat
+
+
+--------------------------------------------------------------------------------
+2) COMO O PAINEL FUNCIONA
+--------------------------------------------------------------------------------
+
+Na tela inicial voce ve "hubs" (grupos):
+
+  - EXTRAIR     -> baixar e organizar documentos do site
+  - PUBLICAR    -> enviar coisas para o portal CR2
+  - SITE        -> mapa / paginas WordPress
+
+Clique no card da ferramenta que precisa -> preencha os campos ->
+clique no botao de iniciar (ex.: "Iniciar" / "Rodar").
+
+Acompanhe o progresso na area de log (texto embaixo).
+No topo aparece uma "pilula" verde mostrando se esta Online ou rodando algo.
+
+
+--------------------------------------------------------------------------------
+3) REGRAS IMPORTANTES ENQUANTO RODA
+--------------------------------------------------------------------------------
+
+- Ate QUATRO processos podem rodar ao mesmo tempo; os demais entram NA FILA.
+- A pilula no topo mostra: "Online · X/4 rodando · N na fila".
+- Se iniciar com fila cheia de slots, voce ve "Na fila — posicao N" (nao e erro).
+- Se atualizar a pagina (F5), o SEU processo continua (na fila ou rodando).
+- Para parar o seu job: clique em "Cancelar fila".
+- A fila e salva em disco — se reiniciar o servidor, jobs pending voltam sozinhos.
+- Limite total na fila: 20 jobs (pending + rodando). Se cheio, aguarde terminar.
+
+
+--------------------------------------------------------------------------------
+3b) VARIAVEIS OPCIONAIS (VPS / servidor)
+--------------------------------------------------------------------------------
+
+  OPTO_MAX_JOBS=4       quantos rodam ao mesmo tempo (padrao: 4)
+  OPTO_MAX_QUEUE=20     tamanho maximo da fila
+  OPTO_SUBPROCESS=1     Playwright em processo isolado (0 = debug)
+  OPTO_JOB_TIMEOUT_S=0  timeout automatico em segundos (0 = desligado; ex. 21600 = 6 h)
+
+  Autenticacao multi-usuario (VPS):
+  OPTO_USERS=admin:senha:admin,maria:123:user
+  ou crie data/auth/users.json (copie users.example.json)
+  OPTO_AUTH_BOOTSTRAP=admin:senha:admin   cria admin na 1a subida
+
+  Coloque no INICIAR.bat ou nas variaveis de ambiente do Windows antes de abrir.
+
+
+--------------------------------------------------------------------------------
+4) FERRAMENTAS MAIS USADAS (EXTRAIR)
+--------------------------------------------------------------------------------
+
+DOCUMENTOS
+  Baixa PDFs de uma pagina de transparencia (ex.: RGF, balancete).
+  Voce informa: site, link da pagina, pasta onde salvar.
+
+CATEGORIAS
+  Varre uma categoria do WordPress (lista de posts) e baixa os PDFs.
+  Bom para secoes com "Carregar mais" / varias paginas.
+
+EXTRACAO PRO  (a mais completa)
+  Baixa leis, decretos, portarias, projetos de lei, pautas/atas, etc.
+  Renomeia sozinho (ex.: "Projeto de Lei Nº001-2024.pdf").
+  Organiza por pasta/ano.
+  Gera planilhas Excel no final (veja secao 5).
+
+  Campos tipicos:
+  - Site da entidade
+  - Pasta de destino (ex.: C:\Downloads\cmvitoriadoxingu)
+  - Anos (ex.: 2024) — deixa em branco para todos
+  - Links:
+      * Categoria  = lista de posts WordPress
+      * Hub de anos = pagina indice com links por ano
+      * Pagina     = PDFs ja listados na propria URL
+  - OCR: ligue se os PDFs forem imagem/escaneados
+  - Motor OCR: Tesseract (rápido — padrão). Auto = Tesseract.
+
+LICITACOES
+  Baixa anexos de licitacoes, extrai campos e monta planilha.
+  OCR padrao: Tesseract (leve). EasyOCR/PaddleOCR nao sao instalados.
+  IA (Ollama): confirma numero, objeto, situacao, datas e valores —
+  nao so os valores. Precisa do Ollama rodando no PC.
+
+REPASSES
+  Le uma planilha com links, baixa os documentos e gera Repasses.xlsx.
+
+CONTRATOS
+  Baixa contratos/aditivos e gera planilha.
+
+
+--------------------------------------------------------------------------------
+5) O QUE A EXTRACAO PRO GERA NA PASTA
+--------------------------------------------------------------------------------
+
+Exemplo de pasta de destino:
+
+  C:\Downloads\minha-entidade\
+    Projetos de Lei\
+      2024\
+        Projeto de Lei Nº001-2024.pdf
+      Relatorio.xlsx          <- planilha DESTA categoria
+    Portarias\
+      2024\
+        ...
+      Relatorio.xlsx
+    Normas.xlsx               <- tudo junto (consolidado)
+    Materias_Legislativas.xlsx <- PRONTA PARA SUBIR NAS AUTOMACOES
+                                  (Tipo, Numero, Descricao, Data de Publicacao,
+                                   Autoria, Situacao + Arquivo/Caminho)
+    Auditoria_Normas.xlsx     <- de onde veio cada campo (titulo, data, etc.)
+    Diarias.xlsx              <- so se houver diarias
+    Sessoes.xlsx              <- se houver pautas/atas organizadas
+
+Colunas de Materias_Legislativas.xlsx (portal CR2):
+  Tipo | Numero | Descricao | Data de Publicacao | Autoria | Situacao
+  (+ Arquivo e Caminho para achar o PDF)
+
+
+--------------------------------------------------------------------------------
+6) PUBLICAR NO PORTAL CR2
+--------------------------------------------------------------------------------
+
+Use as ferramentas do hub PUBLICAR:
+
+  - RGF / RREO / Balancete
+  - Sessao (Pauta, Ata, Presenca, Votacoes)
+  - Publicacao de Repasses
+  - Dic / Est / Ter
+
+Em geral voce informa:
+  - usuario e senha do portal
+  - pasta onde estao os arquivos / planilha
+  - (em alguns) modo teste ligado primeiro, para validar 1 item
+
+
+--------------------------------------------------------------------------------
+7) PROBLEMAS COMUNS
+--------------------------------------------------------------------------------
+
+"pip install falhou" / instalacao nao conclui
+  -> Envie o arquivo instalacao-log.txt (fica ao lado do COMECE_AQUI.bat)
+  -> Confira se a internet esta ok
+  -> Apague a pasta centro-automacoes\venv e rode COMECE_AQUI.bat de novo
+
+"Fila cheia" / "503"
+  -> Aguarde algum dos 4 slots liberar ou cancele um job pending no Admin.
+
+Pagina nao abre / Offline
+  -> Deixe a janela preta aberta
+  -> Clique de novo em COMECE_AQUI.bat
+  -> No Chrome, abra: http://127.0.0.1:8765
+
+"Na fila — posicao N"
+  -> Normal quando varios usuarios ou muitos jobs ao mesmo tempo.
+  -> Espere sua vez; a posicao atualiza sozinha.
+
+Servidor reiniciou no meio do job
+  -> Jobs que estavam RODANDO voltam para a fila (pending).
+  -> Jobs pending continuam na fila automaticamente.
+
+Login / varios usuarios (VPS)
+  -> Configure OPTO_USERS ou users.json (veja secao 3b).
+  -> Cada um entra em /login.html com seu usuario.
+  -> So cancela o proprio job; admin cancela todos e reordena a fila.
+
+Admin — reordenar fila
+  -> Painel Admin > Processos > arraste a fila e clique Salvar ordem.
+
+Muito lento / muitos "pulados"
+  -> Informe o ANO no filtro (ex.: 2024) para nao processar anos antigos
+  -> Versoes novas ja ignoram anos fora do filtro sem abrir cada post
+
+OCR nao le bem
+  -> Em Licitacoes, use Motor OCR = Tesseract (padrao)
+  -> Instale Tesseract-OCR no Windows se o log disser "nao instalado"
+  -> IA so confirma; se Ollama estiver offline, segue so com regras
+
+
+--------------------------------------------------------------------------------
+8) PARA QUEM ENVIA O PROGRAMA A OUTRA PESSOA
+--------------------------------------------------------------------------------
+
+No PC de desenvolvimento, rode:  EMPACOTAR.bat
+Isso gera Opto-Automacoes.zip (sem a pasta venv).
+Envie o ZIP. A outra pessoa so Extrai Tudo + COMECE_AQUI.bat.
+
+
+--------------------------------------------------------------------------------
+9) RESUMO EM 4 PASSOS
+--------------------------------------------------------------------------------
+
+1. Extrair o ZIP
+2. Duplo clique em COMECE_AQUI.bat
+3. No site, escolha a ferramenta e preencha pasta + links
+4. Espere terminar e abra a pasta de destino (PDFs + Excel)
+
+Dúvida ou erro: envie instalacao-log.txt e um print da tela.
+
+================================================================================
+  Fim do guia — Opto Automacoes
+================================================================================

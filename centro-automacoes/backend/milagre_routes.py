@@ -6,11 +6,10 @@ import asyncio
 import json
 import queue
 import sys
-import threading
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DIC_EST_TER = PROJECT_ROOT / "automacoes" / "dic-est-ter"
@@ -20,13 +19,65 @@ if str(DIC_EST_TER) not in sys.path:
 
 import servidor_front as mf  # noqa: E402
 
+from backend import auth  # noqa: E402
+from backend.deps import get_optional_user, require_user  # noqa: E402
+from backend.jobs import JobStatus, QueueFullError  # noqa: E402
+from backend.runners import dispatch  # noqa: E402
+from backend.state import jobs  # noqa: E402
+
 router = APIRouter(tags=["dic_est_ter"])
+
+
+def _active_dic_job():
+    """Job dic_est_ter pending/running mais recente."""
+    with jobs._lock:
+        alive = [
+            j
+            for j in jobs._jobs.values()
+            if j.service_id == "dic_est_ter"
+            and j.status in (JobStatus.PENDING, JobStatus.RUNNING)
+        ]
+    if not alive:
+        return None
+    return max(alive, key=lambda j: j.created_at)
+
+
+def _status_from_global(job) -> dict:
+    d = job.to_dict(jobs)
+    prog = d.get("progress") or {}
+    progresso = {
+        "total": prog.get("total") or 0,
+        "publicadas": prog.get("done") or 0,
+        "chunk_atual": prog.get("done") or 0,
+        "chunk_total": prog.get("total") or 0,
+        "fase": "pending" if job.status == JobStatus.PENDING else "publicando",
+        "msg": prog.get("label") or "",
+    }
+    running = job.status == JobStatus.RUNNING
+    pending = job.status == JobStatus.PENDING
+    return {
+        "running": running,
+        "pending": pending,
+        "global_job_id": job.id,
+        "job_id": job.id,
+        "status": job.status.value,
+        "queue": d.get("queue"),
+        "logs": job.logs[-200:],
+        "resumo": job.result if not running and not pending else None,
+        "progresso": progresso,
+        "cancel_requested": job.cancel_requested,
+        "log_path": str(job.dir / "job.log"),
+    }
 
 
 @router.get("/api/status")
 def milagre_status():
+    gjob = _active_dic_job()
+    if gjob is not None:
+        return _status_from_global(gjob)
+
     with mf._job_lock:
-        return {
+        snap = {
             "running": mf._job["running"],
             "job_id": mf._job.get("job_id"),
             "logs": mf._job["logs"][-200:],
@@ -34,6 +85,9 @@ def milagre_status():
             "progresso": dict(mf._job.get("progresso") or {}),
             "log_path": mf._job.get("log_path"),
         }
+    snap["global_job_id"] = None
+    snap["pending"] = False
+    return snap
 
 
 @router.get("/api/defaults")
@@ -60,29 +114,58 @@ def milagre_validar(body: dict):
 
 
 @router.post("/api/publicar")
-def milagre_publicar(body: dict):
-    with mf._job_lock:
-        if mf._job["running"]:
-            return JSONResponse(
-                status_code=409,
-                content={
-                    "ok": False,
-                    "erro": (
-                        "Ja existe uma publicacao em andamento. "
-                        "Aguarde terminar ou use Parar / Liberar."
-                    ),
-                    "running": True,
-                },
-            )
-    threading.Thread(target=mf._rodar_publicacao, args=(body,), daemon=True).start()
-    return {"ok": True, "started": True}
+def milagre_publicar(body: dict, user=Depends(require_user)):
+    val = mf.validar_pedido(body)
+    if not val.get("ok"):
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "validacao": val,
+                "erro": "Validação falhou antes de enfileirar.",
+            },
+        )
+    owner = user.username if auth.is_enabled() else None
+    try:
+        job = jobs.enqueue("dic_est_ter", body, dispatch, owner=owner)
+    except QueueFullError as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+    meta = jobs.queue_meta(job)
+    return {
+        "ok": True,
+        "started": job.status == JobStatus.RUNNING,
+        "job_id": job.id,
+        "global_job_id": job.id,
+        "status": job.status.value,
+        "queue": meta,
+    }
 
 
 @router.post("/api/cancelar")
 @router.get("/api/cancelar")
 @router.post("/api/parar")
 @router.get("/api/parar")
-def milagre_cancelar():
+def milagre_cancelar(user=Depends(require_user)):
+    gjob = _active_dic_job()
+    if gjob is not None:
+        if not auth.can_cancel_job(user, gjob.owner):
+            raise HTTPException(403, "Sem permissão para cancelar este processo.")
+        jobs.cancel(gjob.id)
+        mf._liberar_publicacao()
+        estava = gjob.status in (JobStatus.RUNNING, JobStatus.PENDING)
+        return {
+            "ok": True,
+            "estava_rodando": estava,
+            "job_id": gjob.id,
+            "msg": (
+                "Cancelamento solicitado — a fila deste processo sera interrompida."
+                if estava
+                else "Nenhuma fila ativa (estado liberado)."
+            ),
+        }
     estava = mf._liberar_publicacao()
     return {
         "ok": True,
@@ -97,10 +180,15 @@ def milagre_cancelar():
 
 @router.get("/api/download/nao-publicadas")
 def milagre_download_nao_publicadas():
-    with mf._job_lock:
-        caminho = mf._job.get("arquivo_nao_publicadas")
-        if not caminho and mf._job.get("resumo"):
-            caminho = (mf._job["resumo"] or {}).get("arquivo_nao_publicadas")
+    gjob = _active_dic_job()
+    caminho = None
+    if gjob and gjob.result:
+        caminho = gjob.result.get("arquivo_nao_publicadas")
+    if not caminho:
+        with mf._job_lock:
+            caminho = mf._job.get("arquivo_nao_publicadas")
+            if not caminho and mf._job.get("resumo"):
+                caminho = (mf._job["resumo"] or {}).get("arquivo_nao_publicadas")
     if not caminho:
         raise HTTPException(404, "Nenhuma planilha de correcao disponivel.")
     path = Path(caminho)
@@ -115,13 +203,50 @@ def milagre_download_nao_publicadas():
 
 @router.get("/api/logs")
 async def milagre_logs_stream():
+    gjob = _active_dic_job()
+
+    async def gen_global():
+        q = gjob.subscribe()
+        while True:
+            try:
+                entry = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: q.get(timeout=25)
+                )
+                payload = dict(entry)
+                if gjob.status == JobStatus.RUNNING:
+                    prog = gjob.to_dict(jobs).get("progress") or {}
+                    payload["progresso"] = {
+                        "total": prog.get("total") or 0,
+                        "publicadas": prog.get("done") or 0,
+                        "chunk_atual": prog.get("done") or 0,
+                        "chunk_total": prog.get("total") or 0,
+                        "fase": "publicando",
+                        "msg": prog.get("label") or "",
+                    }
+                yield "data: {0}\n\n".format(json.dumps(payload, ensure_ascii=False))
+            except Exception:
+                if gjob.status in (
+                    JobStatus.COMPLETED,
+                    JobStatus.FAILED,
+                    JobStatus.CANCELLED,
+                ):
+                    break
+                yield ": ping\n\n"
+
+    if gjob is not None:
+        return StreamingResponse(
+            gen_global(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
+
     q: queue.Queue = queue.Queue()
     with mf._job_lock:
         mf._job["subscribers"].append(q)
         for entry in mf._job["logs"][-200:]:
             q.put(entry)
 
-    async def gen():
+    async def gen_legacy():
         try:
             while True:
                 try:
@@ -139,7 +264,7 @@ async def milagre_logs_stream():
                     pass
 
     return StreamingResponse(
-        gen(),
+        gen_legacy(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )

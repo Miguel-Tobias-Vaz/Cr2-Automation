@@ -48,11 +48,24 @@ def run(job) -> None:
         "HEADLESS": bool(cfg.get("headless")),
         "MODO_TESTE": bool(cfg.get("modo_teste")),
         "REGISTRO_UNICO": registro,
+        "REFINAR_IA_DECLARACAO": bool(cfg.get("refinar_ia_declaracao", True)),
+        "MODELO_IA": (cfg.get("modelo_ia") or "llama3.2:3b").strip() or "llama3.2:3b",
+        "OLLAMA_URL": (cfg.get("ollama_url") or "http://127.0.0.1:11434").strip()
+        or "http://127.0.0.1:11434",
     }
     csv_path = (cfg.get("csv_fila") or "").strip()
     if csv_path:
         patch["CSV_FILA"] = Path(csv_path)
     apply_globals(mod, patch)
+    if patch["REFINAR_IA_DECLARACAO"]:
+        job.emit(
+            "info",
+            "Declaracoes: IA local {0} @ {1} (mes de referencia do PDF)".format(
+                patch["MODELO_IA"], patch["OLLAMA_URL"]
+            ),
+        )
+    else:
+        job.emit("info", "Declaracoes: IA desligada (heuristica no nome/texto)")
 
     argv = [str(SCRIPT)]
     if cfg.get("modo_teste"):

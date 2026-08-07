@@ -15,6 +15,10 @@ def run(job) -> None:
     anos_filtro = [a.strip() for a in anos_raw.split(",") if a.strip()] if anos_raw else []
     limite = int(cfg.get("limite_posts") or 0)
     ler_pdf = bool(cfg.get("ler_pdf", True))
+    usar_ocr = bool(cfg.get("usar_ocr", True))
+    motor_ocr = (cfg.get("motor_ocr") or "auto").strip().lower() or "auto"
+    if motor_ocr in ("docling", "surya", "easyocr"):
+        motor_ocr = "auto"
     refinar_ia = bool(cfg.get("refinar_ia", False))
     modelo_ia = (cfg.get("modelo_ia") or "llama3.2:3b").strip() or "llama3.2:3b"
     ollama_url = (cfg.get("ollama_url") or "http://127.0.0.1:11434").strip() or "http://127.0.0.1:11434"
@@ -27,6 +31,8 @@ def run(job) -> None:
         "ANOS_FILTRO": anos_filtro,
         "LIMITE_POSTS": limite,
         "LER_PDF": ler_pdf,
+        "USAR_OCR": usar_ocr,
+        "MOTOR_OCR": motor_ocr,
         "REFINAR_IA": refinar_ia,
         "MODELO_IA": modelo_ia,
         "OLLAMA_URL": ollama_url,
@@ -37,6 +43,12 @@ def run(job) -> None:
     else:
         job.emit("info", "Filtro de anos: todos")
     job.emit("info", "Leitura PDF para nome: {0}".format("sim" if ler_pdf else "nao"))
+    job.emit(
+        "info",
+        "OCR: {0}".format(
+            "ligado ({0})".format(motor_ocr) if usar_ocr and ler_pdf else "desligado"
+        ),
+    )
     if refinar_ia:
         job.emit("info", "IA local: Ollama / {0} @ {1}".format(modelo_ia, ollama_url))
     else:

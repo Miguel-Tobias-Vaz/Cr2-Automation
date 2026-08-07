@@ -371,10 +371,14 @@ def extrair_diarias(
     arquivo: str = "",
     pasta_hint: str = "",
     url: str = "",
+    texto_link: str = "",
 ) -> dict[str, str] | None:
     """
     Extrai campos de um PDF de diárias (regra geral quando a fonte/doc é de diárias).
     Retorna None se não for diárias.
+
+    texto_link: âncora da página (ex. "Portaria Nº 025/2023") — usada quando o
+    PDF é escaneado e o OCR falha, para não perder o número na planilha.
     """
     if not parece_diarias(
         texto, pasta_hint=pasta_hint, nome_arquivo=arquivo, url=url
@@ -383,7 +387,11 @@ def extrair_diarias(
 
     reg = registro_vazio()
     reg["arquivo"] = arquivo or ""
-    reg["numero_portaria"] = _extrair_numero_portaria(texto)
+    # Na listagem da página o âncora é a fonte da verdade do número
+    # (PDF escaneado / OCR costuma errar ou vir vazio — ex.: 022 e 025).
+    num_link = _extrair_numero_portaria(texto_link) or _extrair_numero_portaria(arquivo)
+    num_pdf = _extrair_numero_portaria(texto)
+    reg["numero_portaria"] = num_link or num_pdf
     reg["data_portaria"] = _extrair_data_portaria(texto)
     ini, fim = _extrair_periodo(texto)
     reg["inicio_viagem"] = ini

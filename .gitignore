@@ -1,0 +1,15 @@
+# Ambientes locais — nunca versionar / nunca colocar no ZIP
+**/venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.cursor/
+
+# Logs e jobs locais
+instalacao-log.txt
+Opto-Automacoes.zip
+centro-automacoes/data/jobs/
+
+# Segredos / ambiente
+.env
+*.auth-state.json

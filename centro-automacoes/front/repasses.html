@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Repasses — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css?v=home44" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill">Servidor …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero" id="fluxos">
+        <div class="hero-plane" aria-hidden="true">
+          <div class="hero-grid"></div>
+        </div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Repasses</h1>
+            <p class="lede">
+              Cole o link da planilha. A automação baixa os documentos, lê com OCR
+              quando preciso e gera a planilha de saída com mês/ano, data, valores e
+              descrição — arquivos em pastas por ano.
+            </p>
+          </header>
+          <article class="stream is-in">
+            <span class="stream-index">01</span>
+            <h3>O que você precisa</h3>
+            <ul>
+              <li>Link do Google Sheets/Drive (compartilhado) ou caminho de um .xlsx</li>
+              <li>Colunas com dados e/ou links dos PDFs</li>
+              <li>Pasta de destino (criada automaticamente por usuário no servidor)</li>
+            </ul>
+          </article>
+          <article class="stream is-in">
+            <span class="stream-index">02</span>
+            <h3>Saída</h3>
+            <ul>
+              <li><code>PASTA\Repasses\ANO\Repasse MM-AAAA - Descrição.pdf</code></li>
+              <li><code>PASTA\Repasses.xlsx</code> — igual Sessões: Link, Mês e Ano, Data, Valores, Descrição, Arquivo</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="painel" id="painel">
+        <header class="section-head">
+          <h2>Configurar e executar</h2>
+          <p>
+            Se a planilha tiver só um dos valores (previsto ou realizado), o outro é
+            preenchido com o mesmo número.
+          </p>
+        </header>
+        <form class="painel-form" id="form-repasses">
+          <fieldset class="bloco">
+            <legend>Parâmetros</legend>
+            <p class="field-hint workspace-hint" id="workspace-hint" hidden></p>
+            <div class="upload-zone" id="upload-planilha">
+              <input type="file" id="file-planilha" hidden />
+              <p class="upload-zone-title">Enviar planilha ou ZIP</p>
+              <p class="upload-zone-desc">Arraste aqui <strong>.xlsx</strong> / <strong>.csv</strong> ou clique para escolher</p>
+              <button type="button" class="btn btn-ghost btn-sm" data-upload-pick>Escolher arquivo</button>
+              <p class="upload-status" id="upload-planilha-status" hidden></p>
+            </div>
+            <div class="grid-2">
+              <label class="field">
+                <span class="field-label"><em>Pasta base</em></span>
+                <input type="text" id="pasta_base" value="" placeholder="Preenchida automaticamente" />
+              </label>
+              <label class="field">
+                <span class="field-label"><em>Anos (opcional)</em></span>
+                <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
+                <small class="field-hint">
+                  Com filtro, a barra de progresso conta só os itens daquele ano
+                  (não o total da planilha).
+                </small>              </label>
+            </div>
+            <label class="field">
+              <span class="field-label"><em>Link da planilha *</em></span>
+              <textarea
+                id="url_planilha"
+                rows="3"
+                placeholder="https://docs.google.com/spreadsheets/d/...&#10;ou C:\caminho\planilha.xlsx"
+              ></textarea>
+              <small class="field-hint">
+                Sheets/Drive com acesso “qualquer pessoa com o link”. Aceita
+                <em>Mês</em> e <em>Ano</em> em colunas separadas, ou “Mês e Ano”
+                juntos; também descrição, documento/link, valores e data.
+              </small>
+            </label>
+          </fieldset>
+
+          <fieldset class="bloco bloco-opcoes">
+            <legend>Leitura do PDF</legend>
+            <div class="opcoes-grid">
+              <label class="check-row" for="usar_ocr">
+                <input type="checkbox" id="usar_ocr" checked />
+                <span class="check-copy">
+                  <strong>OCR em PDFs escaneados</strong>
+                  <small>Liga a leitura de PDF imagem. Escolha o motor abaixo.</small>
+                </span>
+              </label>
+              <label class="check-row" for="refinar_ia">
+                <input type="checkbox" id="refinar_ia" checked />
+                <span class="check-copy">
+                  <strong>Extrair com IA local</strong>
+                  <small>Ollama — mês/ano, data, valores e descrição do PDF</small>
+                </span>
+              </label>
+            </div>
+            <label class="field" id="wrap-motor-ocr" style="margin-top:0.75rem">
+              <span class="field-label"><em>Motor OCR</em></span>
+              <select id="motor_ocr">
+                <option value="auto" selected>Auto (Tesseract ? Paddle se precisar)</option>
+                <option value="tesseract">Tesseract (rápido)</option>
+                <option value="paddleocr">PaddleOCR (mais pesado)</option>
+              </select>
+              <small class="field-hint">
+                Só vale se o OCR estiver ligado. Auto tenta na ordem até ler bem
+                (ex.: 318.390,34 em vez de 1.234,56).
+              </small>
+            </label>
+            <div class="saida-nota" aria-label="Planilha gerada">
+              <div class="saida-nota-head">
+                <span class="saida-nota-badge">Saída</span>
+                <strong>Repasses.xlsx</strong>
+                <span class="saida-nota-muted">igual Sessões</span>
+              </div>
+              <div class="col-tags">
+                <span>Link</span>
+                <span>Mês e Ano</span>
+                <span>Data</span>
+                <span>Valor Previsto</span>
+                <span>Valor Realizado</span>
+                <span>Descrição</span>
+                <span>Arquivo</span>
+              </div>
+              <p>Se só houver previsto ou realizado, o outro valor é duplicado.</p>
+            </div>
+          </fieldset>
+          <div class="acao-row">
+            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar extração</button>
+            <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
+            <a class="btn btn-ghost" href="#log">Ver log</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="log-wrap" id="log">
+        <header class="section-head">
+          <h2>Log ao vivo</h2>
+          <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
+        </header>
+        <div class="log-console" id="log-console"><p class="log-empty">Aguardando execução…</p></div>
+        <div class="job-bar">
+          <a class="btn btn-ghost" id="btn-download" href="#" hidden>Baixar ZIP</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="/assets/shader-background.js?v=home44"></script>
+    <script src="/assets/shared.js?v=home44"></script>
+    <script>
+      CR2Centro.injectNav("repasses");
+      CR2Centro.pingApi();
+      CR2Centro.bindFileUpload({
+        zoneId: "upload-planilha",
+        inputId: "file-planilha",
+        targetFieldId: "url_planilha",
+        statusId: "upload-planilha-status",
+        accept: ".xlsx,.xls,.xlsm,.csv,.zip",
+        extractZip: true,
+        onDone(meta) {
+          if (meta.suggested_pasta_base) {
+            const pb = document.getElementById("pasta_base");
+            if (pb) pb.value = meta.suggested_pasta_base;
+          }
+        },
+      });
+      function syncMotorOcr() {
+        const ocr = document.getElementById("usar_ocr");
+        const wrap = document.getElementById("wrap-motor-ocr");
+        const sel = document.getElementById("motor_ocr");
+        if (!ocr || !wrap) return;
+        const on = !!ocr.checked;
+        wrap.hidden = !on;
+        if (sel) sel.disabled = !on;
+      }
+
+      const fields = ["pasta_base", "anos", "url_planilha", "usar_ocr", "refinar_ia", "motor_ocr"];
+      CR2Centro.bindRun("repasses", "form-repasses", fields, () => ({
+        pasta_base: document.getElementById("pasta_base").value.trim(),
+        anos: document.getElementById("anos").value.trim(),
+        url_planilha: document.getElementById("url_planilha").value.trim(),
+        usar_ocr: document.getElementById("usar_ocr").checked,
+        refinar_ia: document.getElementById("refinar_ia").checked,
+        motor_ocr: document.getElementById("motor_ocr").value,
+      }), false);
+
+      syncMotorOcr();
+      const ocrCb = document.getElementById("usar_ocr");
+      if (ocrCb) ocrCb.addEventListener("change", syncMotorOcr);
+    </script>
+  </body>
+</html>

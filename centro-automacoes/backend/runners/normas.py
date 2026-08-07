@@ -64,7 +64,12 @@ def run(job) -> None:
     ler_pdf = bool(cfg.get("ler_pdf", True))
     limite = int(cfg.get("limite_posts") or 0)
     anos_raw = (cfg.get("anos") or "").strip()
-    anos_filtro = [a.strip() for a in anos_raw.split(",") if a.strip()] if anos_raw else []
+    # Aceita: 2023 | 2023,2024 | 2023 2024
+    import re as _re
+
+    anos_filtro = (
+        list(dict.fromkeys(_re.findall(r"(?:19|20)\d{2}", anos_raw))) if anos_raw else []
+    )
 
     fontes: list[dict] = []
     fontes.extend(_parse_linhas(cfg.get("fontes_categoria") or "", "categoria"))
@@ -89,12 +94,18 @@ def run(job) -> None:
         job.emit("info", "Fontes {0}: {1}".format(modo, n))
 
     mod = load_module("download_normas", SCRIPTS["normas"])
+    usar_ocr = bool(cfg.get("usar_ocr", True))
+    motor_ocr = (cfg.get("motor_ocr") or "auto").strip().lower() or "auto"
+    if motor_ocr in ("docling", "surya", "easyocr"):
+        motor_ocr = "auto"
     mapping = {
         "PASTA_BASE": pasta,
         "LER_PDF": ler_pdf,
         "LIMITE_POSTS": limite,
         "ANOS_FILTRO": anos_filtro,
         "FONTES": fontes,
+        "USAR_OCR": usar_ocr,
+        "MOTOR_OCR": motor_ocr,
         "REFINAR_IA": bool(cfg.get("refinar_ia", False)),
         "MODELO_IA": (cfg.get("modelo_ia") or "llama3.2:3b").strip() or "llama3.2:3b",
         "OLLAMA_URL": (cfg.get("ollama_url") or "http://127.0.0.1:11434").strip()
@@ -109,6 +120,12 @@ def run(job) -> None:
         job.emit("info", "Filtro de anos: {0}".format(", ".join(anos_filtro)))
     else:
         job.emit("info", "Filtro de anos: todos")
+    job.emit(
+        "info",
+        "OCR: {0}".format(
+            "ligado ({0})".format(motor_ocr) if usar_ocr and ler_pdf else "desligado"
+        ),
+    )
     if mapping["REFINAR_IA"]:
         job.emit(
             "info",
@@ -128,6 +145,11 @@ def run(job) -> None:
         "info",
         "Sessões: Pautas/Atas/Presença/Votações → pasta por sessão (ex. 17ª Sessão Ordinária)",
     )
+    job.emit(
+        "info",
+        "Planilhas: Relatorio.xlsx por categoria + Materias_Legislativas.xlsx "
+        "(Tipo/Número/Descrição/Data/Autoria/Situação) + Normas.xlsx + Auditoria",
+    )
     run_main_with_logs(job, mod)
     regs = getattr(mod, "REGISTROS_DIARIAS", None) or []
     if regs:
@@ -135,5 +157,16 @@ def run(job) -> None:
         job.result["planilha_diarias"] = str(
             Path(pasta) / "Diarias.xlsx"
         )
+    regs_n = getattr(mod, "REGISTROS_NORMAS", None) or []
+    if regs_n:
+        job.result["normas_docs"] = len(regs_n)
+        job.result["planilha_normas"] = str(Path(pasta) / "Normas.xlsx")
+        job.result["planilha_auditoria"] = str(Path(pasta) / "Auditoria_Normas.xlsx")
+        mat = Path(pasta) / "Materias_Legislativas.xlsx"
+        if mat.is_file():
+            job.result["planilha_materias"] = str(mat)
+            job.result["materias_docs"] = sum(
+                1 for r in regs_n if r.get("eh_materia")
+            )
     job.result["pasta"] = pasta
     job.result["mensagem"] = "Extração Pro concluída em {0}".format(pasta)

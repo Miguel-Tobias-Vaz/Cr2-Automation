@@ -1,11 +1,46 @@
 Opto Automacoes
 ===============
 
+COMECE AQUI (3 passos)
+----------------------
 1) Botao direito no ZIP -> Extrair Tudo
-2) Entre na pasta
+2) Entre na pasta extraida
 3) Clique DUAS VEZES em:  COMECE_AQUI.bat
 
-O site abre sozinho. Na 1a vez demora um pouco — nao feche a janela.
+O site abre sozinho em http://127.0.0.1:8765
 
-Se pedir Python: instale (marque Add to PATH) e clique de novo em COMECE_AQUI.bat
-Se der erro: envie o arquivo instalacao-log.txt
+Na 1a vez pode demorar alguns minutos (instala Python 3.12, bibliotecas,
+navegador, Tesseract e Ollama). Nao feche a janela preta. Deixe internet ligada.
+
+Nao precisa instalar nada a mao — o COMECE_AQUI cuida de tudo.
+
+
+GUIA COMPLETO (leia com calma)
+------------------------------
+Abra o arquivo:  COMO_USAR.txt
+
+La esta explicado, em linguagem simples:
+- como usar o painel
+- cada ferramenta (Extracao Pro, Licitacoes, Publicar...)
+- onde ficam os PDFs e as planilhas Excel
+- o que fazer se der erro
+
+
+SE DER ERRO NA INSTALACAO
+-------------------------
+Envie o arquivo: instalacao-log.txt
+(ele fica ao lado do COMECE_AQUI.bat)
+
+
+SE SO PISCAR E NAO ABRIR
+------------------------
+1) Botao direito no ZIP -> Extrair Tudo (nao abrir de dentro do ZIP)
+2) Clique em COMECE_AQUI.bat (na pasta Opto-Automacoes)
+3) Se continuar, rode DIAGNOSTICO.bat e envie diagnostico-log.txt
+4) Tente abrir manualmente no Chrome: http://127.0.0.1:8765
+
+
+PARA MONTAR O ZIP E ENVIAR A OUTRA PESSOA
+-----------------------------------------
+Rode: EMPACOTAR.bat
+(nao envie a pasta com "venv" — o EMPACOTAR ja exclui isso)

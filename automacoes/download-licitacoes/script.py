@@ -42,6 +42,7 @@ import sys
 import time
 import unicodedata
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import urljoin, urlparse, unquote
 
 import requests
@@ -75,12 +76,16 @@ def _abortar_se_cancelado():
 LISTAGEM_PADRAO = ""
 SAIDA_PADRAO    = r"C:\Downloads\Licitacoes"
 PLANILHA_SAIDA  = "Licitacoes_preenchida.xlsx"
-ULTIMO_RESULTADO_UPLOAD = None  # preenchido ao final (caminhos das planilhas oficiais)
+# Dict mutável: o main() só faz .clear()/.update() — sem `global` (evita
+# "assigned to before global declaration" se alguém reordenar o código).
+ULTIMO_RESULTADO_UPLOAD: dict = {}
 SUBCATEGORIAS   = ["licitacoes-fracassadas", "licitacoes-desertas"]
 MAX_PAGINAS     = 300     # trava de segurança na varredura de /page/N/
 
 # ----------------------------------------------------------------------------
 # FILTRO DE ANOS — vazio = todos. Use --anos 2023,2024 ou o campo do painel.
+# Com filtro, a listagem (mais recente → mais antiga) PARA ao achar um ano
+# anterior ao menor pedido (ex.: pediu 2023 → para no primeiro 2022).
 # ----------------------------------------------------------------------------
 ANOS_FILTRO = []
 
@@ -93,11 +98,14 @@ RENOMEAR_POR_TITULO = True
 
 # ----------------------------------------------------------------------------
 # MOTOR DE OCR — edite aqui (ou use --motor-ocr na linha de comando).
-#   "auto"      = Tesseract primeiro; se fraco e EasyOCR instalado, usa o melhor
-#   "tesseract" = só Tesseract (ocrmypdf/pytesseract)
-#   "easyocr"   = só EasyOCR (melhor em scans ruins; mais lento sem GPU)
+#   "tesseract" | "auto" = Tesseract (rápido; padrão)
+#   "paddleocr" = opcional, mais pesado
+# A IA (Ollama) SEMPRE confirma as informações (não só valores).
 # ----------------------------------------------------------------------------
-MOTOR_OCR = "auto"
+MOTOR_OCR = "tesseract"
+# Limite de páginas quando o PDF é escaneado (nativo ainda pode ler mais)
+OCR_MAX_PAGINAS_PRIOR = 6
+OCR_MAX_PAGINAS_OUTRO = 2
 
 EXT_DOCS = {
     ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
@@ -572,6 +580,51 @@ def extrai_ano(numero):
     return achados[-1] if achados else ""
 
 
+def ano_do_titulo(titulo):
+    """Ano extraído do título da licitação (número), ou '' se não houver."""
+    _mod, numero = split_modalidade_numero(titulo or "")
+    return extrai_ano(numero)
+
+
+def _anos_filtro_set(anos_filtro):
+    return {str(a).strip() for a in (anos_filtro or []) if str(a).strip()}
+
+
+def _ano_minimo_filtro(anos_set):
+    vals = []
+    for a in anos_set or ():
+        try:
+            vals.append(int(a))
+        except (TypeError, ValueError):
+            pass
+    return min(vals) if vals else None
+
+
+def decidir_ano_vs_filtro(ano_str, anos_set, ano_min):
+    """
+    Como tratar um item na listagem (ordem mais recente → mais antiga):
+
+      pegar  — entra na coleta (ano no filtro, ou sem ano)
+      pular  — ano fora do filtro, mas ainda mais novo que o mínimo (continua)
+      parar  — achou ano anterior ao mínimo do filtro (ex.: filtro 2023 → 2022)
+
+    Sem filtro → sempre pegar.
+    """
+    if not anos_set or ano_min is None:
+        return "pegar"
+    try:
+        yi = int(ano_str) if ano_str else None
+    except (TypeError, ValueError):
+        yi = None
+    if yi is None:
+        return "pegar"
+    if yi < ano_min:
+        return "parar"
+    if str(yi) in anos_set:
+        return "pegar"
+    return "pular"
+
+
 def extrai_objeto(titulo):
     m = re.search(r"\((.*)\)\s*$", titulo.strip(), re.DOTALL)
     return re.sub(r"\s+", " ", m.group(1)).strip() if m else ""
@@ -711,12 +764,16 @@ def descobrir_categoria_id(sessao, base, slug):
     return dados[0]["id"] if isinstance(dados, list) and dados else None
 
 
-def coletar_posts_api(sessao, base, cat_id):
+def coletar_posts_api(sessao, base, cat_id, anos_filtro=None):
+    anos_set = _anos_filtro_set(anos_filtro)
+    ano_min = _ano_minimo_filtro(anos_set)
     posts, pagina = [], 1
-    while pagina <= MAX_PAGINAS:
+    parou_ano = False
+    while pagina <= MAX_PAGINAS and not parou_ano:
         r = sessao.get(f"{base}/wp-json/wp/v2/posts", timeout=TIMEOUT, params={
             "categories": cat_id, "per_page": 100, "page": pagina,
-            "_fields": "title,link,content,date"})
+            "_fields": "title,link,content,date",
+            "orderby": "date", "order": "desc"})
         if r.status_code == 400:      # passou da última página
             break
         r.raise_for_status()
@@ -724,12 +781,29 @@ def coletar_posts_api(sessao, base, cat_id):
         if not lote:
             break
         for p in lote:
+            titulo = BeautifulSoup(
+                p["title"]["rendered"], "html.parser"
+            ).get_text(strip=True)
+            ano = ano_do_titulo(titulo)
+            if not ano and p.get("date"):
+                ano = str(p.get("date") or "")[:4]
+            acao = decidir_ano_vs_filtro(ano, anos_set, ano_min)
+            if acao == "parar":
+                print(
+                    "    · scanner parou: achou ano {0} (filtro desde {1})".format(
+                        ano or "?", ano_min
+                    )
+                )
+                parou_ano = True
+                break
+            if acao == "pular":
+                continue
             posts.append({
-                "titulo": BeautifulSoup(p["title"]["rendered"], "html.parser").get_text(strip=True),
+                "titulo": titulo,
                 "link": p["link"], "content": p["content"]["rendered"],
                 "date": p.get("date", "")})
-        # Se o servidor informa o total de páginas, respeita; se o cabeçalho
-        # foi removido (plugins de segurança fazem isso), segue até 400/vazio.
+        if parou_ano:
+            break
         total_hdr = r.headers.get("X-WP-TotalPages")
         if total_hdr:
             try:
@@ -742,7 +816,7 @@ def coletar_posts_api(sessao, base, cat_id):
     return posts
 
 
-def coletar_via_api(sessao, base, slugs):
+def coletar_via_api(sessao, base, slugs, anos_filtro=None):
     try:
         res = []
         for slug in slugs:
@@ -750,8 +824,9 @@ def coletar_via_api(sessao, base, slugs):
             if not cid:
                 print(f"  · categoria '{slug}' não encontrada na API.")
                 continue
-            posts = coletar_posts_api(sessao, base, cid)
-            print(f"  · '{slug}': {len(posts)} post(s) via API.")
+            posts = coletar_posts_api(sessao, base, cid, anos_filtro=anos_filtro)
+            print(f"  · '{slug}': {len(posts)} post(s) via API"
+                  + (" (com corte por ano)" if anos_filtro else "") + ".")
             for p in posts:
                 data_pub = ""
                 if p["date"]:
@@ -795,10 +870,13 @@ def filtra_posts_da_pagina(soup, url, dominio):
     return posts
 
 
-def coletar_posts_html(sessao, url_listagem):
+def coletar_posts_html(sessao, url_listagem, anos_filtro=None):
     """Varre a listagem página a página SEQUENCIALMENTE (/, /page/2/, /page/3/,
-    ...) até receber 404 ou uma página sem novos posts. Não depende dos links
-    de paginação visíveis (que nem sempre mostram todas as páginas)."""
+    ...) até receber 404, página sem novos posts, ou (com filtro de anos) o
+    primeiro post com ano anterior ao mínimo pedido.
+    """
+    anos_set = _anos_filtro_set(anos_filtro)
+    ano_min = _ano_minimo_filtro(anos_set)
     raiz = raiz_categoria(url_listagem)
     dominio = urlparse(raiz).netloc
     posts = {}
@@ -819,7 +897,30 @@ def coletar_posts_html(sessao, url_listagem):
         inedito = {k: v for k, v in novos.items() if k not in posts}
         if n > 1 and not inedito:
             break            # página repetida/vazia => acabou
-        posts.update(inedito)
+
+        if anos_set and ano_min is not None:
+            manter = {}
+            parar = False
+            ano_parada = ""
+            for href, titulo in inedito.items():
+                ano_t = ano_do_titulo(titulo)
+                acao = decidir_ano_vs_filtro(ano_t, anos_set, ano_min)
+                if acao == "parar":
+                    parar = True
+                    ano_parada = ano_t
+                    break
+                if acao == "pegar":
+                    manter[href] = titulo
+            posts.update(manter)
+            if parar:
+                print(
+                    "    · scanner parou na página {0}: achou ano {1} "
+                    "(filtro desde {2})".format(n, ano_parada or "?", ano_min)
+                )
+                break
+        else:
+            posts.update(inedito)
+
         n += 1
         time.sleep(PAUSA)
     return list(posts.items())
@@ -844,13 +945,33 @@ def data_pub_do_html(html):
     return ""
 
 
-def coletar_via_html(sessao, listagens):
+def coletar_via_html(sessao, listagens, anos_filtro=None):
     res = []
+    anos_set = _anos_filtro_set(anos_filtro)
+    ano_min = _ano_minimo_filtro(anos_set)
     for url_listagem in listagens:
         print(f"  · raspando {raiz_categoria(url_listagem)} (varre /page/N/)")
-        posts = coletar_posts_html(sessao, url_listagem)
-        print(f"    {len(posts)} licitação(ões).")
-        for url_post, titulo in posts:
+        posts = coletar_posts_html(
+            sessao, url_listagem, anos_filtro=anos_filtro
+        )
+        print(
+            f"    {len(posts)} licitação(ões) no filtro — abrindo posts p/ anexos..."
+        )
+        for i, (url_post, titulo) in enumerate(posts, 1):
+            acao = decidir_ano_vs_filtro(
+                ano_do_titulo(titulo), anos_set, ano_min
+            )
+            if acao == "parar":
+                print(
+                    "    · parou de abrir posts: ano anterior ao filtro ({0})".format(
+                        ano_do_titulo(titulo) or "?"
+                    )
+                )
+                break
+            if acao == "pular":
+                continue
+            if i == 1 or i % 20 == 0 or i == len(posts):
+                print(f"    · anexos {i}/{len(posts)}…")
             time.sleep(PAUSA)
             try:
                 r = sessao.get(url_post, timeout=TIMEOUT)
@@ -956,34 +1077,31 @@ def caminho_sidecar(caminho_pdf):
     return caminho_pdf[:-4] + ".ocr.txt"
 
 
-def ocr_para_texto(caminho, idioma="por", motor="auto"):
-    """Roda OCR e devolve o texto. O texto fica cacheado no .ocr.txt, então
-    execuções seguintes (ex.: --so-planilha) não refazem o OCR.
+def ocr_para_texto(caminho, idioma="por", motor="auto", max_paginas=None):
+    """Roda OCR e devolve o texto (cache .ocr.txt).
 
-    motor:
-      "tesseract" -> só Tesseract (ocrmypdf/pytesseract)
-      "easyocr"   -> só EasyOCR (se instalado; senão cai no Tesseract)
-      "auto"      -> Tesseract primeiro; se o resultado vier ruim e o
-                     EasyOCR estiver instalado, refaz e usa o MELHOR."""
+    auto = Tesseract primeiro; Paddle so se fraco. max_paginas limita o OCR.
+    """
     txt_path = caminho_sidecar(caminho)
+    motor = (motor or MOTOR_OCR or "auto").strip().lower() or "auto"
+    if motor in ("easyocr", "docling", "surya"):
+        motor = "auto"
 
-    if motor == "easyocr":
-        if easyocr_disponivel():
-            texto = _ocr_easy(caminho, idioma)
-            _grava_sidecar(txt_path, texto)
-            return texto
-        print("        (EasyOCR não instalado — usando Tesseract)")
-        motor = "tesseract"
+    if motor in ("auto", "paddleocr", "tesseract"):
+        try:
+            raiz = Path(__file__).resolve().parent.parent
+            if str(raiz) not in sys.path:
+                sys.path.insert(0, str(raiz))
+            from _comum.ocr_multi import ocr_pdf
 
-    texto = _ocr_tesseract(caminho, idioma)
+            texto = ocr_pdf(caminho, motor=motor, max_paginas=max_paginas)
+            if texto and texto.strip():
+                _grava_sidecar(txt_path, texto)
+                return texto
+        except Exception as e:
+            print(f"        (ocr_multi falhou: {e})")
 
-    if motor == "auto" and texto_ocr_ruim(texto) and easyocr_disponivel():
-        print(f"        (Tesseract fraco — tentando EasyOCR) "
-              f"{os.path.basename(caminho)}")
-        texto_easy = _ocr_easy(caminho, idioma)
-        if qualidade_texto(texto_easy) > qualidade_texto(texto):
-            texto = texto_easy
-
+    texto = _ocr_tesseract(caminho, idioma, max_paginas=max_paginas)
     _grava_sidecar(txt_path, texto)
     return texto
 
@@ -998,22 +1116,21 @@ def _grava_sidecar(txt_path, texto):
         pass
 
 
-def _ocr_tesseract(caminho, idioma="por"):
+def _ocr_tesseract(caminho, idioma="por", max_paginas=None):
     """OCR via Tesseract (ocrmypdf preferido; pytesseract como alternativa)."""
     backend = detectar_backend_ocr()
+    max_p = max_paginas if max_paginas and int(max_paginas) > 0 else OCR_MAX_PAGINAS_PRIOR
+    max_p = max(1, int(max_p))
     if backend == "ocrmypdf":
         try:
             saida = caminho[:-4] + ".ocr.pdf"
             txt_path_s = caminho_sidecar(caminho)
-            # --deskew endireita páginas escaneadas tortas; --rotate-pages
-            # corrige páginas giradas/cabeça pra baixo; --oversample 300
-            # reamostra digitalizações de baixa resolução para 300 DPI —
-            # os três juntos melhoram bastante a leitura de scans municipais.
             subprocess.run(
                 ["ocrmypdf", "-l", idioma, "--force-ocr",
-                 "--deskew", "--rotate-pages", "--oversample", "300",
+                 "--deskew", "--rotate-pages", "--oversample", "200",
+                 "--pages", "1-%d" % max_p,
                  "--optimize", "1", "--sidecar", txt_path_s, caminho, saida],
-                capture_output=True, text=True, timeout=900)
+                capture_output=True, text=True, timeout=300)
             if os.path.exists(txt_path_s):
                 with open(txt_path_s, encoding="utf-8", errors="ignore") as f:
                     return f.read()
@@ -1024,95 +1141,24 @@ def _ocr_tesseract(caminho, idioma="por"):
         try:
             import pytesseract
             from pdf2image import convert_from_path
-            # dpi=300 e motor LSTM (--oem 1): melhor precisão em scans
             return "\n".join(
-                pytesseract.image_to_string(img, lang=idioma, config="--oem 1")
-                for img in convert_from_path(caminho, dpi=300))
+                pytesseract.image_to_string(img, lang=idioma, config="--oem 1 --psm 6")
+                for img in convert_from_path(caminho, dpi=180, last_page=max_p))
         except Exception as ee:
             print(f"        (pytesseract falhou: {ee})")
         return ""
     return ""
 
 
-# ----------------------------------------------------------------------------
-# EasyOCR (opcional) — deep learning; melhor em scans ruins, lento sem GPU
-# ----------------------------------------------------------------------------
-_EASYOCR_READER = None      # o Reader é caro de criar; inicializa uma vez
-_EASYOCR_OK = None
-
-IDIOMA_EASYOCR = {"por": "pt", "eng": "en", "spa": "es"}
-
-
-def easyocr_disponivel():
-    """True se easyocr + dependências estão instalados (checagem preguiçosa)."""
-    global _EASYOCR_OK
-    if _EASYOCR_OK is not None:
-        return _EASYOCR_OK
-    try:
-        import easyocr, numpy, pdf2image  # noqa
-        _EASYOCR_OK = True
-    except Exception:
-        _EASYOCR_OK = False
-    return _EASYOCR_OK
-
-
-def _easy_reader(idioma="por"):
-    global _EASYOCR_READER
-    if _EASYOCR_READER is None:
-        import easyocr
-        lang = IDIOMA_EASYOCR.get(idioma, "pt")
-        # gpu=True usa CUDA se existir; sem GPU o easyocr cai em CPU sozinho
-        _EASYOCR_READER = easyocr.Reader([lang], gpu=True, verbose=False)
-    return _EASYOCR_READER
-
-
-def _ocr_easy(caminho, idioma="por"):
-    """OCR via EasyOCR, página a página."""
-    try:
-        import numpy as np
-        from pdf2image import convert_from_path
-        reader = _easy_reader(idioma)
-        partes = []
-        for img in convert_from_path(caminho, dpi=300):
-            linhas = reader.readtext(np.array(img), detail=0, paragraph=True)
-            partes.append("\n".join(linhas))
-        return "\n".join(partes)
-    except Exception as ee:
-        print(f"        (easyocr falhou: {ee})")
-        return ""
-
-
-# ----------------------------------------------------------------------------
-# Heurística de qualidade do texto reconhecido
-# ----------------------------------------------------------------------------
-RE_CHAR_BOM = re.compile(r"[a-zA-Z0-9áéíóúâêôãõçÁÉÍÓÚÂÊÔÃÕÇ ,.;:()\-/\n]")
-
-
-def qualidade_texto(texto):
-    """Pontuação simples de legibilidade: comprimento útil x proporção de
-    caracteres reconhecíveis. Serve para comparar saídas de dois motores."""
-    if not texto:
-        return 0.0
-    t = texto.strip()
-    if not t:
-        return 0.0
-    bons = len(RE_CHAR_BOM.findall(t))
-    proporcao = bons / len(t)
-    return len(t) * (proporcao ** 2)
-
-
-def texto_ocr_ruim(texto, min_chars=200, min_proporcao=0.75):
-    """True quando o resultado do OCR parece fraco: muito curto ou com
-    proporção alta de caracteres ilegíveis (lixo de reconhecimento)."""
-    if not texto or len(texto.strip()) < min_chars:
-        return True
-    t = texto.strip()
-    return (len(RE_CHAR_BOM.findall(t)) / len(t)) < min_proporcao
-
-
 def ocr_instalado():
-    """True se ALGUM motor de OCR está disponível (Tesseract ou EasyOCR)."""
-    return detectar_backend_ocr() != "nenhum" or easyocr_disponivel()
+    """True se Tesseract (binário) ou PaddleOCR estão disponíveis."""
+    if detectar_backend_ocr() != "nenhum":
+        return True
+    try:
+        import importlib.util
+        return bool(importlib.util.find_spec("paddleocr"))
+    except Exception:
+        return False
 
 
 def obter_texto(caminho, usar_ocr, idioma="por", min_chars=40, motor="auto",
@@ -1138,7 +1184,15 @@ def obter_texto(caminho, usar_ocr, idioma="por", min_chars=40, motor="auto",
         except Exception:
             pass
     if usar_ocr and ocr_instalado():
-        texto_ocr = ocr_para_texto(caminho, idioma, motor)
+        # OCR nunca lê o PDF inteiro — limita páginas (IA confirma valores)
+        ocr_pag = max_paginas
+        if ocr_pag is None or int(ocr_pag) <= 0:
+            ocr_pag = OCR_MAX_PAGINAS_PRIOR
+        else:
+            ocr_pag = min(int(ocr_pag), OCR_MAX_PAGINAS_PRIOR)
+        texto_ocr = ocr_para_texto(
+            caminho, idioma, motor, max_paginas=ocr_pag
+        )
         if max_chars and texto_ocr and len(texto_ocr) > max_chars:
             texto_ocr = texto_ocr[:max_chars]
         if len(texto_ocr.strip()) >= min_chars:
@@ -1554,6 +1608,7 @@ def situacao_para_front(situacao):
 
 
 def numero_com_sigla_front(numero, modalidade):
+    """Aplica sigla Front sem alterar dígitos/códigos do número."""
     try:
         _garantir_path_script()
         from ia_local import numero_com_sigla
@@ -1562,10 +1617,46 @@ def numero_com_sigla_front(numero, modalidade):
         return (numero or "").strip()
 
 
+def padronizar_linha_para_todas_planilhas(linha):
+    """
+    Deixa Modalidade/Número/Ano iguais em todas as planilhas
+    (Licitacoes_preenchida + subirLicitacoes + subirDocumentos).
+
+    Usa as mesmas regras do Front (inclui Registro de Preços → RPPP/RPPE).
+    Números/códigos do nome ficam iguais; só a categoria (sigla) muda.
+    """
+    if not isinstance(linha, dict):
+        return linha
+    try:
+        _garantir_path_script()
+        from gestor_regras.upload import registro_de_linha_planilha
+        from gestor_regras.front import linha_front
+        lf = linha_front(registro_de_linha_planilha(linha))
+    except Exception:
+        num = numero_com_sigla_front(
+            linha.get("Número") or linha.get("Numero") or "",
+            linha.get("Modalidade") or "",
+        )
+        if num:
+            linha["Número"] = num
+        return linha
+
+    if lf.get("modalidade"):
+        linha["Modalidade"] = lf["modalidade"]
+    if lf.get("numero"):
+        linha["Número"] = lf["numero"]
+    if lf.get("ano"):
+        linha["Ano"] = lf["ano"]
+    return linha
+
+
 def _precisa_ia(linha):
-    """True se falta campo que a IA pode refinar."""
-    for k in ("Número", "Objeto", "Situação da Licitação",
-              "Valor Estimado", "Valor Homologado"):
+    """True se falta campo que a IA pode confirmar/preencher."""
+    for k in (
+        "Número", "Objeto", "Situação da Licitação",
+        "Data de Publicação", "Data de Abertura",
+        "Valor Estimado", "Valor Homologado",
+    ):
         v = linha.get(k)
         if v is None or str(v).strip() in ("", "Não informado"):
             return True
@@ -1625,7 +1716,8 @@ def _ler_docs_priorizados(arquivos_locais, usar_ocr, idioma_ocr, motor_ocr,
         tipo = meta.get("tipo") or "outro"
         max_pag, max_chars = limites_leitura(tipo)
         eh_escolhido = abs_fp in escolhidos_paths
-        # não-priorizados: leitura curta só p/ rename / nomes
+        # não-priorizados: leitura curta só p/ rename / nomes — SEM OCR
+        usar_ocr_doc = bool(usar_ocr) and eh_escolhido
         if not eh_escolhido:
             if max_pag is None:
                 max_pag = 3
@@ -1633,18 +1725,26 @@ def _ler_docs_priorizados(arquivos_locais, usar_ocr, idioma_ocr, motor_ocr,
                 max_pag = min(max_pag, 3)
             max_chars = min(max_chars, 3500)
         elif tipo in ("edital", "dfd", "termo_referencia", "homologacao"):
+            # Nativo: pode ler bastante; OCR (se precisar) fica limitado
+            if max_pag is None:
+                max_pag = OCR_MAX_PAGINAS_PRIOR
+            else:
+                max_pag = min(max_pag, OCR_MAX_PAGINAS_PRIOR)
             _log(
-                "        lendo {0} INTEIRO ({1})…",
+                "        lendo {0} ({1}, até {2} pág.)…",
                 meta.get("rotulo") or tipo,
                 os.path.basename(fp)[:50],
+                max_pag,
             )
+        elif eh_escolhido and max_pag is None:
+            max_pag = OCR_MAX_PAGINAS_PRIOR
 
         texto, origem = obter_texto(
-            fp, usar_ocr, idioma_ocr, motor=motor_ocr,
+            fp, usar_ocr_doc, idioma_ocr, motor=motor_ocr,
             max_paginas=max_pag, max_chars=max_chars,
         )
         if origem == "ocr":
-            print(f"        (OCR) {os.path.basename(fp)}")
+            print(f"        (OCR leve) {os.path.basename(fp)}")
 
         nome_atual = os.path.basename(fp)
         raiz_atual, ext = os.path.splitext(nome_atual)
@@ -1774,7 +1874,7 @@ def _item_aud_simples(campo, valor, doc, rotulo, trecho=""):
 
 def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
                         modelo, ollama_url, pasta_cache, so_se_faltar):
-    """Chama Ollama se ligado; nunca quebra o job se estiver offline."""
+    """Chama Ollama para CONFIRMAR as informações; nunca quebra o job se offline."""
     import threading
 
     if so_se_faltar and not _precisa_ia(linha):
@@ -1790,12 +1890,25 @@ def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
              ollama_url)
         return None
 
+    def _fmt_data(v):
+        if isinstance(v, datetime):
+            return v.strftime("%d/%m/%Y")
+        return str(v or "").strip()
+
+    try:
+        from ia_local.regras_titulo import numero_sem_categoria
+        num_bruto = numero_sem_categoria(linha.get("Número") or "")
+    except Exception:
+        num_bruto = re.sub(r"-([A-Za-z]+)$", "", str(linha.get("Número") or ""))
+
     leitura_local = {
         "numero": linha.get("Número") or "",
-        "numero_bruto": re.sub(r"-([A-Za-z]+)$", "", str(linha.get("Número") or "")),
+        "numero_bruto": num_bruto,
         "ano": str(linha.get("Ano") or ""),
         "objeto": linha.get("Objeto") or "",
         "situacao": linha.get("Situação da Licitação") or "",
+        "data_publicacao": _fmt_data(linha.get("Data de Publicação")),
+        "data_abertura": _fmt_data(linha.get("Data de Abertura")),
         "valor_estimado": (
             f"{linha['Valor Estimado']:.2f}"
             if isinstance(linha.get("Valor Estimado"), (int, float))
@@ -1814,13 +1927,15 @@ def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
     def _heartbeat():
         t0 = time.time()
         while not stop.wait(15):
-            _log("        IA: ainda processando... {0}s (aguarde)",
+            _log("        IA: ainda confirmando... {0}s (aguarde)",
                  int(time.time() - t0))
 
     th = threading.Thread(target=_heartbeat, daemon=True)
     try:
-        _log("        etapa: IA — refinando com Ollama ({0}) — pode levar 1–3 min...",
-             modelo)
+        _log(
+            "        etapa: IA — confirmando informações com Ollama ({0})…",
+            modelo,
+        )
         th.start()
         out = refinar(
             titulo, leitura_local, cabecalhos,
@@ -1841,9 +1956,9 @@ def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
         _log("        IA: cache hit (resposta instantânea)")
     mudancas = out.get("mudancas") or []
     if mudancas:
-        _log("        IA: " + "; ".join(mudancas[:4]))
+        _log("        IA: " + "; ".join(mudancas[:6]))
     else:
-        _log("        IA: sem mudanças (manteve regras)")
+        _log("        IA: confirmou a leitura local (sem mudanças)")
 
     # funde só o que veio validado + monta auditoria da IA
     aud_ia = []
@@ -1855,19 +1970,29 @@ def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
         aud_ia.append(_item_aud_simples(
             campo, valor,
             doc=origem_ia,
-            rotulo=motivo or "refino Ollama",
+            rotulo=motivo or "confirmação Ollama",
             trecho=trecho,
         ))
 
     if out.get("numero"):
         ant = linha.get("Número")
-        linha["Número"] = numero_com_sigla_front(out["numero"], modalidade)
+        try:
+            from ia_local.regras_titulo import numero_pos_confirmacao
+            linha["Número"] = numero_pos_confirmacao(
+                out["numero"], ant or "", modalidade
+            )
+        except Exception:
+            linha["Número"] = numero_com_sigla_front(out["numero"], modalidade)
         if out.get("ano"):
             linha["Ano"] = out["ano"]
         _aud_ia(
             "Número", linha["Número"],
             trecho=out.get("trecho_numero") or "",
-            motivo="IA alterou (antes: {0})".format(ant or "—"),
+            motivo=(
+                "IA alterou (antes: {0})".format(ant or "—")
+                if str(ant or "") != str(linha["Número"])
+                else "IA confirmou"
+            ),
         )
     if out.get("objeto"):
         ant = (linha.get("Objeto") or "")[:60]
@@ -1875,7 +2000,11 @@ def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
         _aud_ia(
             "Objeto", out["objeto"],
             trecho=out.get("trecho_objeto") or "",
-            motivo="IA alterou (antes: {0})".format(ant or "—"),
+            motivo=(
+                "IA alterou (antes: {0})".format(ant or "—")
+                if (ant or "") != (out["objeto"] or "")[:60]
+                else "IA confirmou"
+            ),
         )
     if out.get("situacao"):
         ant = linha.get("Situação da Licitação")
@@ -1883,8 +2012,40 @@ def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
         _aud_ia(
             "Situação da Licitação", linha["Situação da Licitação"],
             trecho=out.get("motivo_situacao") or "",
-            motivo="IA alterou (antes: {0})".format(ant or "—"),
+            motivo=(
+                "IA alterou (antes: {0})".format(ant or "—")
+                if ant != linha["Situação da Licitação"]
+                else "IA confirmou"
+            ),
         )
+
+    def _aplicar_data(campo_linha, campo_ia, chave_trecho):
+        raw = (out.get(campo_ia) or "").strip()
+        if not raw or raw == "Não informado":
+            return
+        try:
+            dt = datetime.strptime(raw, "%d/%m/%Y")
+        except ValueError:
+            return
+        ant = linha.get(campo_linha)
+        linha[campo_linha] = dt
+        _aud_ia(
+            campo_linha, dt.strftime("%d/%m/%Y"),
+            trecho=out.get(chave_trecho) or "",
+            motivo=(
+                "IA alterou (antes: {0})".format(_fmt_data(ant) or "—")
+                if _fmt_data(ant) != dt.strftime("%d/%m/%Y")
+                else "IA confirmou"
+            ),
+        )
+
+    _aplicar_data(
+        "Data de Publicação", "data_publicacao", "trecho_data_publicacao"
+    )
+    _aplicar_data(
+        "Data de Abertura", "data_abertura", "trecho_data_abertura"
+    )
+
     for campo_linha, campo_ia, chave_trecho in (
         ("Valor Estimado", "valor_estimado", "trecho_valor_estimado"),
         ("Valor Homologado", "valor_homologado", "trecho_valor_homologado"),
@@ -1902,7 +2063,13 @@ def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
         _aud_ia(
             campo_linha, valor_aud,
             trecho=out.get(chave_trecho) or "",
-            motivo="IA alterou (antes: {0})".format(ant if ant not in ("", None) else "—"),
+            motivo=(
+                "IA alterou (antes: {0})".format(
+                    ant if ant not in ("", None) else "—"
+                )
+                if str(ant) != str(valor_aud)
+                else "IA confirmou"
+            ),
         )
     out["auditoria"] = aud_ia
     return out
@@ -1931,12 +2098,14 @@ def main():
     ap.add_argument("--ocr", action="store_true",
                     help="Usa OCR nos PDFs sem camada de texto.")
     ap.add_argument("--idioma-ocr", default="por")
-    ap.add_argument("--motor-ocr", default="", choices=["", "auto", "tesseract", "easyocr"],
-                    help="Motor de OCR: auto (Tesseract + EasyOCR de reserva), "
-                         "tesseract ou easyocr. Vazio usa MOTOR_OCR do topo do script.")
+    ap.add_argument("--motor-ocr", default="",
+                    choices=["", "auto", "tesseract", "easyocr", "paddleocr", "docling", "surya"],
+                    help="Motor de OCR: tesseract (padrão/rápido), auto (=tesseract) "
+                         "ou paddleocr. easyocr/docling/surya viram tesseract.")
     ap.add_argument("--anos", default="",
                     help="Anos a extrair, separados por vírgula (ex.: 2023,2024). "
-                         "Vazio usa ANOS_FILTRO do topo do script; ambos vazios = todos.")
+                         "Com filtro, para o scanner ao achar ano anterior ao mínimo "
+                         "(ex.: 2023 → para no 2022). Vazio = todos.")
     ap.add_argument("--sem-renomear", action="store_true",
                     help="Não renomeia anexos pelo título interno do documento.")
     ap.add_argument("--ignorar-ssl", action="store_true",
@@ -1949,7 +2118,7 @@ def main():
     )
     ap.add_argument(
         "--refinar-ia", action="store_true",
-        help="Refina numero/objeto/situacao/valores com Ollama local (grátis).",
+        help="Confirma com Ollama: número, objeto, situação, datas e valores.",
     )
     ap.add_argument(
         "--modelo-ia", default="llama3.2:3b",
@@ -1961,14 +2130,20 @@ def main():
     )
     ap.add_argument(
         "--ia-sempre", action="store_true",
-        help="Chama a IA mesmo quando regras já preencheram os campos "
-             "(padrão: só chama se faltar número/objeto/situação/valor).",
+        help="Com --refinar-ia, confirma todas as informações mesmo se "
+             "as regras já preencheram (número, objeto, situação, datas, valores).",
     )
     ap.add_argument(
         "--limite", type=int, default=0,
         help="Processa no máximo N licitações (0 = todas). Útil para testes.",
     )
     args = ap.parse_args()
+    # Garante dict mutável (runner antigo do painel às vezes setava None).
+    _ur = globals().get("ULTIMO_RESULTADO_UPLOAD")
+    if not isinstance(_ur, dict):
+        globals()["ULTIMO_RESULTADO_UPLOAD"] = {}
+    else:
+        _ur.clear()
 
     if not (args.listagem or "").strip():
         ap.error("Informe --listagem com a URL da página de licitações.")
@@ -1999,12 +2174,17 @@ def main():
     if args.ocr:
         motor_ocr = args.motor_ocr or MOTOR_OCR
         tess = detectar_backend_ocr()
-        easy = easyocr_disponivel()
+        try:
+            import importlib.util
+            paddle_ok = bool(importlib.util.find_spec("paddleocr"))
+        except Exception:
+            paddle_ok = False
         print(f"  · OCR: motor '{motor_ocr}' | Tesseract: "
-              f"{tess if tess != 'nenhum' else 'NÃO instalado'} | EasyOCR: "
-              f"{'instalado' if easy else 'não instalado'}")
+              f"{tess if tess != 'nenhum' else 'NÃO instalado'} | PaddleOCR: "
+              f"{'instalado' if paddle_ok else 'não instalado'}")
         if not ocr_instalado():
-            print("    ! nenhum motor de OCR disponível — OCR será ignorado")
+            print("    ! Tesseract não encontrado — OCR será ignorado "
+                  "(instale Tesseract-OCR; Auto usa só Tesseract)")
     else:
         motor_ocr = args.motor_ocr or MOTOR_OCR
 
@@ -2018,8 +2198,11 @@ def main():
     if args.limite and args.limite > 0:
         print(f"Limite   : {args.limite} licitação(ões)")
     if args.refinar_ia:
-        print(f"IA       : Ollama / {args.modelo_ia} @ {args.ollama_url}"
-              + (" (só se faltar campo)" if not args.ia_sempre else " (sempre)"))
+        # Sempre confirma todas as informações (não só valores / não só gaps)
+        print(
+            f"IA       : Ollama / {args.modelo_ia} @ {args.ollama_url}"
+            " (confirmando número, objeto, situação, datas e valores)"
+        )
     else:
         print("IA       : desligada")
     print("=" * 66 + "\n")
@@ -2028,13 +2211,15 @@ def main():
     if not args.so_html:
         print("► Coletando via API REST...")
         slugs = ["licitacoes"] + (SUBCATEGORIAS if args.incluir_subcategorias else [])
-        licitacoes = coletar_via_api(sessao, base, slugs)
+        licitacoes = coletar_via_api(sessao, base, slugs, anos_filtro=anos_filtro)
     if licitacoes is None:
         print("► Coletando via HTML (varredura de páginas)...")
         listagens = [args.listagem] + (
             [f"{base}/c/licitacoes/{s}/" for s in SUBCATEGORIAS]
             if args.incluir_subcategorias else [])
-        licitacoes = coletar_via_html(sessao, listagens)
+        licitacoes = coletar_via_html(
+            sessao, listagens, anos_filtro=anos_filtro
+        )
     if args.limite and args.limite > 0:
         licitacoes = licitacoes[: args.limite]
     print(f"\n► {len(licitacoes)} licitação(ões) a processar.\n")
@@ -2171,7 +2356,7 @@ def main():
                     "licitacao": titulo,
                 })
 
-                # Número com sigla (ex.: 002/2023-AD)
+                # Número com sigla (ex.: 9/2023-007-CMVX-RPPP) — só troca categoria
                 num_final = numero_com_sigla_front(
                     linha.get("Número") or numero, modalidade
                 )
@@ -2218,17 +2403,33 @@ def main():
                     pasta_cache = os.path.join(
                         os.path.dirname(os.path.abspath(__file__)), "cache_ia"
                     )
+                    # Sempre confirma (número, objeto, situação, datas, valores)
                     out_ia = _refinar_com_ollama(
                         titulo, linha, cabecalhos, modalidade,
                         modelo=args.modelo_ia,
                         ollama_url=args.ollama_url,
                         pasta_cache=pasta_cache,
-                        so_se_faltar=not args.ia_sempre,
+                        so_se_faltar=False,
                     )
                     if out_ia:
                         for item in out_ia.get("auditoria") or []:
                             item["licitacao"] = titulo
                             auditoria_geral.append(item)
+
+                # Mesmo Número/Modalidade em preenchida + subir* (+ contratos)
+                ant_num = linha.get("Número")
+                padronizar_linha_para_todas_planilhas(linha)
+                if str(linha.get("Número") or "") != str(ant_num or ""):
+                    auditoria_geral.append({
+                        **_item_aud_simples(
+                            "Número", linha.get("Número"),
+                            doc="padronização Front (todas as planilhas)",
+                            rotulo="padronizar_linha_para_todas_planilhas",
+                            trecho=(titulo or "")[:120],
+                        ),
+                        "licitacao": titulo,
+                    })
+                    modalidade = linha.get("Modalidade") or modalidade
 
             linhas_planilha.append(linha)
             itens_upload.append({
@@ -2251,11 +2452,10 @@ def main():
                            args.planilha_modelo, args.planilha_saida)
         print(f"  ✓ {args.planilha_saida}")
         print("  · Aba 'Auditoria': origem de cada campo (documento + trecho)")
-        global ULTIMO_RESULTADO_UPLOAD
-        ULTIMO_RESULTADO_UPLOAD = {
+        ULTIMO_RESULTADO_UPLOAD.update({
             "planilha_preenchida": os.path.abspath(args.planilha_saida),
             "planilha_auditoria": os.path.abspath(args.planilha_saida),
-        }
+        })
 
         # Planilhas oficiais de upload (Front)
         try:
@@ -2267,34 +2467,22 @@ def main():
                 sys.path.insert(0, _dir_script)
             from gestor_regras import gerar_planilhas_upload
 
-        print("\n► Gerando planilhas de upload (subirLicitacoes / subirDocumentos / contratos)...")
+        print("\n► Planilhas oficiais (licitação + separar contratos)...")
         resultado_upload = gerar_planilhas_upload(
             itens_upload,
             args.saida,
             link_pasta_base=(args.link_pasta_base or "").strip(),
-            ler_texto=obter_texto,
-            usar_ocr=bool(args.ocr),
-            idioma_ocr=getattr(args, "idioma_ocr", "por") or "por",
-            motor_ocr=(getattr(args, "motor_ocr", None) or "auto"),
-            usar_ia_contratos=bool(getattr(args, "refinar_ia", False)),
-            modelo_ia=(getattr(args, "modelo_ia", None) or "llama3.2:3b"),
-            ollama_url=(getattr(args, "ollama_url", None) or "http://127.0.0.1:11434"),
         )
         print(
-            "  ✓ Prontas: {0}  |  Pendentes: {1}".format(
+            "\n  Resumo — Prontas: {0}  |  Pendentes: {1}".format(
                 resultado_upload["prontas"],
                 resultado_upload["pendentes"],
             )
         )
-        print("  ✓ {0}".format(resultado_upload["planilha_licitacoes"]))
-        print("  ✓ {0}".format(resultado_upload["planilha_documentos"]))
-        if resultado_upload.get("planilha_contratos"):
-            print("  ✓ Contratos: {0} linha(s) → {1}".format(
-                resultado_upload.get("contratos_extraidos", "?"),
-                resultado_upload["planilha_contratos"],
-            ))
+        print("  ✓ Licitação: {0}".format(resultado_upload["planilha_licitacoes"]))
+        print("  ✓ Documentos: {0}".format(resultado_upload["planilha_documentos"]))
         if resultado_upload.get("contratos_movidos"):
-            print("  · Contratos separados: {0} arquivo(s) em Contratos/".format(
+            print("  · Contratos separados: {0} arquivo(s)".format(
                 resultado_upload["contratos_movidos"]))
             for msg in (resultado_upload.get("logs_contratos") or [])[:8]:
                 print("  · {0}".format(msg))
@@ -2323,8 +2511,8 @@ def main():
     print("\n" + "=" * 66)
     print("CANCELADO." if cancelado else "Concluído.")
     if not args.sem_extracao:
-        print("  Planilhas oficiais: subirLicitacoes.xlsx + subirDocumentosLicitacoes.xlsx")
-        print("  Contratos: Contratos/ + contratos.xlsx (aba Auditoria) + contratos.csv")
+        print("  1) Licitação: subirLicitacoes.xlsx + subirDocumentosLicitacoes.xlsx")
+        print("  2) Contratos (depois): só pasta Contratos/ (sem planilha)")
         print("  Veja também a aba 'Auditoria' e a pasta PENDENTES/ se houver faltas.")
     print("=" * 66)
     if cancelado:

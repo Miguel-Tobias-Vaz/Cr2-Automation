@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Refino por IA dos campos difíceis: número, objeto, situação.
+Confirmação por IA dos campos da licitação.
 
 Padrão: Ollama LOCAL (grátis, roda no PC).
-Opcional: Anthropic (pago).
+Confirma: número, objeto, situação, datas e valores (não só valores).
 
-Integração Cr2 (flag --refinar-ia; padrão OFF).
-- Só recebe texto já extraído (título + cabeçalhos de PDF).
+Integração Cr2 (flag --refinar-ia).
+- Só recebe texto já extraído (título + PDFs prioritários).
 - Exige trecho literal (anti-alucinação).
 - Cache em disco para não repetir a mesma consulta.
 """
@@ -45,9 +45,11 @@ MODELO_LOCAL_PADRAO = "llama3.2:3b"
 
 _ESQUEMA_KEYS = (
     "numero", "ano", "objeto", "situacao",
+    "data_publicacao", "data_abertura",
     "valor_estimado", "valor_homologado",
     "confianca",
     "trecho_numero", "trecho_objeto", "motivo_situacao",
+    "trecho_data_publicacao", "trecho_data_abertura",
     "trecho_valor_estimado", "trecho_valor_homologado",
     "observacao",
 )
@@ -67,6 +69,14 @@ _ESQUEMA = {
         "situacao": {
             "type": "string",
             "description": "Uma das situações do Front, ou 'Não informado'.",
+        },
+        "data_publicacao": {
+            "type": "string",
+            "description": "Data de publicação dd/mm/aaaa, ou 'Não informado'.",
+        },
+        "data_abertura": {
+            "type": "string",
+            "description": "Data de abertura da sessão/licitação dd/mm/aaaa, ou 'Não informado'.",
         },
         "valor_estimado": {
             "type": "string",
@@ -99,6 +109,14 @@ _ESQUEMA = {
             "type": "string",
             "description": "Evidência curta da situação (nome do ato ou trecho).",
         },
+        "trecho_data_publicacao": {
+            "type": "string",
+            "description": "Trecho LITERAL da data de publicação.",
+        },
+        "trecho_data_abertura": {
+            "type": "string",
+            "description": "Trecho LITERAL da data de abertura.",
+        },
         "trecho_valor_estimado": {
             "type": "string",
             "description": "Trecho LITERAL do valor estimado.",
@@ -113,20 +131,20 @@ _ESQUEMA = {
     "additionalProperties": False,
 }
 
-_SYSTEM = """Você confere campos de licitações públicas brasileiras para o portal CR2.
+_SYSTEM = """Você CONFIRMA campos de licitações públicas brasileiras para o portal CR2.
 
 Receberá:
 1) o título da publicação no site;
 2) a leitura local (regras) já feita;
-3) documentos prioritários lidos INTEIROS quando existirem:
-   EDITAL, DFD (Formalização de Demanda), TERMO DE REFERÊNCIA (TR) e
-   TERMO DE HOMOLOGAÇÃO — além de ETP, orçamento, contrato e ata.
+3) documentos prioritários (Edital, DFD, TR, Homologação, etc.).
 
-Campos a confirmar/corrigir: numero, objeto, situacao, valor_estimado,
-valor_homologado.
+Sua missão é VERIFICAR e, se necessário, CORRIGIR TODOS estes campos — não só valores:
+numero, ano, objeto, situacao, data_publicacao, data_abertura,
+valor_estimado, valor_homologado.
 
 Regras rígidas:
 - Extraia APENAS o que estiver no material. Não invente.
+- Se a leitura local estiver correta, MANTENHA-A (confirme).
 - Se não puder afirmar, use exatamente "Não informado".
 - Número do CERTAME no formato 000/AAAA. NÃO use: lei, decreto, processo
   administrativo, contrato, empenho, CNPJ, telefone.
@@ -134,27 +152,19 @@ Regras rígidas:
 - Situação: use EXATAMENTE uma destas (ou Não informado):
   Aberto, Anulado, Cancelado, Deserto, Em andamento, Finalizado,
   Fracassado, Publicada, Revogado, Suspenso.
-- VALORES (obrigatório buscar com cuidado):
-  * valor_estimado: leia o TR inteiro e o Edital/DFD. Prefira valor
-    estimado / global / máximo / de referência. Formato 1720000.00.
-  * valor_homologado: leia o Termo de Homologação inteiro.
-    - Se no FINAL houver TOTAL GERAL / VALOR TOTAL HOMOLOGADO / VALOR GLOBAL,
-      use ESSE total (não um item isolado).
-    - Se só houver valores por ITEM ou LOTE, SOME todos os itens/lotes
-      homologados e informe a soma como valor_homologado.
-    - Depois: Adjudicação, Contrato ou Ata.
-    NÃO confunda com valor estimado nem com preço unitário.
-  * Se o TR/Edital/DFD trouxer o estimado e a Homologação outro valor,
-    use cada um na coluna correta.
-- Evidências de Finalizado: termo de homologação, ratificação (dispensa/
-  inexigibilidade/adesão), contrato assinado publicado.
-- Evidência de Publicada: só edital/aviso/extrato sem ato final.
-- Em trecho_*, copie texto LITERAL do material (onde o valor aparece).
-- Prefira confirmar a leitura local quando ela estiver correta.
+- Datas: formato dd/mm/aaaa.
+  * data_publicacao: publicação do edital/aviso no site ou no documento.
+  * data_abertura: sessão/abertura/disputa (não confundir com publicação).
+- VALORES:
+  * valor_estimado: TR/Edital/DFD — estimado/global/máximo. Formato 1720000.00.
+  * valor_homologado: Termo de Homologação — TOTAL final (ou soma de lotes).
+    NÃO confunda com estimado nem preço unitário.
+- Em trecho_*, copie texto LITERAL do material.
+- Prefira confirmar a leitura local quando correta.
 - Responda APENAS um JSON válido, sem markdown.
 """
 
-_RE_NUMERO = re.compile(r"^\s*(\d{1,10})\s*/\s*(\d{4})\s*$")
+_RE_NUMERO = re.compile(r"^\s*(\d{1,10})\s*/\s*(\d{4})")  # ignora sufixo portal
 _RE_JSON = re.compile(r"\{.*\}", re.DOTALL)
 
 
@@ -261,11 +271,11 @@ def montar_prompt(titulo: str, leitura_local: dict, cabecalhos: list[dict]) -> s
     return (
         f"TÍTULO NO SITE:\n{titulo}\n\n"
         f"LEITURA LOCAL (regras):\n{local}\n\n"
-        "DOCUMENTOS (EDITAL+DFD+TR INTEIROS → valor_estimado; "
-        "TERMO DE HOMOLOGAÇÃO INTEIRO → valor_homologado):\n"
+        "DOCUMENTOS PRIORITÁRIOS:\n"
         f"{docs}\n\n"
-        "Confirme ou corrija numero, objeto, situacao, valor_estimado e "
-        "valor_homologado. Nos valores, cite o trecho literal. Responda só JSON."
+        "CONFIRME ou CORRIJA todos os campos: numero, objeto, situacao, "
+        "data_publicacao, data_abertura, valor_estimado e valor_homologado. "
+        "Cite trechos literais. Responda só JSON."
     )
 
 
@@ -371,6 +381,8 @@ def refinar(
             "numero": leitura_local.get("numero_bruto") or leitura_local.get("numero"),
             "objeto": leitura_local.get("objeto"),
             "situacao": leitura_local.get("situacao"),
+            "data_publicacao": leitura_local.get("data_publicacao"),
+            "data_abertura": leitura_local.get("data_abertura"),
             "valor_estimado": leitura_local.get("valor_estimado"),
             "valor_homologado": leitura_local.get("valor_homologado"),
         },
@@ -379,7 +391,7 @@ def refinar(
             for c in cabecalhos
         ],
         "modelo": modelo,
-        "v": 2,
+        "v": 3,
     }
     chave = _chave_cache(payload_cache)
 
@@ -412,6 +424,7 @@ def refinar(
 
 
 _RE_VALOR_FRONT = re.compile(r"^\s*(\d+(?:\.\d{1,2})?)\s*$")
+_RE_DATA_BR = re.compile(r"^\s*(\d{1,2})/(\d{1,2})/(\d{4})\s*$")
 
 
 def _normalizar_valor_ia(texto: str) -> str:
@@ -433,6 +446,20 @@ def _normalizar_valor_ia(texto: str) -> str:
         return ""
 
 
+def _normalizar_data_ia(texto: str) -> str:
+    """Aceita dd/mm/aaaa → dd/mm/aaaa normalizado; senão ''."""
+    t = (texto or "").strip()
+    if not t or t == "Não informado":
+        return ""
+    m = _RE_DATA_BR.match(t)
+    if not m:
+        return ""
+    d, mth, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if not (1 <= d <= 31 and 1 <= mth <= 12 and 1990 <= y <= 2100):
+        return ""
+    return f"{d:02d}/{mth:02d}/{y}"
+
+
 def _validar_e_fundir(dados: dict, local: dict, fonte: str) -> dict:
     """Aceita sugestão da IA só com evidência; senão mantém a leitura local."""
     out = {
@@ -440,12 +467,16 @@ def _validar_e_fundir(dados: dict, local: dict, fonte: str) -> dict:
         "ano": local.get("ano") or "",
         "objeto": local.get("objeto") or "",
         "situacao": local.get("situacao") or "",
+        "data_publicacao": local.get("data_publicacao") or "",
+        "data_abertura": local.get("data_abertura") or "",
         "valor_estimado": local.get("valor_estimado") or "",
         "valor_homologado": local.get("valor_homologado") or "",
         "confianca": dados.get("confianca") or "baixa",
         "trecho_numero": dados.get("trecho_numero") or "",
         "trecho_objeto": dados.get("trecho_objeto") or "",
         "motivo_situacao": dados.get("motivo_situacao") or "",
+        "trecho_data_publicacao": dados.get("trecho_data_publicacao") or "",
+        "trecho_data_abertura": dados.get("trecho_data_abertura") or "",
         "observacao": dados.get("observacao") or "",
         "mudancas": [],
     }
@@ -453,14 +484,26 @@ def _validar_e_fundir(dados: dict, local: dict, fonte: str) -> dict:
     num_ia = (dados.get("numero") or "").strip()
     if num_ia and num_ia != "Não informado":
         m = _RE_NUMERO.match(num_ia)
-        # Local: aceita se o número aparecer na fonte OU trecho bater
         num_norm = normaliza(num_ia)
         num_ok = _trecho_existe(dados.get("trecho_numero", ""), fonte) or (
             num_norm in fonte or normaliza(m.group(0) if m else "") in fonte
         )
         if m and num_ok:
-            novo = "%s/%s" % (m.group(1).zfill(3), m.group(2))
-            antigo = re.sub(r"-([A-Za-z]+)$", "", out["numero"] or "")
+            # Não altera dígitos/códigos já lidos — só a base N/AAAA da IA
+            novo = "%s/%s" % (m.group(1), m.group(2))
+            local_cheio = out["numero"] or ""
+            try:
+                from .regras_titulo import numero_sem_categoria
+                local_base = numero_sem_categoria(local_cheio)
+            except Exception:
+                local_base = re.sub(r"-([A-Za-z]+)$", "", local_cheio)
+            # Se o local já tem o mesmo N/AAAA (ex.: 9/2023-007-CMVX), preserva
+            if local_base and re.search(
+                r"(?<!\d)%s\s*/\s*%s\b" % (re.escape(m.group(1)), re.escape(m.group(2))),
+                local_base,
+            ):
+                novo = local_base
+            antigo = local_base or local_cheio
             if novo != antigo:
                 out["mudancas"].append(f"numero: {antigo or '∅'} → {novo}")
             out["numero"] = novo
@@ -490,6 +533,30 @@ def _validar_e_fundir(dados: dict, local: dict, fonte: str) -> dict:
             out["situacao"] = sit_ia
 
     for campo, chave_trecho in (
+        ("data_publicacao", "trecho_data_publicacao"),
+        ("data_abertura", "trecho_data_abertura"),
+    ):
+        data_ok = _normalizar_data_ia(dados.get(campo) or "")
+        if not data_ok:
+            continue
+        trecho_ok = _trecho_existe(dados.get(chave_trecho, ""), fonte)
+        data_na_fonte = normaliza(data_ok) in fonte or data_ok in (fonte or "")
+        if not (trecho_ok or data_na_fonte or not out.get(campo)):
+            # só preenche vazio sem evidência fraca; com evidência troca
+            if out.get(campo) and not (trecho_ok or data_na_fonte):
+                continue
+        if not out.get(campo):
+            if trecho_ok or data_na_fonte or dados.get("confianca") in ("alta", "media"):
+                out[campo] = data_ok
+                out["mudancas"].append(f"{campo}: preenchido pela IA")
+        elif data_ok != out.get(campo) and (trecho_ok or data_na_fonte):
+            if dados.get("confianca") in ("alta", "media"):
+                out["mudancas"].append(
+                    f"{campo}: {out.get(campo)} → {data_ok}"
+                )
+                out[campo] = data_ok
+
+    for campo, chave_trecho in (
         ("valor_estimado", "trecho_valor_estimado"),
         ("valor_homologado", "trecho_valor_homologado"),
     ):
@@ -497,7 +564,6 @@ def _validar_e_fundir(dados: dict, local: dict, fonte: str) -> dict:
         if not val:
             continue
         trecho_ok = _trecho_existe(dados.get(chave_trecho, ""), fonte)
-        # também aceita se o número formatado BR aparecer na fonte
         digitos = val.replace(".", "")
         fonte_tem = digitos[:6] in re.sub(r"\D", "", fonte) if len(digitos) >= 6 else False
         if not (trecho_ok or fonte_tem):

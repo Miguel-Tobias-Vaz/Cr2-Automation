@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,12 +17,17 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backend.jobs import JobManager, JobStatus  # noqa: E402
+from backend import auth  # noqa: E402
+from backend.config import JOB_TIMEOUT_S  # noqa: E402
+from backend.deps import get_optional_user, require_admin, require_user  # noqa: E402
+from backend.jobs import JobManager, JobStatus, QueueFullError  # noqa: E402
+from backend.job_output import build_download_zip  # noqa: E402
 from backend.milagre_routes import router as milagre_router  # noqa: E402
 from backend.runners import dispatch  # noqa: E402
+from backend.state import jobs  # noqa: E402
+from backend.user_storage import apply_user_defaults, save_upload, workspace_info  # noqa: E402
 
 FRONT = ROOT / "front"
-jobs = JobManager()
 
 app = FastAPI(title="Opto Automações", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -60,6 +65,13 @@ SERVICES = {
         "pagina": "/licitacoes.html",
         "icone": "04",
     },
+    "repasses": {
+        "id": "repasses",
+        "nome": "Repasses",
+        "descricao": "Planilha com links → baixa documentos, OCR e gera Repasses.xlsx.",
+        "pagina": "/repasses.html",
+        "icone": "10",
+    },
     "contratos": {
         "id": "contratos",
         "nome": "Contratos / Aditivos",
@@ -80,6 +92,13 @@ SERVICES = {
         "descricao": "Tipo, Data, Número, Pauta, Ata, Presença e Votações no portal CR2.",
         "pagina": "/sessao.html",
         "icone": "06",
+    },
+    "pub_repasses": {
+        "id": "pub_repasses",
+        "nome": "Publicação Repasses",
+        "descricao": "Publica Repasses.xlsx no portal CR2 (Mês/Ano, Data, valores, arquivo).",
+        "pagina": "/pub-repasses.html",
+        "icone": "11",
     },
     "mapa": {
         "id": "mapa",
@@ -108,38 +127,110 @@ class JobCreate(BaseModel):
     config: dict = {}
 
 
+class LoginBody(BaseModel):
+    username: str
+    password: str
+
+
+class QueueReorderBody(BaseModel):
+    order: list[str]
+
+
+SERVICE_LABELS = {
+    "documentos": "Documentos",
+    "categorias": "Categorias",
+    "normas": "Extração Pro",
+    "licitacoes": "Licitações",
+    "repasses": "Extração Repasses",
+    "contratos": "Contratos",
+    "publicacao": "Publicação",
+    "sessao": "Sessão",
+    "pub_repasses": "Pub. Repasses",
+    "mapa": "Mapa",
+    "dic_est_ter": "Dic/Est/Ter",
+}
+
+
+def _job_summary(job) -> dict:
+    d = job.to_dict(jobs)
+    prog = d.get("progress") or {}
+    return {
+        "id": d["id"],
+        "service_id": d["service_id"],
+        "nome": SERVICE_LABELS.get(d["service_id"], d["service_id"]),
+        "status": d["status"],
+        "cancel_requested": d.get("cancel_requested"),
+        "done": prog.get("done") or 0,
+        "total": prog.get("total") or 0,
+        "percent": prog.get("percent"),
+        "label": prog.get("label") or "",
+        "queue": d.get("queue"),
+        "owner": d.get("owner"),
+    }
+
+
+def _assert_can_cancel(job, user) -> None:
+    if not auth.can_cancel_job(user, job.owner):
+        raise HTTPException(403, "Sem permissão para cancelar este processo.")
+
+
+@app.get("/api/auth/me")
+def auth_me(user=Depends(get_optional_user)):
+    if not auth.is_enabled():
+        return {"auth_required": False, "user": None}
+    if not user:
+        return {"auth_required": True, "user": None}
+    return {
+        "auth_required": True,
+        "user": {"username": user.username, "role": user.role},
+    }
+
+
+@app.post("/api/auth/login")
+def auth_login(body: LoginBody):
+    if not auth.is_enabled():
+        raise HTTPException(400, "Autenticação não configurada neste servidor.")
+    sess = auth.login(body.username.strip(), body.password)
+    if not sess:
+        raise HTTPException(401, "Usuário ou senha inválidos.")
+    return {
+        "ok": True,
+        "token": sess.token,
+        "user": {"username": sess.username, "role": sess.role},
+    }
+
+
+@app.post("/api/auth/logout")
+def auth_logout(authorization: str | None = None):
+    auth.logout(auth.bearer_token(authorization))
+    return {"ok": True}
+
+
 @app.get("/api/health")
-def health():
-    """
-    Saúde do servidor + processo ativo (para o pill Online).
-    """
+def health(user=Depends(get_optional_user)):
+    """Saúde do servidor + fila (pill Online)."""
+    snap = jobs.queue_snapshot()
     ativo = jobs.job_ativo()
-    payload = {"ok": True, "ativos": jobs.ativos(), "ativo": None}
+    payload = {
+        "ok": True,
+        "auth_required": auth.is_enabled(),
+        "user": (
+            {"username": user.username, "role": user.role} if user else None
+        ),
+        "job_timeout_s": JOB_TIMEOUT_S,
+        "ativos": jobs.ativos(),
+        "running": snap["running"],
+        "pending": snap["pending"],
+        "max_concurrent": snap["max_concurrent"],
+        "max_queue": snap["max_queue"],
+        "queue": snap,
+        "ativo": None,
+        "running_jobs": [
+            _job_summary(j) for j in jobs.running_jobs()
+        ],
+    }
     if ativo is not None:
-        d = ativo.to_dict()
-        labels = {
-            "documentos": "Documentos",
-            "categorias": "Categorias",
-            "normas": "Extração Pro",
-            "licitacoes": "Licitações",
-            "contratos": "Contratos",
-            "publicacao": "Publicação",
-            "sessao": "Sessão",
-            "mapa": "Mapa",
-            "dic_est_ter": "Dic/Est/Ter",
-        }
-        prog = d.get("progress") or {}
-        payload["ativo"] = {
-            "id": d["id"],
-            "service_id": d["service_id"],
-            "nome": labels.get(d["service_id"], d["service_id"]),
-            "status": d["status"],
-            "cancel_requested": d.get("cancel_requested"),
-            "done": prog.get("done") or 0,
-            "total": prog.get("total") or 0,
-            "percent": prog.get("percent"),
-            "label": prog.get("label") or "",
-        }
+        payload["ativo"] = _job_summary(ativo)
     return payload
 
 
@@ -153,35 +244,144 @@ def list_jobs():
     return jobs.list_jobs()
 
 
+@app.get("/api/queue")
+def get_queue():
+    return jobs.queue_snapshot()
+
+
+@app.post("/api/jobs/cancel-active")
+def cancel_active_job(user=Depends(require_user)):
+    """Cancela processo em andamento (do usuário ou qualquer se admin)."""
+    with jobs._lock:
+        alive = [
+            j
+            for j in jobs._jobs.values()
+            if j.status in (JobStatus.PENDING, JobStatus.RUNNING)
+        ]
+    if auth.is_enabled() and user.role != "admin":
+        alive = [j for j in alive if j.owner in (None, user.username)]
+    alive.sort(key=lambda j: j.started_at or j.created_at, reverse=True)
+    job = alive[0] if alive else None
+    if not job:
+        return {
+            "ok": True,
+            "estava_rodando": False,
+            "msg": "Nenhuma fila ativa (estado liberado).",
+        }
+    _assert_can_cancel(job, user)
+    jobs.cancel(job.id)
+    return {
+        "ok": True,
+        "estava_rodando": True,
+        "job_id": job.id,
+        "status": job.status.value,
+        "cancel_requested": job.cancel_requested,
+        "msg": "Cancelamento solicitado — a fila deste processo sera interrompida.",
+    }
+
+
+@app.post("/api/jobs/cancel-all-pending")
+def cancel_all_pending(_admin=Depends(require_admin)):
+    n = jobs.cancel_all_pending()
+    return {"ok": True, "cancelados": n, "msg": "{0} job(s) removido(s) da fila.".format(n)}
+
+
+@app.post("/api/queue/reorder")
+def reorder_queue(body: QueueReorderBody, _admin=Depends(require_admin)):
+    if not body.order:
+        raise HTTPException(400, "Informe a ordem dos jobs.")
+    final = jobs.reorder_pending(body.order)
+    return {"ok": True, "order": final, "queue": jobs.queue_snapshot()}
+
+
+@app.on_event("startup")
+def _startup_resume_queue():
+    auth.reload_users()
+    restored = jobs.restore_from_disk()
+    jobs.resume_queue(dispatch)
+    if restored:
+        import logging
+
+        logging.getLogger("uvicorn.error").info(
+            "Fila restaurada: %s job(s) pending após reinício.", restored
+        )
+
+
+def _assert_can_access_job(job, user) -> None:
+    if not auth.is_enabled():
+        return
+    if user.role == "admin":
+        return
+    if job.owner not in (None, user.username):
+        raise HTTPException(403, "Sem permissão para acessar este processo.")
+
+
+@app.get("/api/workspace")
+def get_workspace(user=Depends(require_user)):
+    """Pastas do usuário (uploads + saída padrão)."""
+    owner = user.username if auth.is_enabled() else None
+    return {"ok": True, **workspace_info(owner)}
+
+
+@app.post("/api/uploads")
+async def upload_file(
+    user=Depends(require_user),
+    file: UploadFile = File(...),
+    extract: str = Form("false"),
+):
+    """Recebe planilha ou ZIP; opcionalmente extrai ZIP na pasta do usuário."""
+    owner = user.username if auth.is_enabled() else None
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "Arquivo vazio.")
+    do_extract = str(extract).strip().lower() in ("1", "true", "yes", "on")
+    try:
+        meta = save_upload(
+            owner,
+            file.filename or "arquivo",
+            raw,
+            extract=do_extract,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, **meta}
+
+
 @app.get("/api/jobs/{job_id}")
-def get_job(job_id: str):
+def get_job(job_id: str, user=Depends(require_user)):
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Processo não encontrado")
-    return {**job.to_dict(), "logs": job.logs[-200:]}
+    _assert_can_access_job(job, user)
+    return {**job.to_dict(jobs), "logs": job.logs[-200:]}
 
 
 @app.post("/api/jobs")
-def create_job(body: JobCreate):
+def create_job(body: JobCreate, user=Depends(require_user)):
     if body.service_id not in SERVICES or body.service_id in SERVICES_OCULTOS:
         raise HTTPException(400, "Serviço inválido")
-    if jobs.ativos() >= jobs.MAX_ATIVOS:
-        raise HTTPException(
-            409,
-            "Já existe um processo em andamento. Cancele ou aguarde terminar.",
-        )
-    job = jobs.create(body.service_id, body.config)
-    jobs.save_config(job)
-    jobs.start(job, dispatch)
-    return {"job_id": job.id, "status": job.status.value}
+    owner = user.username if auth.is_enabled() else None
+    config = apply_user_defaults(body.config, owner)
+    try:
+        job = jobs.enqueue(body.service_id, config, dispatch, owner=owner)
+    except QueueFullError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    meta = jobs.queue_meta(job)
+    return {
+        "job_id": job.id,
+        "status": job.status.value,
+        "queue": meta,
+        "owner": job.owner,
+    }
 
 
 @app.post("/api/jobs/{job_id}/cancel")
-def cancel_job(job_id: str):
-    job = jobs.cancel(job_id)
+def cancel_job(job_id: str, user=Depends(require_user)):
+    job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Processo não encontrado")
-
+    _assert_can_cancel(job, user)
+    job = jobs.cancel(job_id)
     return {
         "ok": True,
         "job_id": job.id,
@@ -220,21 +420,31 @@ async def stream_logs(job_id: str):
 
 
 @app.get("/api/jobs/{job_id}/download")
-def download_job(job_id: str):
+def download_job(job_id: str, user=Depends(require_user)):
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Processo não encontrado")
+    _assert_can_access_job(job, user)
 
     zip_path = job.result.get("zip")
+    if not zip_path or not Path(zip_path).is_file():
+        build_download_zip(job)
+        zip_path = job.result.get("zip")
     if zip_path and Path(zip_path).is_file():
-        return FileResponse(zip_path, filename="cr2-{0}.zip".format(job_id))
+        svc = SERVICE_LABELS.get(job.service_id, job.service_id)
+        fname = "opto-{0}-{1}.zip".format(svc.replace(" ", "-").lower(), job_id)
+        return FileResponse(
+            zip_path,
+            filename=fname,
+            media_type="application/zip",
+        )
     raise HTTPException(404, "Nenhum arquivo para download")
 
 
 def _page(name: str):
     path = FRONT / name
     if path.is_file():
-        return FileResponse(path)
+        return FileResponse(path, media_type="text/html; charset=utf-8")
     raise HTTPException(404)
 
 
@@ -273,6 +483,11 @@ def page_licitacoes():
     return _page("licitacoes.html")
 
 
+@app.get("/repasses.html")
+def page_repasses():
+    return _page("repasses.html")
+
+
 @app.get("/contratos.html")
 def page_contratos():
     return _page("contratos.html")
@@ -288,6 +503,11 @@ def page_sessao():
     return _page("sessao.html")
 
 
+@app.get("/pub-repasses.html")
+def page_pub_repasses():
+    return _page("pub-repasses.html")
+
+
 @app.get("/mapa.html")
 def page_mapa():
     return _page("mapa.html")
@@ -298,9 +518,56 @@ def page_dic_est_ter():
     return _page("dic-est-ter.html")
 
 
-@app.get("/transparencia.html")
-def redirect_transparencia():
-    return RedirectResponse(url="/dic-est-ter.html", status_code=302)
+@app.get("/api/admin/overview")
+def admin_overview(_admin=Depends(require_admin)):
+    """Dados agregados para o painel admin."""
+    snap = jobs.admin_snapshot()
+    ativo = jobs.job_ativo()
+    queue = jobs.queue_snapshot()
+    payload = {
+        "ok": True,
+        "version": app.version,
+        "max_ativos": jobs.MAX_ATIVOS,
+        "max_queue": jobs.MAX_QUEUE,
+        "job_timeout_s": JOB_TIMEOUT_S,
+        "auth_required": auth.is_enabled(),
+        "ativos": jobs.ativos(),
+        "running": jobs.running_count(),
+        "pending": jobs.pending_count(),
+        "queue": queue,
+        "stats": snap,
+        "service_labels": SERVICE_LABELS,
+        "disk": jobs.disk_usage_jobs(),
+        "services": list(SERVICES.values()),
+        "services_ocultos": sorted(SERVICES_OCULTOS),
+        "ativo": None,
+        "running_jobs": [_job_summary(j) for j in jobs.running_jobs()],
+    }
+    if ativo is not None:
+        payload["ativo"] = _job_summary(ativo)
+    return payload
+
+
+@app.get("/login.html")
+def page_login():
+    return _page("login.html")
+
+
+@app.get("/login")
+def redirect_login():
+    return RedirectResponse(url="/login.html", status_code=302)
+
+
+@app.get("/admin")
+def redirect_admin():
+    return RedirectResponse(url="/admin.html", status_code=302)
+
+
+@app.get("/admin.html")
+def page_admin():
+    return _page("admin.html")
+
+
 
 
 if __name__ == "__main__":

@@ -51,6 +51,10 @@ LIMITE_POSTS = 0
 LER_PDF = True
 MAX_PAGINAS_PDF = 2
 
+# OCR multi-motor (_comum) quando o PDF é escaneado
+USAR_OCR = True
+MOTOR_OCR = "auto"
+
 # IA local (Ollama) — corrige nome quando regras falham.
 REFINAR_IA = False
 MODELO_IA = "llama3.2:3b"
@@ -323,16 +327,43 @@ def montar_nome_documento(
 
 
 def ler_texto_pdf_bytes(data: bytes, max_paginas: int = MAX_PAGINAS_PDF) -> str:
-    if not data or not PdfReader or data[:4] != b"%PDF":
+    if not data or data[:4] != b"%PDF":
         return ""
+    texto = ""
+    if PdfReader:
+        try:
+            reader = PdfReader(io.BytesIO(data))
+            partes = []
+            for page in reader.pages[: max(1, max_paginas)]:
+                partes.append(page.extract_text() or "")
+            texto = _normalizar_texto("\n".join(partes))
+        except Exception:
+            texto = ""
+    util = re.sub(r"\s+", "", texto or "")
+    if len(util) >= 40 or not USAR_OCR:
+        return texto
     try:
-        reader = PdfReader(io.BytesIO(data))
-        partes = []
-        for page in reader.pages[: max(1, max_paginas)]:
-            partes.append(page.extract_text() or "")
-        return _normalizar_texto("\n".join(partes))
-    except Exception:
-        return ""
+        import sys
+        from pathlib import Path
+
+        auto = Path(__file__).resolve().parent.parent
+        if str(auto) not in sys.path:
+            sys.path.insert(0, str(auto))
+        from _comum.ocr_multi import obter_texto_de_bytes
+
+        ocr, origem = obter_texto_de_bytes(
+            data,
+            usar_ocr=True,
+            motor=MOTOR_OCR or "auto",
+            min_nativo=40,
+            max_paginas_nativo=max_paginas,
+        )
+        if ocr and len(re.sub(r"\s+", "", ocr)) > len(util):
+            print(f"    [OCR] texto via {origem}")
+            return _normalizar_texto(ocr)
+    except Exception as e:
+        print(f"    [AVISO] OCR: {str(e)[:80]}")
+    return texto
 
 
 # =============================================================

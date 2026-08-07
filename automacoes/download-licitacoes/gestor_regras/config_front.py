@@ -116,29 +116,6 @@ MAPA_SITUACAO = {
 
 ARQ_MODELO_LICITACOES = "subirLicitacoes.xlsx"
 ARQ_MODELO_DOCUMENTOS = "subirDocumentosLicitacoes.xlsx"
-ARQ_CONTRATOS_CSV = "contratos.csv"
-ARQ_CONTRATOS_XLSX = "contratos.xlsx"
 ABA_LICITACOES = "Modelo_Licitacoes - Planilha"
 ABA_DOCUMENTOS = "UploadLicitacao - Página1"
-
-# Planilha de contratos (Front) — colunas e ordem exatas do modelo
-CAMPOS_CONTRATO = [
-    ("licitacaoOrigem", "licitacaoOrigem"),
-    ("ano", "ano"),
-    ("tipoContrato", "tipoContrato"),
-    ("numero", "numero"),
-    ("objeto", "objeto"),
-    ("nomeRazaoSocial", "nomeRazaoSocial"),
-    ("cpfCnpj", "cpfCnpj"),
-    ("dataVigenciaIN", "dataVigenciaIN"),
-    ("dataVigenciaFIM", "dataVigenciaFIM"),
-    ("valor", "valor"),
-    ("fiscalContrato", "fiscalContrato"),
-    ("documento", "documento"),  # sempre vazia (link Drive)
-]
-CHAVES_CONTRATO = [c[0] for c in CAMPOS_CONTRATO]
-COLUNA_CONTRATO_VAZIA = "documento"
-AGUARDANDO_INFO = "Aguardando informação"
-CNPJ_INEXISTENTE = "00.000.000/0000-00"
-DIAS_VIGENCIA_PADRAO = 365
 

@@ -1,5 +1,41 @@
 (() => {
   const API = "";
+  const AUTH_TOKEN_KEY = "opto-auth-token";
+
+  function authHeaders(extra) {
+    const h = { ...(extra || {}) };
+    try {
+      const t = sessionStorage.getItem(AUTH_TOKEN_KEY);
+      if (t) h.Authorization = "Bearer " + t;
+    } catch (_) {}
+    return h;
+  }
+
+  function authFetch(url, opts) {
+    const o = { ...(opts || {}) };
+    o.headers = authHeaders(o.headers);
+    return fetch(url, o);
+  }
+
+  async function guardAuth() {
+    if (location.pathname.includes("login.html")) return;
+    try {
+      const r = await fetch(`${API}/api/auth/me`);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.auth_required && !d.user) {
+        const next = encodeURIComponent(location.pathname + location.search);
+        location.href = `/login.html?next=${next}`;
+      }
+    } catch (_) {}
+  }
+
+  function setAuthToken(token) {
+    try {
+      if (token) sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+      else sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch (_) {}
+  }
 
   /** Ferramentas por id (páginas de automação). */
   const TOOLS = {
@@ -35,6 +71,14 @@
       icon: "building",
       cta: "Abrir",
     },
+    repasses: {
+      id: "repasses",
+      nome: "Repasses",
+      descricao: "Planilha com links -> baixa documentos, OCR e gera planilha de repasses.",
+      pagina: "/repasses.html",
+      icon: "table",
+      cta: "Abrir",
+    },
     contratos: {
       id: "contratos",
       nome: "Contratos",
@@ -57,6 +101,14 @@
       descricao: "Pauta, Ata, Presença e Votações no portal CR2.",
       pagina: "/sessao.html",
       icon: "users",
+      cta: "Abrir",
+    },
+    pub_repasses: {
+      id: "pub_repasses",
+      nome: "Publicação de Repasses",
+      descricao: "Publica Repasses.xlsx no portal CR2 (mês/ano, data, valores, PDF).",
+      pagina: "/pub-repasses.html",
+      icon: "upload",
       cta: "Abrir",
     },
     dic_est_ter: {
@@ -103,6 +155,9 @@
   };
 
   /** Hubs de alto nível: Extração | Publicação | Mapa */
+  // Alinhado ao backend SERVICES_OCULTOS — não listar no hub/subnav.
+  const TOOLS_OCULTOS = new Set(["contratos", "dic_est_ter"]);
+
   const HUBS = [
     {
       key: "extrair",
@@ -110,10 +165,10 @@
       href: "/extrair.html",
       titulo: "Extração",
       descricao:
-        "Baixas do portal: documentos, categorias, Extração Pro e licitações.",
+        "Baixas do portal: documentos, categorias, Extração Pro, licitações e repasses.",
       icon: "download",
       cta: "Ver ferramentas",
-      tools: ["documentos", "categorias", "normas", "licitacoes"],
+      tools: ["documentos", "categorias", "normas", "licitacoes", "repasses"],
       // ocultos por enquanto: "contratos"
     },
     {
@@ -124,8 +179,8 @@
       descricao: "Envie dados e arquivos ao portal CR2 com poucos cliques.",
       icon: "publish",
       cta: "Ver ferramentas",
-      tools: ["publicacao", "sessao", "dic_est_ter"],
-      // ocultos por enquanto: nenhum
+      tools: ["publicacao", "sessao", "pub_repasses"],
+      // ocultos por enquanto: "dic_est_ter"
     },
     {
       key: "mapa",
@@ -142,6 +197,7 @@
   const NAV = [
     { href: "/", label: "Início", key: "hub" },
     ...HUBS.map((h) => ({ href: h.href, label: h.label, key: h.key })),
+    { href: "/admin.html", label: "Admin", key: "admin" },
   ];
 
   const el = (id) => document.getElementById(id);
@@ -190,6 +246,7 @@
     document.body.classList.add("has-subnav");
     const back = `<a class="hub-subnav-back" href="${hub.href}">← ${hub.label}</a>`;
     const links = hub.tools
+      .filter((tid) => !TOOLS_OCULTOS.has(tid))
       .map((tid) => {
         const t = TOOLS[tid];
         if (!t) return "";
@@ -207,7 +264,8 @@
       nav.innerHTML = NAV.map((n) => {
         const on =
           n.key === hubActive || (n.key === "hub" && activeKey === "hub");
-        return `<a href="${n.href}" class="${on ? "is-active" : ""}">${n.label}</a>`;
+        const adminCls = n.key === "admin" ? " nav-admin" : "";
+        return `<a href="${n.href}" class="${on ? "is-active" : ""}${adminCls}">${n.label}</a>`;
       }).join("");
     }
     injectSubnav(activeKey);
@@ -267,17 +325,24 @@
   }
 
   function renderHomeHubs() {
-    renderHubCards(
-      "hub-grid",
-      HUBS.map((h) => ({
+    renderHubCards("hub-grid", [
+      ...HUBS.map((h) => ({
         href: h.href,
         pagina: h.href,
         icon: h.icon,
         nome: h.titulo,
         descricao: h.descricao,
         cta: h.cta,
-      }))
-    );
+      })),
+      {
+        href: "/admin.html",
+        pagina: "/admin.html",
+        icon: "table",
+        nome: "Admin",
+        descricao: "Monitoramento, processos, logs e status do servidor.",
+        cta: "Abrir painel",
+      },
+    ]);
   }
 
   function renderHubTools(hubKey) {
@@ -289,7 +354,10 @@
     if (lede) lede.textContent = hub.descricao;
     renderHubCards(
       "hub-grid",
-      hub.tools.map((tid) => TOOLS[tid]).filter(Boolean)
+      hub.tools
+        .filter((tid) => !TOOLS_OCULTOS.has(tid))
+        .map((tid) => TOOLS[tid])
+        .filter(Boolean)
     );
   }
 
@@ -297,7 +365,7 @@
     const pill = el("api-pill");
     if (!pill) return;
     try {
-      const r = await fetch(`${API}/api/health`);
+      const r = await authFetch(`${API}/api/health`);
       if (!r.ok) throw new Error();
       const data = await r.json();
       atualizarPillStatus(pill, data);
@@ -315,40 +383,38 @@
   }
 
   function atualizarPillStatus(pill, data) {
+    const queue = (data && data.queue) || {};
+    const running = Number(data.running ?? queue.running) || 0;
+    const pending = Number(data.pending ?? queue.pending) || 0;
+    const maxSlots = Number(data.max_concurrent ?? queue.max_concurrent) || 4;
     const ativo = data && data.ativo;
     pill.classList.remove("offline");
-    if (!ativo) {
+
+    if (running === 0 && pending === 0) {
+      syncCancelFromHealth(null);
       pill.textContent = "Online";
-      pill.title = "Servidor online — nenhum processo em execução";
+      pill.title = "Servidor online — nenhum processo na fila";
       pill.classList.add("online");
       pill.classList.remove("running");
       return;
     }
 
-    const nome = ativo.nome || ativo.service_id || "Processo";
-    const done = Number(ativo.done) || 0;
-    const total = Number(ativo.total) || 0;
-    let pct = ativo.percent;
-    if (pct == null && total > 0) {
-      pct = Math.round((100 * done) / total);
-    }
+    let texto = `Online · ${running}/${maxSlots} rodando`;
+    if (pending > 0) texto += ` · ${pending} na fila`;
+    pill.title = texto;
 
-    let texto = nome;
-    if (total > 0) {
-      texto = `${nome} · ${done}/${total}`;
-      if (pct != null) texto += ` · ${pct}%`;
-    } else if (pct != null) {
-      texto = `${nome} · ${pct}%`;
-    } else if (ativo.cancel_requested) {
-      texto = `${nome} · cancelando…`;
-    } else {
-      texto = `${nome} · em execução`;
+    if (ativo && ativo.id) {
+      const mem = readRememberedJob();
+      if (mem && mem.jobId === ativo.id) {
+        syncCancelFromHealth(ativo);
+      }
+      const nome = ativo.nome || ativo.service_id || "Processo";
+      const pct = ativo.percent;
+      if (pct != null) texto += ` · ${nome} ${pct}%`;
+      else if (ativo.cancel_requested) texto += ` · ${nome} cancelando…`;
     }
 
     pill.textContent = texto;
-    pill.title = ativo.label
-      ? `${nome}: ${ativo.label}`
-      : `${nome} em andamento`;
     pill.classList.add("online", "running");
   }
 
@@ -378,6 +444,507 @@
     localStorage.setItem(`cr2-centro-${key}`, JSON.stringify(data));
   }
 
+  function isNoisyLog(msg) {
+    const m = String(msg || "");
+    if (!m.trim()) return true;
+    return (
+      /UserWarning|FutureWarning|DeprecationWarning/i.test(m) ||
+      /huggingface_hub|HF Hub|HF_TOKEN|symlinks by default/i.test(m) ||
+      /torch\.quantize|torch_dtype is deprecated|Triggered internally/i.test(m) ||
+      /site-packages[\\/](torch|huggingface|transformers|easyocr|docling)/i.test(m) ||
+      /Loading weights:|\d+%\|[#█]+/i.test(m) ||
+      /Developer Mode|To support symlinks|HF_HUB_DISABLE/i.test(m) ||
+      /^\s*w_ih\s*=/.test(m) ||
+      /warnings\.warn\(/i.test(m) ||
+      /\[OCR\]\s*(Tentando|Usando|Escolhido)|\[OCR\].*chars, score=/i.test(m) ||
+      /Texto nativo insuficiente|OCR multi-motor/i.test(m) ||
+      /Using CPU\.|CUDA not available|Neither CUDA nor MPS/i.test(m) ||
+      /\[PULADO\]|fora do filtro|sem ano no link \(filtro/i.test(m)
+    );
+  }
+
+  const LOG_MODULES = {
+    inicio: { label: "Começando", tone: "teal" },
+    config: { label: "O que foi configurado", tone: "slate" },
+    coleta: { label: "Buscando no site", tone: "blue" },
+    item: { label: "Licitação", tone: "indigo" },
+    download: { label: "Baixando arquivos", tone: "cyan" },
+    leitura: { label: "Lendo documentos", tone: "violet" },
+    extracao: { label: "Organizando dados", tone: "amber" },
+    planilha: { label: "Montando planilha", tone: "green" },
+    contratos: { label: "Contratos", tone: "lime" },
+    publicacao: { label: "Publicando no portal", tone: "rose" },
+    resumo: { label: "Resultado final", tone: "gold" },
+    geral: { label: "Acompanhamento", tone: "mist" },
+  };
+
+  function detectLogModule(msg, lvl, currentId) {
+    const m = String(msg || "").trim();
+    if (!m) return null;
+
+    if (
+      /processo iniciado|modo:|ocr:\s*ligado|ocr:\s*desligado|subcategorias|ia local|cancelamento solicitado/i.test(
+        m
+      )
+    ) {
+      return { id: "inicio", label: LOG_MODULES.inicio.label, tone: "teal" };
+    }
+    if (
+      /^(entidade|listagem|downloads|planilha|anos|renomear|ia)\s*:/i.test(m) ||
+      /^pasta\s*:/i.test(m) ||
+      (/motor ['"]?auto|tesseract:|easyocr:/i.test(m) && /OCR:/i.test(m))
+    ) {
+      return { id: "config", label: LOG_MODULES.config.label, tone: "slate" };
+    }
+    if (
+      /coletando|raspando|licita[cç][aã]o\(ões\) a processar|via api rest|via html/i.test(m)
+    ) {
+      return { id: "coleta", label: LOG_MODULES.coleta.label, tone: "blue" };
+    }
+
+    const itemMatch = m.match(/\[(\d+)\s*\/\s*(\d+)/);
+    if (itemMatch && (/^──/.test(m) || /%\]/.test(m) || /\[[\-=]+\]/.test(m))) {
+      let titulo = m
+        .replace(/^──\s*/, "")
+        .replace(/\[\d+\s*\/\s*\d+[^\]]*\]\s*/g, "")
+        .replace(/\[[\-=]+\]\s*/g, "")
+        .trim();
+      if (titulo.length > 42) titulo = titulo.slice(0, 40).trim() + "…";
+      const label = titulo
+        ? `Licitação ${itemMatch[1]} de ${itemMatch[2]} · ${titulo}`
+        : `Licitação ${itemMatch[1]} de ${itemMatch[2]}`;
+      return { id: `item-${itemMatch[1]}`, label, tone: "indigo" };
+    }
+
+    if (currentId && String(currentId).startsWith("item")) {
+      if (
+        /\[DOWN\]|\(OCR\)|\[OCR\]|\[REN\s*\]|\betapa:|lendo .+|Baixando modelo OCR|Modelo OCR|pytesseract|poppler|AVISO/i.test(
+          m
+        )
+      ) {
+        return null;
+      }
+    }
+
+    if (/\[DOWN\]|baixando anexo|arquivo enviado/i.test(m)) {
+      return { id: "download", label: LOG_MODULES.download.label, tone: "cyan" };
+    }
+    if (
+      /\(OCR\)|\[OCR\]|lendo .+ INTEIRO|modelo OCR|Baixando modelo OCR|pytesseract|poppler/i.test(
+        m
+      )
+    ) {
+      return { id: "leitura", label: LOG_MODULES.leitura.label, tone: "violet" };
+    }
+    if (/\[REN\s*\]|preenchendo planilha|auditoria \(origem/i.test(m)) {
+      return { id: "extracao", label: LOG_MODULES.extracao.label, tone: "amber" };
+    }
+    if (
+      /planilhas oficiais|subirLicitacoes|subirDocumentos|contratos\.xlsx|aba 'Auditoria'/i.test(
+        m
+      )
+    ) {
+      return { id: "planilha", label: LOG_MODULES.planilha.label, tone: "green" };
+    }
+    if (
+      /contratos separados|pasta Contratos|portaria de fiscal|TESTES CONTRATO/i.test(m)
+    ) {
+      return {
+        id: "contratos",
+        label: LOG_MODULES.contratos.label,
+        tone: "lime",
+      };
+    }
+    if (
+      /\[-> REPASSE\]|Clicou em Publicar|Clicou em Anexar|Clicou em Finalizar|Clicou no lapis|Dialogo 'Anexar|Mes e Ano|Valor Previsto|Valor Realizado|Descri[cç][aã]o =/i.test(
+        m
+      )
+    ) {
+      return {
+        id: "publicacao",
+        label: LOG_MODULES.publicacao.label,
+        tone: "rose",
+      };
+    }
+    if (
+      /^(Conclu[ií]do|CANCELADO)/i.test(m) ||
+      /Resumo —|Prontas:|Erros:\s*\d|OK:\s*\d|CONCLUIDO|fila interrompida|PENDENTES\//i.test(
+        m
+      )
+    ) {
+      return { id: "resumo", label: LOG_MODULES.resumo.label, tone: "gold" };
+    }
+    if (/^►\s/.test(m)) {
+      if (/planilha|upload|oficial/i.test(m)) {
+        return { id: "planilha", label: LOG_MODULES.planilha.label, tone: "green" };
+      }
+      if (/colet/i.test(m)) {
+        return { id: "coleta", label: LOG_MODULES.coleta.label, tone: "blue" };
+      }
+      if (/contrat/i.test(m)) {
+        return {
+          id: "contratos",
+          label: LOG_MODULES.contratos.label,
+          tone: "lime",
+        };
+      }
+    }
+    return null;
+  }
+
+  function humanizeLogMsg(msg) {
+    let m = String(msg || "").replace(/\s+/g, " ").trim();
+    if (!m) return "";
+
+    // Modelos / ruído técnico → frases claras
+    if (/Downloading detection model/i.test(m)) {
+      return "Preparando a leitura de PDFs escaneados (primeira vez pode demorar)…";
+    }
+    if (/Downloading recognition model/i.test(m)) {
+      return "Baixando o reconhecimento de texto dos PDFs…";
+    }
+    if (/Loading weights:\s*100%/i.test(m)) {
+      return "Leitor de PDF escaneado pronto.";
+    }
+    if (/por\.traineddata|tessdata\/por/i.test(m)) {
+      return "Falta o português no Tesseract (arquivo por.traineddata). Sem isso, PDFs escaneados ficam difíceis de ler.";
+    }
+    if (/poppler/i.test(m) && /PATH|instal/i.test(m)) {
+      return "Falta o programa Poppler neste computador (ajuda a abrir PDFs). Peça à equipe de TI para instalar.";
+    }
+    if (/WinError 1114|biblioteca de v[ií]nculo din[aâ]mico/i.test(m)) {
+      return "O leitor EasyOCR não abriu neste PC. Vamos tentar outra forma de ler o PDF.";
+    }
+    if (/easyocr.*falhou|AVISO.*easyocr/i.test(m)) {
+      return "Não foi possível usar o EasyOCR neste arquivo. Tentando outra opção…";
+    }
+    if (/paddleocr.*falhou|AVISO.*paddle/i.test(m)) {
+      return "Não foi possível usar o PaddleOCR neste arquivo. Tentando outra opção…";
+    }
+    if (/tesseract.*falhou|AVISO.*tesseract/i.test(m)) {
+      return "O Tesseract não conseguiu ler este PDF. Continuando…";
+    }
+    if (/Motor OCR .+ removido|docling|surya/i.test(m) && /auto|removid/i.test(m)) {
+      return "Um leitor antigo foi trocado pelo modo automático.";
+    }
+
+    // Início / painel
+    let mm;
+    mm = m.match(/^Processo iniciado\s*[—\-–]?\s*(.+)$/i);
+    if (mm) {
+      const mapa = {
+        licitacoes: "licitações",
+        repasses: "repasses",
+        normas: "normas",
+        categorias: "categorias",
+        "pub-repasses": "publicação de repasses",
+        publicacao: "publicação",
+        sessao: "sessão",
+        contratos: "contratos",
+        documentos: "documentos",
+        mapa: "mapa",
+      };
+      const nome = mapa[String(mm[1]).trim().toLowerCase()] || mm[1].trim();
+      return `Começamos o processo de ${nome}.`;
+    }
+    mm = m.match(/^Modo:\s*(.+)$/i);
+    if (mm) {
+      let modo = mm[1];
+      modo = modo.replace(/Completo\s*\([^)]*\)/i, "completo: baixar, ler e montar a planilha");
+      modo = modo.replace(/s[oó] baixar|so_baixar/i, "somente baixar arquivos");
+      modo = modo.replace(/s[oó] planilha|so_planilha/i, "somente montar a planilha (sem baixar de novo)");
+      return `Como vai funcionar: ${modo}.`;
+    }
+    if (/^OCR:\s*ligado/i.test(m)) {
+      return "Leitura de PDFs escaneados (imagem): ligada.";
+    }
+    if (/^OCR:\s*desligado/i.test(m)) {
+      return "Leitura de PDFs escaneados: desligada.";
+    }
+    if (/Subcategorias fracassadas\/desertas/i.test(m)) {
+      return "Também vamos incluir licitações fracassadas e desertas.";
+    }
+    if (/^IA local:\s*desligada/i.test(m)) {
+      return "Ajuda com inteligência artificial: desligada.";
+    }
+    if (/^IA local/i.test(m) || /^IA\s*:/i.test(m)) {
+      return "Ajuda com inteligência artificial: ligada (só quando faltar algum dado).";
+    }
+    if (/Cancelamento solicitado/i.test(m)) {
+      return "Você pediu para parar. Encerrando com segurança…";
+    }
+
+    // Config
+    mm = m.match(/^Entidade\s*:\s*(.+)$/i);
+    if (mm) return `Órgão / site: ${mm[1]}`;
+    mm = m.match(/^Listagem\s*:\s*(.+)$/i);
+    if (mm) return `Página da lista: ${mm[1]}`;
+    mm = m.match(/^Downloads\s*:\s*(.+)$/i);
+    if (mm) return `Pasta onde salvamos os arquivos: ${mm[1]}`;
+    mm = m.match(/^Planilha\s*:\s*(.+)$/i);
+    if (mm) {
+      return `Planilha que será gerada: ${mm[1].replace(/\s*\(modelo:[^)]*\)\s*$/i, "").trim()}`;
+    }
+    mm = m.match(/^Anos\s*:\s*(.+)$/i);
+    if (mm) {
+      const a = mm[1].trim();
+      return a.toLowerCase() === "todos"
+        ? "Anos: todos os disponíveis."
+        : `Anos selecionados: ${a}.`;
+    }
+    mm = m.match(/^Renomear\s*:\s*(.+)$/i);
+    if (mm) return `Renomear arquivos automaticamente: sim (${mm[1]}).`;
+    mm = m.match(/^Pasta\s*:\s*(.+)$/i);
+    if (mm) return `Pasta de trabalho: ${mm[1]}`;
+    if (/OCR:\s*motor/i.test(m)) {
+      return "Leitores de PDF escaneado: modo automático (escolhe o melhor disponível).";
+    }
+    if (/LinkDaPasta base/i.test(m)) {
+      mm = m.match(/LinkDaPasta base:\s*(.+)$/i);
+      return mm
+        ? `Link base das pastas: ${mm[1]}`
+        : "Link base das pastas configurado.";
+    }
+
+    // Coleta
+    if (/Coletando via API REST/i.test(m)) {
+      return "Buscando licitações pela API do site…";
+    }
+    if (/Coletando via HTML|Fallback HTML/i.test(m)) {
+      return "Buscando licitações pelas páginas do site…";
+    }
+    mm = m.match(/raspando\s+(\S+)/i);
+    if (mm) return `Lendo a página: ${mm[1]}`;
+    mm = m.match(/(\d+)\s+licita[cç][aã]o\(ões\)\.\s*$/i);
+    if (mm) {
+      const n = Number(mm[1]);
+      return n === 0
+        ? "Nenhuma licitação encontrada nesta página."
+        : n === 1
+          ? "Encontramos 1 licitação nesta página."
+          : `Encontramos ${n} licitações nesta página.`;
+    }
+    mm = m.match(/(\d+)\s+licita[cç][aã]o\(ões\)\s+a processar/i);
+    if (mm) {
+      const n = Number(mm[1]);
+      return n === 1
+        ? "Vamos processar 1 licitação."
+        : `Vamos processar ${n} licitações.`;
+    }
+    if (/API REST indispon/i.test(m)) {
+      return "A API do site não respondeu. Vamos buscar pelas páginas normalmente.";
+    }
+
+    // Item / etapas
+    mm = m.match(/\[(\d+)\s*\/\s*(\d+)[^\]]*\]\s*(?:\[[\-=]+\]\s*)?(.+)$/);
+    if (mm && (/^──/.test(m) || /%\]/.test(m) || /\[[\-=]+\]/.test(m))) {
+      const titulo = (mm[3] || "").trim();
+      return titulo
+        ? `Agora: licitação ${mm[1]} de ${mm[2]} — ${titulo}`
+        : `Agora: licitação ${mm[1]} de ${mm[2]}.`;
+    }
+    mm = m.match(/etapa:\s*baixar anexos\s*\((\d+)\s*link/i);
+    if (mm) {
+      const n = Number(mm[1]);
+      return n === 1
+        ? "Baixando 1 anexo…"
+        : `Baixando ${n} anexos…`;
+    }
+    if (/etapa:\s*baixar/i.test(m)) return "Baixando os anexos…";
+    if (/etapa:\s*ler documentos/i.test(m)) {
+      return "Lendo os documentos principais…";
+    }
+    if (/etapa:\s*/i.test(m)) {
+      return m.replace(/^.*etapa:\s*/i, "Próximo passo: ").replace(/\.\.\.$/, "…");
+    }
+
+    mm = m.match(/^\[DOWN\]\s*(.+)$/i);
+    if (mm) return `Baixou: ${mm[1]}`;
+    mm = m.match(/^\[REN\s*\]\s*(.+?)\s*->\s*(.+)$/i);
+    if (mm) return `Renomeou o arquivo: ${mm[1]} → ${mm[2]}`;
+
+    mm = m.match(/lendo\s+(.+?)\s+INTEIRO\s*\(([^)]+)\)/i);
+    if (mm) return `Lendo ${mm[1].toLowerCase()} por completo: ${mm[2]}`;
+    mm = m.match(/lendo\s+(.+)$/i);
+    if (mm) return `Lendo: ${mm[1]}`;
+
+    mm = m.match(/^\(OCR\)\s*(.+)$/i);
+    if (mm) return `Li o PDF escaneado: ${mm[1]}`;
+    if (/Baixando modelo OCR/i.test(m)) {
+      return "Preparando a leitura de PDFs escaneados…";
+    }
+    if (/Modelo OCR carregado/i.test(m)) {
+      return "Leitor de PDF escaneado pronto.";
+    }
+
+    // Planilha / fim
+    if (/Preenchendo planilha/i.test(m)) {
+      return "Preenchendo a planilha Excel com os dados encontrados…";
+    }
+    if (/Planilhas oficiais|licita[cç][aã]o primeiro, contratos depois/i.test(m)) {
+      return "Gerando as planilhas oficiais para enviar ao portal…";
+    }
+    if (/Auditoria \(origem dos dados\)/i.test(m)) {
+      return "A planilha tem uma aba “Auditoria” mostrando de onde veio cada informação.";
+    }
+    mm = m.match(/Resumo\s*[—\-–]\s*Prontas:\s*(\d+)\s*\|\s*Pendentes:\s*(\d+)/i);
+    if (mm) {
+      return `Resumo: ${mm[1]} prontas para upload · ${mm[2]} pendentes (faltou algum dado).`;
+    }
+    if (/^Conclu[ií]do\.?$/i.test(m) || /^CONCLUIDO/i.test(m)) {
+      return "Tudo certo — processo concluído.";
+    }
+    if (/CANCELADO|fila interrompida|fila cancelada/i.test(m)) {
+      return "Processo interrompido a seu pedido.";
+    }
+    if (/^1\)\s*Licita/i.test(m)) {
+      return "Arquivos de licitação: subirLicitacoes.xlsx e subirDocumentosLicitacoes.xlsx";
+    }
+    if (/^2\)\s*Contratos/i.test(m)) {
+      return "Contratos vão automaticamente para a pasta Contratos/";
+    }
+    if (/Veja também a aba 'Auditoria'/i.test(m)) {
+      return "Se algo faltar, confira a aba Auditoria e a pasta PENDENTES.";
+    }
+    if (/Pendentes:/i.test(m) && /PENDENTES|relatorio|relatório/i.test(m)) {
+      return m.replace(/Pendentes:/i, "Itens pendentes:");
+    }
+
+    // Publicação / repasses
+    mm = m.match(/\[-> REPASSE\]\s*\[(\d+)\/(\d+)\]\s*(.+)$/i);
+    if (mm) return `Publicando repasse ${mm[1]} de ${mm[2]}: ${mm[3]}`;
+    if (/Clicou em Publicar/i.test(m)) return "Clicou em Publicar no portal.";
+    if (/Clicou em Anexar/i.test(m)) return "Abriu a tela para anexar o PDF.";
+    if (/Clicou em Finalizar/i.test(m)) return "Finalizou este item no portal.";
+    if (/Clicou no lapis|Clicou no lápis/i.test(m)) {
+      return "Abriu a edição do documento (lápis).";
+    }
+    if (/Dialogo 'Anexar/i.test(m)) return "Apareceu a janela de anexar documentos.";
+    if (/Arquivo enviado|Upload na zona/i.test(m)) return "PDF enviado com sucesso.";
+    if (/\[OK\]\s*Concluido|\[OK\]\s*Concluído/i.test(m)) {
+      return "Item publicado com sucesso.";
+    }
+    if (/Campo 'Data de Publicacao' nao encontrado|Data de Publicação/i.test(m) && /n[aã]o encontrado|ERRO/i.test(m)) {
+      return "Não achamos o campo “Data de Publicação” na tela. Pode ser que o portal tenha mudado.";
+    }
+
+    mm = m.match(/^ERRO:\s*(.+)$/i);
+    if (mm) {
+      const inner = String(mm[1] || "").trim();
+      if (/NoneType.*clear/i.test(inner)) {
+        return "Problema interno ao reiniciar o resultado. Tente rodar de novo.";
+      }
+      if (/assigned to before global/i.test(inner)) {
+        return "Versão do script desatualizada. Atualize o código e reinicie o painel.";
+      }
+      return `Problema: ${inner}`;
+    }
+    if (/NoneType.*clear/i.test(m)) {
+      return "Houve um erro interno ao reiniciar o resultado. Tente rodar de novo.";
+    }
+    if (/assigned to before global/i.test(m)) {
+      return "Versão do script desatualizada. Atualize o código e reinicie o painel.";
+    }
+
+    // Limpeza genérica
+    m = m.replace(/^====\s*/, "").replace(/\s*====$/, "");
+    m = m.replace(/^►\s*/, "");
+    m = m.replace(/^·\s*/, "");
+    m = m.replace(/^──\s*/, "");
+    m = m.replace(/^!\s*/, "");
+    m = m.replace(/^\(ocr_multi falhou:[^)]*\)/i, "A leitura automática do PDF falhou; tentando outro método…");
+    m = m.replace(/^\(EasyOCR n[aã]o instalado[^)]*\)/i, "EasyOCR não está instalado; usando outro leitor.");
+    m = m.replace(/^\(Tesseract fraco[^)]*\)/i, "A leitura saiu fraca; tentando outro leitor…");
+
+    if (m.length > 420) m = m.slice(0, 400).trim() + "…";
+    return m;
+  }
+
+  function beautifyLogMsg(msg) {
+    return humanizeLogMsg(msg);
+  }
+
+  function ensureLogModule(box, mod) {
+    const id = (mod && mod.id) || "geral";
+    const tone = (mod && mod.tone) || (LOG_MODULES[id] || LOG_MODULES.geral).tone;
+    const label =
+      (mod && mod.label) || (LOG_MODULES[id] || LOG_MODULES.geral).label;
+    if (box._logModuleId === id && box._logModuleBody) {
+      const cur = box._logModuleBody.closest(".log-module");
+      if (cur && cur.classList.contains("is-collapsed")) {
+        cur.classList.remove("is-collapsed");
+        const btn = cur.querySelector(".log-module-toggle");
+        if (btn) btn.setAttribute("aria-expanded", "true");
+      }
+      return box._logModuleBody;
+    }
+
+    // Fecha a gaveta anterior (mantém o título visível)
+    const prev = box.querySelector(".log-module.is-open:not(.is-collapsed)");
+    if (prev && prev.dataset.module !== id) {
+      prev.classList.add("is-collapsed");
+      prev.classList.remove("is-open");
+      const prevBtn = prev.querySelector(".log-module-toggle");
+      if (prevBtn) prevBtn.setAttribute("aria-expanded", "false");
+      _atualizarContagemGaveta(prev);
+    }
+
+    const block = document.createElement("section");
+    block.className = `log-module log-tone-${tone} is-open`;
+    block.dataset.module = id;
+    block.innerHTML =
+      '<button type="button" class="log-module-head log-module-toggle" aria-expanded="true">' +
+      '<span class="log-module-row">' +
+      '<span class="log-module-dot" aria-hidden="true"></span>' +
+      '<span class="log-module-label"></span>' +
+      '<span class="log-module-count" hidden></span>' +
+      '<span class="log-module-chevron" aria-hidden="true"></span>' +
+      "</span>" +
+      '<span class="log-module-preview" hidden></span>' +
+      "</button>" +
+      '<div class="log-module-body"></div>';
+    block.querySelector(".log-module-label").textContent = label;
+    const toggle = block.querySelector(".log-module-toggle");
+    toggle.addEventListener("click", () => {
+      const closed = block.classList.toggle("is-collapsed");
+      block.classList.toggle("is-open", !closed);
+      toggle.setAttribute("aria-expanded", closed ? "false" : "true");
+      _atualizarContagemGaveta(block);
+    });
+    box.appendChild(block);
+    box._logModuleId = id;
+    box._logModuleBody = block.querySelector(".log-module-body");
+    return box._logModuleBody;
+  }
+
+  function _atualizarContagemGaveta(block) {
+    if (!block) return;
+    const lines = block.querySelectorAll(".log-module-body .log-line");
+    const n = lines.length;
+    const badge = block.querySelector(".log-module-count");
+    if (badge) {
+      if (n > 0) {
+        badge.hidden = false;
+        badge.textContent = n === 1 ? "1 linha" : n + " linhas";
+      } else {
+        badge.hidden = true;
+      }
+    }
+    const preview = block.querySelector(".log-module-preview");
+    if (!preview) return;
+    const lastMsg = block.querySelector(
+      ".log-module-body .log-line:last-child .msg"
+    );
+    const txt = lastMsg ? String(lastMsg.textContent || "").trim() : "";
+    if (txt && block.classList.contains("is-collapsed")) {
+      preview.hidden = false;
+      preview.textContent = txt.length > 90 ? txt.slice(0, 88).trim() + "…" : txt;
+    } else {
+      preview.hidden = true;
+      preview.textContent = "";
+    }
+  }
+
   function appendLog(line, level) {
     const box = el("log-console");
     if (!box) return;
@@ -397,43 +964,85 @@
       msg = String(line || "");
     }
 
-    msg = msg.replace(/\s+/g, " ").trim();
+    const rawMsg = String(msg || "").trim();
+    msg = beautifyLogMsg(msg);
     if (!msg || msg === "— fim —" || msg === "- fim -") return;
+    if (isNoisyLog(rawMsg) || isNoisyLog(msg)) return;
 
-    // Separadores do script (====) viram linha visual limpa
-    if (/^=+$/.test(msg) || /^-+$/.test(msg)) {
+    if (/^=+$/.test(msg) || /^-+$/.test(msg) || /^·+$/.test(msg)) {
+      const body = box._logModuleBody || box;
       const sep = document.createElement("div");
       sep.className = "log-sep";
       sep.setAttribute("aria-hidden", "true");
-      box.appendChild(sep);
+      body.appendChild(sep);
       box.scrollTop = box.scrollHeight;
       return;
     }
 
-    // Títulos de seção / progresso do job
+    const detected = detectLogModule(rawMsg, lvl, box._logModuleId);
+    const mod =
+      detected ||
+      (box._logModuleId
+        ? { id: box._logModuleId }
+        : { id: "geral", label: LOG_MODULES.geral.label, tone: "mist" });
+    const isNewItemBlock =
+      detected &&
+      String(detected.id).startsWith("item-") &&
+      detected.id !== box._logModuleId;
+    const body = ensureLogModule(box, mod);
+
+    // Título do bloco já mostra a licitação — evita repetir a mesma frase
+    if (isNewItemBlock) {
+      msg = "Começando esta licitação…";
+    }
+
+    const last = body.querySelector(".log-line:last-child .msg");
+    if (last && last.textContent === msg) return;
+
     const isSection =
-      /^(fonte|resumo|download de normas|processando|p[aá]gina:)/i.test(msg) ||
-      msg.includes("FONTE (") ||
-      msg.startsWith("====") ||
-      /^──\s*\[/.test(msg) ||
-      /^etapas?:/i.test(msg) ||
-      /\betapa:\s/i.test(msg);
+      /^(fonte|resumo|download de normas|processando|p[aá]gina:)/i.test(rawMsg) ||
+      rawMsg.includes("FONTE (") ||
+      /^──\s*\[/.test(rawMsg) ||
+      /^etapas?:/i.test(rawMsg) ||
+      /\betapa:\s/i.test(rawMsg) ||
+      /^►\s/.test(rawMsg) ||
+      /^Baixando modelo OCR/i.test(rawMsg) ||
+      /^Modelo OCR/i.test(rawMsg) ||
+      /Processo iniciado|licita[cç][aã]o\(ões\) a processar|Planilhas oficiais|Conclu[ií]do/i.test(
+        rawMsg
+      );
 
     const labels = {
       info: "info",
-      warn: "aviso",
+      warn: "atenção",
       error: "erro",
       ok: "ok",
     };
 
+    const isDownloadChild =
+      /^(baixou:|baixado:|salvou:|arquivo:)/i.test(msg) ||
+      /^\[DOWN\]/i.test(rawMsg);
+    const isDownloadHead = /^baixando\b/i.test(msg);
+    if (/^(baixou:|conclu[ií]da|pronto|✓)/i.test(msg) && lvl === "info") {
+      lvl = "ok";
+    }
+
     const div = document.createElement("div");
     div.className = `log-line log-${lvl}${isSection ? " log-section-line" : ""}`;
+    if (isDownloadChild) div.classList.add("log-child");
+    if (!(isDownloadHead || isSection) && lvl === "info") {
+      div.classList.add("log-quiet");
+    }
     div.innerHTML =
       '<span class="t"></span><span class="lv"></span><span class="msg"></span>';
-    div.querySelector(".t").textContent = time || "··:··";
+    div.querySelector(".t").textContent = time || "--:--";
     div.querySelector(".lv").textContent = labels[lvl] || lvl;
-    div.querySelector(".msg").textContent = msg.replace(/^====\s*/, "").replace(/\s*====$/, "");
-    box.appendChild(div);
+    div.querySelector(".msg").textContent = msg;
+    body.appendChild(div);
+
+    const block = body.closest(".log-module");
+    if (block) _atualizarContagemGaveta(block);
+
     box.scrollTop = box.scrollHeight;
   }
 
@@ -461,7 +1070,13 @@
     const note = document.createElement("div");
     note.className = `opto-notice opto-notice-${kind || "ok"}`;
     const title =
-      kind === "error" ? "Erro" : kind === "warn" ? "Cancelado" : "Concluído";
+      kind === "error"
+        ? "Erro"
+        : kind === "warn"
+          ? "Cancelado"
+          : kind === "info"
+            ? "Fila"
+            : "Concluído";
     note.innerHTML = `<strong>${title}</strong><span>${message}</span>`;
     host.appendChild(note);
     requestAnimationFrame(() => note.classList.add("is-in"));
@@ -477,24 +1092,193 @@
     categorias: "Baixar por Categoria",
     normas: "Extração Pro",
     licitacoes: "Licitações",
+    repasses: "Repasses",
     contratos: "Contratos / Aditivos",
     publicacao: "Publicação CR2",
     sessao: "Publicação de Sessão",
+    pub_repasses: "Publicação de Repasses",
     mapa: "Mapa do Site",
     dic_est_ter: "Publicação Dic/Est/Ter",
+    repasses: "Extração de Repasses",
   };
 
   const STATUS_PT = {
     pending: "Na fila",
-    running: "Em execução",
-    completed: "Concluído",
-    failed: "Erro",
-    cancelled: "Cancelado",
+    running: "Em andamento",
+    completed: "Finalizado",
+    failed: "Com problema",
+    cancelled: "Interrompido",
   };
 
   let es = null;
   let currentJobId = null;
   let noticeShownFor = null;
+  let boundServiceId = null;
+  let workspaceCache = null;
+  let resumedOnce = false;
+
+  async function loadWorkspace(fieldIds) {
+    try {
+      const r = await authFetch(`${API}/api/workspace`);
+      if (!r.ok) return null;
+      const ws = await r.json();
+      workspaceCache = ws;
+      const ids = fieldIds || [
+        "pasta_base",
+        "pasta_saida",
+        "pasta_rgf",
+        "pasta_rreo",
+        "pasta_balancete",
+        "pasta_balanco",
+      ];
+      ids.forEach((id) => {
+        const node = el(id);
+        if (!node) return;
+        const v = (node.value || "").trim();
+        if (!v || /^c:\\downloads/i.test(v.replace(/\//g, "\\"))) {
+          node.value = ws.output_dir;
+        }
+        if (!node.placeholder) node.placeholder = ws.output_dir;
+      });
+      const hint = el("workspace-hint");
+      if (hint) {
+        hint.textContent = `Pasta do usuário «${ws.username}»: ${ws.output_dir}`;
+        hint.hidden = false;
+      }
+      return ws;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function uploadFile(file, { extract = false } = {}) {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("extract", extract ? "true" : "false");
+    const r = await authFetch(`${API}/api/uploads`, { method: "POST", body: fd });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || "Falha no upload");
+    return data;
+  }
+
+  /**
+   * Zona de arrastar/clicar para enviar planilha ou ZIP.
+   * opts: { zoneId, inputId, targetFieldId, accept, extractZip, onDone, statusId }
+   */
+  function bindFileUpload(opts) {
+    const zone = el(opts.zoneId);
+    const input = el(opts.inputId);
+    if (!zone || !input) return;
+    const statusEl = opts.statusId ? el(opts.statusId) : null;
+    const pick = zone.querySelector("[data-upload-pick]");
+    const setStatus = (msg, ok) => {
+      if (!statusEl) return;
+      statusEl.hidden = !msg;
+      statusEl.textContent = msg || "";
+      statusEl.classList.toggle("upload-status--ok", !!ok);
+      statusEl.classList.toggle("upload-status--err", ok === false);
+    };
+
+    const handle = async (file) => {
+      if (!file) return;
+      setStatus("Enviando…", null);
+      zone.classList.add("is-uploading");
+      try {
+        const ext = (file.name.split(".").pop() || "").toLowerCase();
+        const doExtract = opts.extractZip && ext === "zip";
+        const meta = await uploadFile(file, { extract: doExtract });
+        const target = opts.targetFieldId ? el(opts.targetFieldId) : null;
+        if (target) {
+          if (doExtract && meta.suggested_pasta_base) {
+            target.value = meta.suggested_pasta_base;
+          } else if (meta.path) {
+            target.value = meta.path;
+          }
+        }
+        if (typeof opts.onDone === "function") opts.onDone(meta);
+        const msg = doExtract
+          ? `ZIP extraído (${meta.extracted_files || "?"} arquivos)`
+          : `Arquivo recebido: ${meta.filename}`;
+        setStatus(msg, true);
+        showNotice(msg, "ok");
+      } catch (e) {
+        setStatus(String(e.message || e), false);
+        showNotice(String(e.message || e), "error");
+      } finally {
+        zone.classList.remove("is-uploading");
+        input.value = "";
+      }
+    };
+
+    if (opts.accept) input.accept = opts.accept;
+    if (pick) pick.addEventListener("click", () => input.click());
+    zone.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-upload-pick]") || ev.target === input) return;
+      if (!ev.target.closest("button") && !ev.target.closest("a")) input.click();
+    });
+    input.addEventListener("change", () => handle(input.files && input.files[0]));
+    zone.addEventListener("dragover", (ev) => {
+      ev.preventDefault();
+      zone.classList.add("is-dragover");
+    });
+    zone.addEventListener("dragleave", () => zone.classList.remove("is-dragover"));
+    zone.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      zone.classList.remove("is-dragover");
+      const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+      handle(f);
+    });
+  }
+
+  async function downloadJobArtifact(jobId) {
+    try {
+      const r = await authFetch(`${API}/api/jobs/${jobId}/download`);
+      if (!r.ok) return false;
+      const blob = await r.blob();
+      let fname = `opto-${jobId}.zip`;
+      const cd = r.headers.get("content-disposition") || "";
+      const m = /filename=\"?([^\";]+)\"?/i.exec(cd);
+      if (m) fname = m[1];
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  let queuePollTimer = null;
+
+  const JOB_SESSION_KEY = "opto-active-job";
+
+  function rememberJob(jobId, serviceId) {
+    try {
+      sessionStorage.setItem(
+        JOB_SESSION_KEY,
+        JSON.stringify({ jobId, serviceId: serviceId || "", t: Date.now() })
+      );
+    } catch (_) {}
+  }
+
+  function forgetJob() {
+    try {
+      sessionStorage.removeItem(JOB_SESSION_KEY);
+    } catch (_) {}
+  }
+
+  function readRememberedJob() {
+    try {
+      const raw = sessionStorage.getItem(JOB_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   function ensureCancelButton() {
     let btn = el("btn-cancel");
@@ -524,7 +1308,9 @@
   function setCancelVisible(visible) {
     const btn = ensureCancelButton();
     btn.hidden = !visible;
-    btn.disabled = !visible;
+    if (visible) btn.disabled = false;
+    else btn.disabled = true;
+    if (!visible) btn.textContent = "Cancelar fila";
   }
 
   function closeStream() {
@@ -534,19 +1320,8 @@
     }
   }
 
-  function watchJob(jobId) {
+  function attachStream(jobId) {
     closeStream();
-    currentJobId = jobId;
-    noticeShownFor = null;
-    setLogState("Executando");
-    setCancelVisible(true);
-    const runBtn = el("btn-run");
-    if (runBtn) runBtn.disabled = true;
-    const box = el("log-console");
-    if (box) {
-      box.innerHTML = '<p class="log-empty">Aguardando execução…</p>';
-    }
-
     es = new EventSource(`${API}/api/jobs/${jobId}/logs/stream`);
     es.onmessage = (ev) => {
       try {
@@ -569,30 +1344,223 @@
     };
   }
 
+  function stopQueuePoll() {
+    if (queuePollTimer) {
+      clearInterval(queuePollTimer);
+      queuePollTimer = null;
+    }
+  }
+
+  function pollQueuePosition(jobId) {
+    stopQueuePoll();
+    queuePollTimer = setInterval(async () => {
+      try {
+        const r = await authFetch(`${API}/api/jobs/${jobId}`);
+        if (!r.ok) return;
+        const job = await r.json();
+        if (job.status === "running") {
+          stopQueuePoll();
+          setLogState("Em andamento");
+          const st = el("job-status");
+          if (st) st.textContent = STATUS_PT.running;
+          if (!es) attachStream(jobId);
+          return;
+        }
+        if (job.status !== "pending") {
+          stopQueuePoll();
+          refreshStatus(jobId);
+          return;
+        }
+        const pos = (job.queue && job.queue.position) || "?";
+        setLogState(`Na fila — posição ${pos}`);
+        const st = el("job-status");
+        if (st) st.textContent = `Na fila (#${pos})`;
+      } catch (_) {}
+    }, 3000);
+  }
+
+  function watchJob(jobId, opts) {
+    const preserveLogs = !!(opts && opts.preserveLogs);
+    const initialStatus = opts && opts.initialStatus;
+    currentJobId = jobId;
+    noticeShownFor = null;
+    rememberJob(jobId, boundServiceId);
+    setCancelVisible(true);
+    const runBtn = el("btn-run");
+    if (runBtn) runBtn.disabled = true;
+    const box = el("log-console");
+    if (box && !preserveLogs) {
+      box.innerHTML =
+        '<p class="log-empty">Aguarde — o acompanhamento aparece aqui…</p>';
+      box._logModuleId = null;
+      box._logModuleBody = null;
+    }
+    if (initialStatus === "pending") {
+      setLogState("Na fila…");
+      pollQueuePosition(jobId);
+    } else {
+      setLogState("Em andamento");
+      attachStream(jobId);
+    }
+  }
+
+  async function fetchActiveJob() {
+    try {
+      const r = await authFetch(`${API}/api/health`);
+      if (!r.ok) return null;
+      const data = await r.json();
+      return data.ativo || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** Após F5: religa no job desta aba (sessionStorage), não em outro processo. */
+  async function resumeActiveJob(serviceId) {
+    ensureCancelButton();
+    let ativo = null;
+    const mem = readRememberedJob();
+    if (mem && mem.jobId) {
+      try {
+          const r = await authFetch(`${API}/api/jobs/${mem.jobId}`);
+        if (r.ok) {
+          const job = await r.json();
+          if (job.status === "running" || job.status === "pending") {
+            if (!serviceId || job.service_id === serviceId) {
+              ativo = {
+                id: job.id,
+                service_id: job.service_id,
+                nome: SERVICE_LABELS[job.service_id] || job.service_id,
+                cancel_requested: job.cancel_requested,
+                status: job.status,
+                queue: job.queue,
+              };
+            }
+          } else {
+            forgetJob();
+          }
+        }
+      } catch (_) {}
+    }
+    if (!ativo || !ativo.id) {
+      setCancelVisible(false);
+      return false;
+    }
+
+    currentJobId = ativo.id;
+    rememberJob(ativo.id, ativo.service_id);
+    setCancelVisible(true);
+    const runBtn = el("btn-run");
+    if (runBtn) runBtn.disabled = true;
+
+    try {
+      const r = await authFetch(`${API}/api/jobs/${ativo.id}`);
+      if (r.ok) {
+        const job = await r.json();
+        const box = el("log-console");
+        if (box && Array.isArray(job.logs) && job.logs.length) {
+          box.innerHTML = "";
+          box._logModuleId = null;
+          box._logModuleBody = null;
+          job.logs.forEach((entry) => appendLog(entry, entry.level));
+        }
+        if (job.status === "pending") {
+          const pos = (job.queue && job.queue.position) || "?";
+          setLogState(`Na fila — posição ${pos}`);
+          pollQueuePosition(ativo.id);
+        } else if (!es) {
+          attachStream(ativo.id);
+          setLogState(ativo.cancel_requested ? "Parando…" : "Em andamento");
+        }
+      }
+    } catch (_) {}
+    return true;
+  }
+
+  function syncCancelFromHealth(ativo) {
+    if (!el("btn-run") && !el("btn-cancel")) return;
+    const mem = readRememberedJob();
+    if (!mem || !mem.jobId) return;
+    if (ativo && ativo.id && ativo.id !== mem.jobId) return;
+    if (!ativo || !ativo.id) {
+      if (currentJobId && !es) {
+        refreshStatus(currentJobId).catch(() => {});
+      }
+      return;
+    }
+    if (ativo.id !== mem.jobId) return;
+    currentJobId = ativo.id;
+    setCancelVisible(true);
+    const runBtn = el("btn-run");
+    if (runBtn) runBtn.disabled = true;
+    if (
+      boundServiceId &&
+      ativo.service_id === boundServiceId &&
+      !es &&
+      !resumedOnce &&
+      ativo.status !== "pending"
+    ) {
+      resumedOnce = true;
+      resumeActiveJob(boundServiceId).catch(() => {});
+    }
+  }
+
   async function cancelCurrentJob() {
-    if (!currentJobId) return;
     const btn = ensureCancelButton();
     btn.disabled = true;
     btn.textContent = "Cancelando…";
     try {
-      const r = await fetch(`${API}/api/jobs/${currentJobId}/cancel`, {
-        method: "POST",
-      });
+      const url = currentJobId
+        ? `${API}/api/jobs/${currentJobId}/cancel`
+        : `${API}/api/jobs/cancel-active`;
+      const r = await authFetch(url, { method: "POST" });
+      const data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.detail || "Falha ao cancelar");
+        throw new Error(data.detail || "Falha ao cancelar");
+      }
+      if (data.job_id) {
+        currentJobId = data.job_id;
+        rememberJob(data.job_id, boundServiceId);
+      }
+      if (data.estava_rodando === false && !currentJobId) {
+        appendLog(
+          { msg: data.msg || "Nenhuma fila ativa.", level: "info" },
+          "info"
+        );
+        setCancelVisible(false);
+        const runBtn = el("btn-run");
+        if (runBtn) runBtn.disabled = false;
+        forgetJob();
+        return;
       }
       appendLog({ msg: "Cancelamento solicitado…", level: "warn" }, "warn");
+      setLogState("Parando…");
+      if (currentJobId && !es) attachStream(currentJobId);
     } catch (e) {
       appendLog({ msg: String(e.message || e), level: "error" }, "error");
       btn.disabled = false;
       btn.textContent = "Cancelar fila";
+      // Último recurso: cancela o ativo global mesmo sem id local
+      if (currentJobId) {
+        try {
+          const r2 = await authFetch(`${API}/api/jobs/cancel-active`, {
+            method: "POST",
+          });
+          if (r2.ok) {
+            appendLog(
+              { msg: "Cancelamento solicitado (fila ativa)…", level: "warn" },
+              "warn"
+            );
+            setLogState("Parando…");
+          }
+        } catch (_) {}
+      }
     }
   }
 
   async function refreshStatus(jobId) {
     try {
-      const r = await fetch(`${API}/api/jobs/${jobId}`);
+      const r = await authFetch(`${API}/api/jobs/${jobId}`);
       const job = await r.json();
       const runBtn = el("btn-run");
       if (runBtn) runBtn.disabled = false;
@@ -612,11 +1580,23 @@
       if (st) st.textContent = STATUS_PT[job.status] || job.status;
 
       if (finished) {
+        stopQueuePoll();
         setCancelVisible(false);
+        forgetJob();
+        if (currentJobId === jobId) currentJobId = null;
+      }
+
+      if (job.status === "pending") {
+        const pos = (job.queue && job.queue.position) || "?";
+        setLogState(`Na fila — posição ${pos}`);
+        setCancelVisible(true);
+        if (runBtn) runBtn.disabled = true;
+        if (!queuePollTimer) pollQueuePosition(jobId);
+        return;
       }
 
       if (job.status === "failed") {
-        setLogState("Erro");
+        setLogState("Com problema");
         if (job.error) {
           appendLog({ msg: "ERRO: " + job.error, level: "error" }, "error");
         }
@@ -625,7 +1605,7 @@
           showNotice(job.error || `${label} terminou com erro.`, "error");
         }
       } else if (job.status === "cancelled") {
-        setLogState("Cancelado");
+        setLogState("Interrompido");
         if (!already) {
           noticeShownFor = jobId;
           showNotice(
@@ -634,7 +1614,7 @@
           );
         }
       } else if (job.status === "completed") {
-        setLogState("Concluído");
+        setLogState("Finalizado");
         if (!already) {
           noticeShownFor = jobId;
           showNotice(
@@ -643,16 +1623,34 @@
             "ok"
           );
         }
+        const dlKey = `opto-dl-${jobId}`;
+        if (!sessionStorage.getItem(dlKey)) {
+          sessionStorage.setItem(dlKey, "1");
+          downloadJobArtifact(jobId).then((ok) => {
+            if (!ok) return;
+            appendLog({ msg: "Download do resultado iniciado.", level: "info" }, "info");
+            const dl = el("btn-download");
+            if (dl) {
+              dl.hidden = false;
+              dl.href = "#";
+              dl.onclick = (ev) => {
+                ev.preventDefault();
+                downloadJobArtifact(jobId);
+              };
+            }
+          });
+        }
       } else if (job.status === "running" && job.cancel_requested) {
-        setLogState("Cancelando");
+        setLogState("Parando…");
         setCancelVisible(true);
+        if (runBtn) runBtn.disabled = true;
       } else {
-        setLogState("Executando");
+        setLogState("Em andamento");
         setCancelVisible(true);
         if (runBtn) runBtn.disabled = true;
       }
     } catch (_) {
-      setLogState("Parado");
+      setLogState("Aguardando");
       setCancelVisible(false);
       const runBtn = el("btn-run");
       if (runBtn) runBtn.disabled = false;
@@ -663,28 +1661,44 @@
     const btn = el("btn-run");
     if (btn) btn.disabled = true;
     try {
-      const r = await fetch(`${API}/api/jobs`, {
+      const r = await authFetch(`${API}/api/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ service_id: serviceId, config }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || "Falha ao iniciar");
-      watchJob(data.job_id);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(data.detail || "Falha ao iniciar");
+      }
+      const q = data.queue || {};
+      if (data.status === "pending") {
+        const pos = q.position || "?";
+        showNotice(
+          `Na fila — posição ${pos} (${q.running_slots || 0} rodando, máx. ${q.max_slots || 4})`,
+          "info"
+        );
+      } else {
+        showNotice("Processo iniciado.", "ok");
+      }
+      watchJob(data.job_id, { initialStatus: data.status });
     } catch (e) {
       appendLog({ msg: String(e.message || e), level: "error" }, "error");
-      setLogState("Erro");
-      setCancelVisible(false);
+      setLogState(currentJobId ? "Em andamento" : "Com problema");
+      if (!currentJobId) setCancelVisible(false);
+      else setCancelVisible(true);
       showNotice(String(e.message || e), "error");
-      if (btn) btn.disabled = false;
+      if (btn && !currentJobId) btn.disabled = false;
     }
   }
 
   function bindRun(serviceId, formId, fieldIds, readConfig, skipSensitive) {
     const form = el(formId);
     if (!form) return;
+    boundServiceId = serviceId;
     ensureCancelButton();
     loadForm(serviceId, fieldIds);
+    loadWorkspace(fieldIds.filter((f) => f.startsWith("pasta")));
+    resumeActiveJob(serviceId).catch(() => {});
     form.addEventListener("submit", (ev) => {
       ev.preventDefault();
       saveForm(serviceId, fieldIds, skipSensitive);
@@ -700,25 +1714,37 @@
     injectNav,
     pingApi,
     bindRun,
+    startJob,
     parallaxHero,
     appendLog,
     showNotice,
     cancelCurrentJob,
+    resumeActiveJob,
     renderHomeHubs,
     renderHubTools,
     enableSpotlightCards,
+    authFetch,
+    authHeaders,
+    setAuthToken,
+    guardAuth,
+    loadWorkspace,
+    uploadFile,
+    bindFileUpload,
+    downloadJobArtifact,
     HUBS,
     TOOLS,
   };
   window.CR2Centro = window.OptoAutomacoes;
 
-  // Garante fundo de partículas mesmo se a página esquecer o <script>
-  if (!window.OptoFluidBackground) {
+  guardAuth().catch(() => {});
+
+  // Fundo WebGL (shader) em todas as páginas
+  if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/fluid-particles.js";
+    s.src = "/assets/shader-background.js?v=home44";
     s.async = true;
     document.head.appendChild(s);
-  } else if (window.OptoFluidBackground.init) {
-    window.OptoFluidBackground.init();
+  } else if (window.OptoShaderBackground.init) {
+    window.OptoShaderBackground.init();
   }
 })();

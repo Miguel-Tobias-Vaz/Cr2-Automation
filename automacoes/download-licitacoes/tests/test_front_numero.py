@@ -39,10 +39,10 @@ TABELA_OFICIAL = {
 
 
 class TestNumeroFront(unittest.TestCase):
-    def test_numero_curto_padroniza(self):
+    def test_numero_curto_so_acrescenta_sigla(self):
         self.assertEqual(
             numero_front({"numero": "3/2025", "modalidade": "Pregão Eletrônico"}),
-            "003/2025-PE",
+            "3/2025-PE",
         )
 
     def test_numero_longo_altamira_nao_corta(self):
@@ -53,7 +53,92 @@ class TestNumeroFront(unittest.TestCase):
 
     def test_numero_com_sigla_ia(self):
         self.assertEqual(numero_com_sigla("1123002/2023", "Convite"), "1123002/2023-CV")
-        self.assertEqual(numero_com_sigla("1/2024", "Pregão Presencial"), "001/2024-PP")
+        self.assertEqual(numero_com_sigla("1/2024", "Pregão Presencial"), "1/2024-PP")
+
+    def test_so_troca_categoria_preserva_numeros(self):
+        """Números/códigos ficam iguais; só a categoria final muda."""
+        casos = [
+            ("9/2023-007-CMVX-SRP", "Registro de Preços Originário de Pregão Presencial",
+             "9/2023-007-CMVX-RPPP"),
+            ("9/2023-004-CMVX-SRP", "Registro de Preços Originário de Pregão Presencial",
+             "9/2023-004-CMVX-RPPP"),
+            ("9/2023-006-CMVX", "Registro de Preços Originário de Pregão Presencial",
+             "9/2023-006-CMVX-RPPP"),
+            ("2/2023-001", "Tomada de Preços", "2/2023-001-TP"),
+            ("0/2023-007-CMXV", "Dispensa de Licitação", "0/2023-007-CMXV-DL"),
+            ("1/2023-004-CMVX", "Convite", "1/2023-004-CMVX-CV"),
+            ("6/2023-004-CMVX", "Inexigibilidade de Licitação", "6/2023-004-CMVX-IN"),
+            ("6/2023-003", "Inexigibilidade de Licitação", "6/2023-003-IN"),
+            ("1/2023-001", "Convite", "1/2023-001-CV"),
+            ("0/2023-001-CMVX", "Dispensa de Licitação", "0/2023-001-CMVX-DL"),
+            ("009/2023-RPPP", "Registro de Preços Originário de Pregão Presencial",
+             "009/2023-RPPP"),
+            ("009/2023-PE", "Registro de Preços Originário de Pregão Presencial",
+             "009/2023-RPPP"),
+        ]
+        for bruto, modalidade, esperado in casos:
+            self.assertEqual(
+                numero_com_sigla(bruto, modalidade),
+                esperado,
+                msg="falhou para %r" % bruto,
+            )
+            self.assertEqual(
+                numero_front({"numero": bruto, "modalidade": modalidade}),
+                esperado,
+                msg="numero_front falhou para %r" % bruto,
+            )
+
+    def test_ia_nao_encurta_codigos_portal(self):
+        from ia_local.regras_titulo import numero_pos_confirmacao
+
+        self.assertEqual(
+            numero_pos_confirmacao(
+                "009/2023",
+                "9/2023-007-CMVX-RPPP",
+                "Registro de Preços Originário de Pregão Presencial",
+            ),
+            "9/2023-007-CMVX-RPPP",
+        )
+        self.assertEqual(
+            numero_pos_confirmacao(
+                "9/2023",
+                "9/2023-007-CMVX-SRP",
+                "Registro de Preços Originário de Pregão Presencial",
+            ),
+            "9/2023-007-CMVX-RPPP",
+        )
+
+    def test_mesmo_numero_em_todas_as_planilhas(self):
+        """preenchida e subir* devem ficar com o mesmo Número (só troca categoria)."""
+        from script import padronizar_linha_para_todas_planilhas
+        from gestor_regras.upload import (
+            _garantir_numero_igual_nas_planilhas,
+            registro_de_linha_planilha,
+        )
+
+        linha = {
+            "Modalidade": "Pregão Presencial",
+            "Número": "9/2023-007-CMVX-SRP",
+            "Ano": "2023",
+            "Objeto": "registro de preços de materiais de limpeza",
+            "Data de Publicação": "01/04/2023",
+            "Data de Abertura": "10/04/2023",
+            "Valor Estimado": "1000.00",
+            "Situação da Licitação": "Publicada",
+            "Valor Homologado": "",
+        }
+        padronizar_linha_para_todas_planilhas(linha)
+        self.assertEqual(linha["Número"], "9/2023-007-CMVX-RPPP")
+        self.assertEqual(
+            linha["Modalidade"],
+            "Registro de Preços Originário de Pregão Presencial",
+        )
+
+        reg = registro_de_linha_planilha(linha)
+        lf = linha_front(reg)
+        lf = _garantir_numero_igual_nas_planilhas(lf, linha)
+        self.assertEqual(lf["numero"], linha["Número"])
+        self.assertEqual(lf["modalidade"], linha["Modalidade"])
 
     def test_linha_front_objeto_altamira(self):
         obj = (
@@ -87,7 +172,7 @@ class TestModalidadesOficiais(unittest.TestCase):
         for sigla, nome in TABELA_OFICIAL.items():
             self.assertEqual(
                 numero_com_sigla("12/2024", nome),
-                "012/2024-%s" % sigla,
+                "12/2024-%s" % sigla,
             )
 
     def test_concorrencia_variantes_viram_cc(self):
@@ -95,7 +180,7 @@ class TestModalidadesOficiais(unittest.TestCase):
         self.assertEqual(modalidade_front("Concorrência Presencial"), "Concorrência")
         self.assertEqual(
             numero_front({"numero": "5/2024", "modalidade": "Concorrência"}),
-            "005/2024-CC",
+            "5/2024-CC",
         )
 
 
