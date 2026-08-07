@@ -1687,31 +1687,78 @@
 
   function ensureDownloadButton() {
     let btn = el("btn-download");
+    if (btn && btn.tagName === "A") {
+      const next = document.createElement("button");
+      next.type = "button";
+      next.id = "btn-download";
+      next.className = "btn btn-ghost btn-sm";
+      next.textContent = btn.textContent || "Baixar ZIP";
+      btn.replaceWith(next);
+      btn = next;
+    }
     if (btn) return btn;
-    btn = document.createElement("a");
-    btn.className = "btn btn-primary btn-sm";
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-ghost btn-sm";
     btn.id = "btn-download";
-    btn.href = "#";
-    btn.hidden = true;
     btn.textContent = "Baixar ZIP";
-    const bar =
-      document.querySelector(".job-bar") ||
-      document.querySelector(".acao-row") ||
-      document.querySelector(".log-wrap .section-head");
+    btn.disabled = true;
+    btn.setAttribute("aria-disabled", "true");
+    let bar = document.querySelector(".log-wrap .job-bar") || document.querySelector(".job-bar");
+    if (!bar) {
+      const logWrap = document.querySelector(".log-wrap");
+      if (logWrap) {
+        bar = document.createElement("div");
+        bar.className = "job-bar";
+        logWrap.appendChild(bar);
+      }
+    }
     if (bar) bar.prepend(btn);
+    else {
+      const head =
+        document.querySelector(".log-wrap .section-head") || document.querySelector(".acao-row");
+      if (head) head.prepend(btn);
+      else document.body.appendChild(btn);
+    }
     return btn;
   }
 
-  function showJobDownloadButton(jobId) {
-    if (workspaceCache && workspaceCache.local_mode) return;
+  function setJobDownloadButton(jobId, ready, opts) {
+    if (workspaceCache && workspaceCache.local_mode) {
+      const hide = el("btn-download");
+      if (hide) hide.hidden = true;
+      return;
+    }
     const btn = ensureDownloadButton();
     if (!btn) return;
     btn.hidden = false;
-    btn.textContent = "Baixar ZIP";
-    btn.onclick = (ev) => {
-      ev.preventDefault();
-      downloadJobArtifact(jobId);
-    };
+    const waiting = !!(opts && opts.waiting);
+    if (ready && jobId) {
+      btn.disabled = false;
+      btn.removeAttribute("aria-disabled");
+      btn.className = "btn btn-primary btn-sm";
+      btn.textContent = "Baixar ZIP";
+      btn.title = "Baixar pacote ZIP com os arquivos gerados";
+      btn.onclick = () => downloadJobArtifact(jobId);
+    } else {
+      btn.disabled = true;
+      btn.setAttribute("aria-disabled", "true");
+      btn.className = "btn btn-ghost btn-sm";
+      btn.textContent = "Baixar ZIP";
+      btn.title = waiting
+        ? "Disponível quando o processo terminar e houver arquivos"
+        : "Nenhum arquivo gerado para download";
+      btn.onclick = null;
+    }
+  }
+
+  function initJobDownloadButton() {
+    if (workspaceCache && workspaceCache.local_mode) return;
+    setJobDownloadButton(null, false, { waiting: false });
+  }
+
+  function showJobDownloadButton(jobId) {
+    setJobDownloadButton(jobId, true);
   }
 
   function ensureDownloadBanner() {
@@ -1774,7 +1821,13 @@
       const r = await authFetch(`${API}/api/jobs/downloads-ready`);
       if (!r.ok) return;
       const data = await r.json();
-      renderDownloadBanner(data.downloads || []);
+      const downloads = data.downloads || [];
+      renderDownloadBanner(downloads);
+      const mem = readRememberedJob(boundServiceId);
+      const jid = currentJobId || (mem && mem.jobId);
+      if (jid && downloads.some((d) => d.id === jid)) {
+        showJobDownloadButton(jid);
+      }
     } catch (_) {}
   }
 
@@ -1954,6 +2007,9 @@
     if (box && !preserveLogs) {
       resetLogConsole(box);
     }
+    if (!workspaceCache?.local_mode) {
+      setJobDownloadButton(jobId, false, { waiting: true });
+    }
     if (initialStatus === "pending") {
       setLogState("Na fila…");
       pollQueuePosition(jobId);
@@ -2057,6 +2113,8 @@
           `${SERVICE_LABELS[job.service_id] || job.service_id} finalizado — clique em Baixar ZIP.`,
         "ok"
       );
+    } else if (!workspaceCache?.local_mode) {
+      setJobDownloadButton(job.id, false, { waiting: false });
     }
     pollDownloadsReady().catch(() => {});
   }
@@ -2153,8 +2211,18 @@
       if (cancelBtn) cancelBtn.textContent = "Cancelar fila";
 
       const dl = el("btn-download");
-      if (dl && job.has_download && !workspaceCache?.local_mode) {
-        showJobDownloadButton(jobId);
+      if (!workspaceCache?.local_mode) {
+        if (job.has_download) {
+          showJobDownloadButton(jobId);
+        } else if (
+          job.status === "running" ||
+          job.status === "pending" ||
+          job.cancel_requested
+        ) {
+          setJobDownloadButton(jobId, false, { waiting: true });
+        } else {
+          setJobDownloadButton(jobId, false, { waiting: false });
+        }
       } else if (dl) {
         dl.hidden = true;
       }
@@ -2203,11 +2271,10 @@
         setLogState("Finalizado");
         if (!already) {
           noticeShownFor = jobId;
-          showNotice(
-            (job.result && job.result.mensagem) ||
-              `${label} finalizado — clique em Baixar ZIP para baixar.`,
-            "ok"
-          );
+          const fallback = job.has_download
+            ? `${label} finalizado — clique em Baixar ZIP para baixar.`
+            : `${label} finalizado.`;
+          showNotice((job.result && job.result.mensagem) || fallback, "ok");
         }
         if (job.has_download && !workspaceCache?.local_mode) {
           showJobDownloadButton(jobId);
@@ -2272,7 +2339,9 @@
     ensureDownloadButton();
     ensureLogToolbar();
     loadForm(serviceId, fieldIds);
-    loadWorkspace(fieldIds.filter((f) => f.startsWith("pasta")));
+    loadWorkspace(fieldIds.filter((f) => f.startsWith("pasta")))
+      .then(() => initJobDownloadButton())
+      .catch(() => initJobDownloadButton());
     resumeActiveJob(serviceId).catch(() => {});
     form.addEventListener("submit", (ev) => {
       ev.preventDefault();
@@ -2322,7 +2391,7 @@
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home54";
+    s.src = "/assets/shader-background.js?v=home55";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {

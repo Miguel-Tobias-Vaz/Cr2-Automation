@@ -2259,6 +2259,19 @@ body.has-subnav .page-shell {
   word-break: break-word;
 }
 
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.42;
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+}
+
+.job-bar .btn:disabled,
+.job-bar .btn[aria-disabled="true"] {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(220, 228, 232, 0.55);
+}
+
 .job-bar {
   display: flex;
   flex-wrap: wrap;
