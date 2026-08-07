@@ -1575,6 +1575,21 @@ body.has-dl-banner:not(.has-subnav) main {
   gap: 0.55rem;
 }
 
+.log-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  margin-bottom: 0.55rem;
+}
+
+.log-toolbar-hint {
+  flex: 1 1 12rem;
+  font-size: 0.76rem;
+  color: rgba(210, 220, 228, 0.62);
+  line-height: 1.35;
+}
+
 .log-console::-webkit-scrollbar {
   width: 9px;
 }
@@ -1711,10 +1726,51 @@ button.log-module-toggle:hover {
   display: flex;
   flex-direction: column;
   gap: 0.12rem;
+  max-height: min(42vh, 420px);
+  overflow: auto;
+  scrollbar-width: thin;
 }
 
 .log-module.is-collapsed .log-module-body {
   display: none;
+}
+
+.log-module.is-collapsed .log-module-preview {
+  display: block !important;
+}
+
+.log-line.log-compact,
+.log-line.log-agg {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0.38rem 1rem 0.38rem 1.2rem;
+}
+
+.log-line.log-compact .t,
+.log-line.log-compact .lv,
+.log-line.log-agg .t,
+.log-line.log-agg .lv {
+  display: none;
+}
+
+.log-line.log-quiet {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0.28rem 1rem 0.28rem 1.35rem;
+  opacity: 0.88;
+}
+
+.log-line.log-quiet .t,
+.log-line.log-quiet .lv {
+  display: none;
+}
+
+.log-line.log-quiet .msg {
+  font-size: 0.86rem;
+  color: rgba(220, 228, 232, 0.82);
+}
+
+.log-line.log-agg .msg {
+  color: #c6f0d4;
+  font-weight: 500;
 }
 
 .log-module.is-collapsed .log-module-head,

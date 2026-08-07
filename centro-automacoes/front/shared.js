@@ -634,7 +634,27 @@
       /\[OCR\]\s*(Tentando|Usando|Escolhido)|\[OCR\].*chars, score=/i.test(m) ||
       /Texto nativo insuficiente|OCR multi-motor/i.test(m) ||
       /Using CPU\.|CUDA not available|Neither CUDA nor MPS/i.test(m) ||
-      /\[PULADO\]|fora do filtro|sem ano no link \(filtro/i.test(m)
+      /\[PULADO\]|fora do filtro|sem ano no link \(filtro/i.test(m) ||
+      /site-packages|\\\\Users\\\\|\/opt\/opto-automacoes\/centro-automacoes\/venv/i.test(m)
+    );
+  }
+
+  function shouldAggregateLog(rawMsg, msg) {
+    const r = String(rawMsg || "");
+    const m = String(msg || "");
+    return (
+      /^\s*\[OK\]/i.test(r) ||
+      /^\[DOWN\]/i.test(r) ||
+      /^Baixou:/i.test(m) ||
+      /^baixou:/i.test(m) ||
+      /^arquivo enviado/i.test(m)
+    );
+  }
+
+  function shortPathInMsg(msg) {
+    return String(msg || "").replace(
+      /(?:[A-Za-z]:\\|\/)?(?:[^\s\\/]+[\\/]){2,}([^\s\\/]+(?:[\\/][^\s\\/]+)?)/g,
+      "…/$1"
     );
   }
 
@@ -693,12 +713,33 @@
 
     if (currentId && String(currentId).startsWith("item")) {
       if (
-        /\[DOWN\]|\(OCR\)|\[OCR\]|\[REN\s*\]|\betapa:|lendo .+|Baixando modelo OCR|Modelo OCR|pytesseract|poppler|AVISO/i.test(
+        /\[DOWN\]|baixou:|baixado:|\[OK\]|salvou:/i.test(m) ||
+        /\(OCR\)|\[OCR\]|\[REN\s*\]|\betapa:|lendo .+|Baixando modelo OCR|Modelo OCR|pytesseract|poppler|AVISO/i.test(
           m
         )
       ) {
         return null;
       }
+    }
+
+    if (/^PÁGINA:|^PAGINA:/i.test(m)) {
+      return {
+        id: "pagina-atual",
+        label:
+          "Página · " +
+          m
+            .replace(/^PÁGINA:\s*/i, "")
+            .replace(/^PAGINA:\s*/i, "")
+            .slice(0, 42),
+        tone: "blue",
+      };
+    }
+    if (
+      /RESUMO GERAL|Total baixados|Paginas na fila|Paginas com falha|Pastas com arquivos/i.test(
+        m
+      )
+    ) {
+      return { id: "resumo", label: LOG_MODULES.resumo.label, tone: "gold" };
     }
 
     if (/\[DOWN\]|baixando anexo|arquivo enviado/i.test(m)) {
@@ -1036,7 +1077,76 @@
   }
 
   function beautifyLogMsg(msg) {
-    return humanizeLogMsg(msg);
+    return shortPathInMsg(humanizeLogMsg(msg));
+  }
+
+  function findLogModule(box, id) {
+    if (!box || !id) return null;
+    const safe = String(id).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    return box.querySelector(`.log-module[data-module="${safe}"]`);
+  }
+
+  function collapseLogModule(block, userInitiated) {
+    if (!block) return;
+    block.classList.add("is-collapsed");
+    block.classList.remove("is-open");
+    const btn = block.querySelector(".log-module-toggle");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+    if (userInitiated) block.dataset.userCollapsed = "1";
+    _atualizarContagemGaveta(block);
+  }
+
+  function expandLogModule(block) {
+    if (!block) return;
+    block.classList.remove("is-collapsed");
+    block.classList.add("is-open");
+    delete block.dataset.userCollapsed;
+    const btn = block.querySelector(".log-module-toggle");
+    if (btn) btn.setAttribute("aria-expanded", "true");
+    _atualizarContagemGaveta(block);
+  }
+
+  function collapseOtherLogModules(box, exceptId) {
+    if (!box) return;
+    box.querySelectorAll(".log-module").forEach((prev) => {
+      if (prev.dataset.module === exceptId) return;
+      if (!prev.classList.contains("is-collapsed")) {
+        collapseLogModule(prev, false);
+      }
+    });
+  }
+
+  function collapseAllLogModules(box, opts) {
+    const modules = [...(box?.querySelectorAll(".log-module") || [])];
+    if (!modules.length) return;
+    const keepId =
+      opts && opts.exceptLast
+        ? modules[modules.length - 1].dataset.module
+        : opts && opts.exceptId;
+    modules.forEach((block) => {
+      if (keepId && block.dataset.module === keepId) {
+        expandLogModule(block);
+      } else {
+        collapseLogModule(block, true);
+      }
+    });
+  }
+
+  function bindLogModuleToggle(block, box) {
+    const toggle = block.querySelector(".log-module-toggle");
+    if (!toggle || toggle.dataset.bound) return;
+    toggle.dataset.bound = "1";
+    toggle.addEventListener("click", () => {
+      const willCollapse = !block.classList.contains("is-collapsed");
+      if (willCollapse) {
+        collapseLogModule(block, true);
+      } else {
+        expandLogModule(block);
+        box._logActiveModule = block.dataset.module;
+        box._logModuleId = block.dataset.module;
+        box._logModuleBody = block.querySelector(".log-module-body");
+      }
+    });
   }
 
   function ensureLogModule(box, mod) {
@@ -1044,27 +1154,28 @@
     const tone = (mod && mod.tone) || (LOG_MODULES[id] || LOG_MODULES.geral).tone;
     const label =
       (mod && mod.label) || (LOG_MODULES[id] || LOG_MODULES.geral).label;
-    if (box._logModuleId === id && box._logModuleBody) {
-      const cur = box._logModuleBody.closest(".log-module");
-      if (cur && cur.classList.contains("is-collapsed")) {
-        cur.classList.remove("is-collapsed");
-        const btn = cur.querySelector(".log-module-toggle");
-        if (btn) btn.setAttribute("aria-expanded", "true");
+
+    let block = findLogModule(box, id);
+    if (block) {
+      box._logModuleId = id;
+      box._logModuleBody = block.querySelector(".log-module-body");
+      const lbl = block.querySelector(".log-module-label");
+      if (lbl && mod && mod.label && mod.label.length > (lbl.textContent || "").length) {
+        lbl.textContent = mod.label;
       }
+      bindLogModuleToggle(block, box);
+      if (!block.dataset.userCollapsed) {
+        expandLogModule(block);
+        collapseOtherLogModules(box, id);
+      }
+      box._logActiveModule = id;
       return box._logModuleBody;
     }
 
-    // Fecha a gaveta anterior (mantém o título visível)
-    const prev = box.querySelector(".log-module.is-open:not(.is-collapsed)");
-    if (prev && prev.dataset.module !== id) {
-      prev.classList.add("is-collapsed");
-      prev.classList.remove("is-open");
-      const prevBtn = prev.querySelector(".log-module-toggle");
-      if (prevBtn) prevBtn.setAttribute("aria-expanded", "false");
-      _atualizarContagemGaveta(prev);
-    }
+    collapseOtherLogModules(box, id);
+    box._logActiveModule = id;
 
-    const block = document.createElement("section");
+    block = document.createElement("section");
     block.className = `log-module log-tone-${tone} is-open`;
     block.dataset.module = id;
     block.innerHTML =
@@ -1079,13 +1190,7 @@
       "</button>" +
       '<div class="log-module-body"></div>';
     block.querySelector(".log-module-label").textContent = label;
-    const toggle = block.querySelector(".log-module-toggle");
-    toggle.addEventListener("click", () => {
-      const closed = block.classList.toggle("is-collapsed");
-      block.classList.toggle("is-open", !closed);
-      toggle.setAttribute("aria-expanded", closed ? "false" : "true");
-      _atualizarContagemGaveta(block);
-    });
+    bindLogModuleToggle(block, box);
     box.appendChild(block);
     box._logModuleId = id;
     box._logModuleBody = block.querySelector(".log-module-body");
@@ -1110,7 +1215,9 @@
     const lastMsg = block.querySelector(
       ".log-module-body .log-line:last-child .msg"
     );
-    const txt = lastMsg ? String(lastMsg.textContent || "").trim() : "";
+    const aggMsg = block.querySelector(".log-line[data-agg] .msg");
+    const src = lastMsg || aggMsg;
+    const txt = src ? String(src.textContent || "").trim() : "";
     if (txt && block.classList.contains("is-collapsed")) {
       preview.hidden = false;
       preview.textContent = txt.length > 90 ? txt.slice(0, 88).trim() + "…" : txt;
@@ -1118,6 +1225,33 @@
       preview.hidden = true;
       preview.textContent = "";
     }
+  }
+
+  function appendAggregatedLog(body, msg, lvl) {
+    const kind = "downloads";
+    let row = body.querySelector(`.log-line[data-agg="${kind}"]`);
+    if (!row) {
+      row = document.createElement("div");
+      row.className = "log-line log-ok log-agg log-compact";
+      row.dataset.agg = kind;
+      row.innerHTML = '<span class="msg"></span>';
+      body.appendChild(row);
+    }
+    const n = (parseInt(row.dataset.count || "0", 10) || 0) + 1;
+    row.dataset.count = String(n);
+    const short = String(msg || "")
+      .replace(/^Baixou:\s*/i, "")
+      .replace(/^\[OK\]\s*/i, "")
+      .trim();
+    const tail =
+      short.length > 36 ? short.slice(0, 34).trim() + "…" : short;
+    row.querySelector(".msg").textContent =
+      n === 1
+        ? msg
+        : `${n} arquivos baixados · último: ${tail || "…"}`;
+    const block = body.closest(".log-module");
+    if (block) _atualizarContagemGaveta(block);
+    return n;
   }
 
   function appendLog(line, level) {
@@ -1155,16 +1289,43 @@
     }
 
     const detected = detectLogModule(rawMsg, lvl, box._logModuleId);
-    const mod =
+    let mod =
       detected ||
       (box._logModuleId
         ? { id: box._logModuleId }
         : { id: "geral", label: LOG_MODULES.geral.label, tone: "mist" });
+    if (/^PÁGINA:|^PAGINA:/i.test(rawMsg)) {
+      box._paginaSeq = (box._paginaSeq || 0) + 1;
+      const titulo = rawMsg
+        .replace(/^PÁGINA:\s*/i, "")
+        .replace(/^PAGINA:\s*/i, "")
+        .trim()
+        .slice(0, 42);
+      mod = {
+        id: `pagina-${box._paginaSeq}`,
+        label: titulo
+          ? `Página ${box._paginaSeq} · ${titulo}`
+          : `Página ${box._paginaSeq}`,
+        tone: "blue",
+      };
+    }
     const isNewItemBlock =
       detected &&
       String(detected.id).startsWith("item-") &&
       detected.id !== box._logModuleId;
     const body = ensureLogModule(box, mod);
+
+    if (shouldAggregateLog(rawMsg, msg)) {
+      const n = appendAggregatedLog(body, msg, lvl);
+      const block = body.closest(".log-module");
+      if (block && block.classList.contains("is-collapsed")) {
+        _atualizarContagemGaveta(block);
+      }
+      if (n === 1 || n % 8 === 0) {
+        box.scrollTop = box.scrollHeight;
+      }
+      return;
+    }
 
     // Título do bloco já mostra a licitação — evita repetir a mesma frase
     if (isNewItemBlock) {
@@ -1218,7 +1379,40 @@
     const block = body.closest(".log-module");
     if (block) _atualizarContagemGaveta(block);
 
-    box.scrollTop = box.scrollHeight;
+    if (!block || !block.dataset.userCollapsed) {
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  function resetLogConsole(box) {
+    if (!box) return;
+    box.innerHTML = '<p class="log-empty">Aguardando — o acompanhamento aparece aqui…</p>';
+    box._logModuleId = null;
+    box._logModuleBody = null;
+    box._logActiveModule = null;
+    box._paginaSeq = 0;
+  }
+
+  function ensureLogToolbar() {
+    const box = el("log-console");
+    const wrap = box && box.closest(".log-wrap");
+    if (!wrap || wrap.querySelector(".log-toolbar")) return;
+    const bar = document.createElement("div");
+    bar.className = "log-toolbar";
+    bar.innerHTML =
+      '<button type="button" class="btn btn-ghost btn-sm" id="btn-log-collapse">Recolher gavetas</button>' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="btn-log-expand">Expandir tudo</button>' +
+      '<span class="log-toolbar-hint">Clique no título da gaveta para abrir ou fechar. Downloads iguais são agrupados.</span>';
+    box.parentNode.insertBefore(bar, box);
+    bar.querySelector("#btn-log-collapse")?.addEventListener("click", () => {
+      collapseAllLogModules(box, { exceptId: box._logActiveModule });
+    });
+    bar.querySelector("#btn-log-expand")?.addEventListener("click", () => {
+      box.querySelectorAll(".log-module").forEach((b) => {
+        delete b.dataset.userCollapsed;
+        expandLogModule(b);
+      });
+    });
   }
 
   function setLogState(state) {
@@ -1758,10 +1952,7 @@
     if (runBtn) runBtn.disabled = true;
     const box = el("log-console");
     if (box && !preserveLogs) {
-      box.innerHTML =
-        '<p class="log-empty">Aguarde — o acompanhamento aparece aqui…</p>';
-      box._logModuleId = null;
-      box._logModuleBody = null;
+      resetLogConsole(box);
     }
     if (initialStatus === "pending") {
       setLogState("Na fila…");
@@ -1833,10 +2024,9 @@
         const job = await r.json();
         const box = el("log-console");
         if (box && Array.isArray(job.logs) && job.logs.length) {
-          box.innerHTML = "";
-          box._logModuleId = null;
-          box._logModuleBody = null;
+          resetLogConsole(box);
           job.logs.forEach((entry) => appendLog(entry, entry.level));
+          collapseAllLogModules(box, { exceptLast: true });
         }
         if (job.status === "pending") {
           const pos = (job.queue && job.queue.position) || "?";
@@ -2080,6 +2270,7 @@
     boundServiceId = serviceId;
     ensureCancelButton();
     ensureDownloadButton();
+    ensureLogToolbar();
     loadForm(serviceId, fieldIds);
     loadWorkspace(fieldIds.filter((f) => f.startsWith("pasta")));
     resumeActiveJob(serviceId).catch(() => {});
@@ -2131,7 +2322,7 @@
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home53";
+    s.src = "/assets/shader-background.js?v=home54";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {
