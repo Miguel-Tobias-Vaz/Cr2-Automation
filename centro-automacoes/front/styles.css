@@ -3611,3 +3611,207 @@ body.login-page {
   display: none !important;
 }
 
+/* —— Minimal footer (site-wide) —— */
+.minimal-footer {
+  position: relative;
+  z-index: 2;
+  margin-top: auto;
+  padding: 2.5rem 1rem 0;
+}
+
+.minimal-footer__shell {
+  position: relative;
+  max-width: 56rem;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 6px);
+  background:
+    radial-gradient(
+      35% 80% at 30% 0%,
+      rgba(255, 255, 255, 0.07),
+      transparent
+    ),
+    rgba(8, 8, 14, 0.55);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+}
+
+@media (min-width: 768px) {
+  .minimal-footer__shell {
+    border-radius: calc(var(--radius) + 10px);
+  }
+}
+
+.minimal-footer__rule {
+  height: 1px;
+  width: 100%;
+  background: var(--line);
+}
+
+.minimal-footer__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1.5rem;
+  padding: 1.25rem 1rem;
+}
+
+.minimal-footer__brand {
+  grid-column: span 6;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+@media (min-width: 768px) {
+  .minimal-footer__brand {
+    grid-column: span 4;
+  }
+}
+
+.minimal-footer__logo {
+  display: inline-flex;
+  opacity: 0.35;
+  transition: opacity 0.2s var(--ease);
+}
+
+.minimal-footer__logo:hover {
+  opacity: 0.65;
+}
+
+.minimal-footer__logo img {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 10px;
+}
+
+.minimal-footer__tagline {
+  margin: 0;
+  max-width: 22rem;
+  font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--mist);
+  text-wrap: balance;
+}
+
+.minimal-footer__social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.minimal-footer__social a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--fog);
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+
+.minimal-footer__social a:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.minimal-footer__social svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.minimal-footer__col {
+  grid-column: span 3;
+}
+
+@media (min-width: 768px) {
+  .minimal-footer__col {
+    grid-column: span 1;
+  }
+}
+
+.minimal-footer__col-title {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.minimal-footer__links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.minimal-footer__links a {
+  width: max-content;
+  padding: 0.2rem 0;
+  font-size: 0.88rem;
+  color: var(--fog);
+  text-decoration: none;
+  transition: color 0.2s var(--ease);
+}
+
+.minimal-footer__links a:hover {
+  text-decoration: underline;
+  color: var(--paper);
+}
+
+.minimal-footer__copy {
+  margin: 0;
+  padding: 0.65rem 1rem 1.35rem;
+  font-size: 0.82rem;
+  font-weight: 300;
+  text-align: center;
+  color: var(--mist);
+}
+
+.minimal-footer__copy strong {
+  font-weight: 500;
+  color: var(--fog);
+}
+
+.minimal-footer__copy a {
+  color: var(--fog);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s var(--ease);
+}
+
+.minimal-footer__copy a:hover {
+  color: var(--accent-soft);
+  text-decoration: underline;
+}
+
+.minimal-footer--compact {
+  padding-top: 2rem;
+  padding-bottom: 1.25rem;
+}
+
+.minimal-footer__grid--compact {
+  grid-template-columns: 1fr;
+}
+
+.minimal-footer__grid--compact .minimal-footer__brand {
+  grid-column: 1;
+  align-items: center;
+  text-align: center;
+}
+
+.minimal-footer__grid--compact .minimal-footer__tagline {
+  max-width: 28rem;
+}
+
+body:not(.login-page):not(.admin-page) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+body:not(.login-page):not(.admin-page) main {
+  flex: 1 0 auto;
+}
+
