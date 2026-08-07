@@ -313,18 +313,16 @@
     footer.className = "minimal-footer minimal-footer--compact";
     footer.innerHTML = `
       <div class="minimal-footer__shell">
-        <div class="minimal-footer__rule" aria-hidden="true"></div>
         <div class="minimal-footer__grid minimal-footer__grid--compact">
           <div class="minimal-footer__brand">
             <a class="minimal-footer__logo" href="/" aria-label="Opto Automações">
-              <img src="/assets/brand-icon.png" alt="" width="32" height="32" />
+              <img src="/assets/brand-icon.png" alt="" width="36" height="36" />
             </a>
             <p class="minimal-footer__tagline">
               Automações para administração pública — baixar, publicar e integrar sistemas.
             </p>
           </div>
         </div>
-        <div class="minimal-footer__rule" aria-hidden="true"></div>
         <p class="minimal-footer__copy">
           © ${year} — Direitos reservados a
           <a href="https://github.com/Miguel-Tobias-Vaz" target="_blank" rel="noopener noreferrer">Miguel Vaz</a>
@@ -2431,7 +2429,7 @@
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home56";
+    s.src = "/assets/shader-background.js?v=home57";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {
