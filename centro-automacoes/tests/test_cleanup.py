@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 from backend import cleanup
+from backend import job_paths
 from backend.jobs import Job, JobManager, JobStatus
 
 
@@ -25,6 +26,8 @@ def test_preview_and_cleanup_jobs(tmp_path, monkeypatch):
     (shots / "sessao_erro_1.png").write_bytes(b"y" * 50)
 
     monkeypatch.setattr(cleanup, "DATA_JOBS", jobs_dir)
+    monkeypatch.setattr(job_paths, "LEGACY_JOBS_ROOT", jobs_dir)
+    monkeypatch.setattr(job_paths, "USERS_ROOT", tmp_path / "data" / "users")
     monkeypatch.setattr(cleanup, "AUTOMACOES", tmp_path / "automacoes")
     monkeypatch.setattr(cleanup, "USERS_ROOT", tmp_path / "data" / "users")
     monkeypatch.setattr(cleanup, "SCREENSHOT_GLOBS", ("publicacao-sessao/screenshots_pub",))

@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from backend.config import JOB_TIMEOUT_S, MAX_CONCURRENT, MAX_QUEUE
 from backend import queue_store
+from backend.job_paths import ensure_job_dir, iter_all_job_dirs
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "jobs"
@@ -59,9 +60,7 @@ class Job:
 
     @property
     def dir(self) -> Path:
-        p = DATA / self.id
-        p.mkdir(parents=True, exist_ok=True)
-        return p
+        return ensure_job_dir(self.id, self.owner)
 
     @property
     def progress_percent(self) -> int | None:
@@ -427,16 +426,14 @@ class JobManager:
     def disk_usage_jobs(self) -> dict[str, Any]:
         total = 0
         dirs = 0
-        if DATA.is_dir():
-            for p in DATA.iterdir():
-                if p.is_dir():
-                    dirs += 1
-                    for f in p.rglob("*"):
-                        if f.is_file():
-                            try:
-                                total += f.stat().st_size
-                            except OSError:
-                                pass
+        for p in iter_all_job_dirs():
+            dirs += 1
+            for f in p.rglob("*"):
+                if f.is_file():
+                    try:
+                        total += f.stat().st_size
+                    except OSError:
+                        pass
         return {
             "job_dirs": dirs,
             "bytes": total,
@@ -460,7 +457,7 @@ class JobManager:
             job.emit("warn", msg)
             job.emit("info", "— fim —")
             self._persist()
-            queue_store.cleanup_runtime(job.id)
+            queue_store.cleanup_runtime(job.id, job.owner)
             return job
         job.emit("warn", "Cancelamento solicitado — parando a fila deste processo...")
         return job
@@ -509,7 +506,7 @@ class JobManager:
             job.status = JobStatus.CANCELLED
             job.finished_at = time.time()
             self._persist()
-            queue_store.cleanup_runtime(job.id)
+            queue_store.cleanup_runtime(job.id, job.owner)
             self._dispatch()
             return
 
@@ -556,7 +553,7 @@ class JobManager:
         finally:
             job.finished_at = time.time()
             self._persist()
-            queue_store.cleanup_runtime(job.id)
+            queue_store.cleanup_runtime(job.id, job.owner)
             self._dispatch()
 
     def cancel_all_pending(self) -> int:

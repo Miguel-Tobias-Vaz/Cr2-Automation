@@ -3,6 +3,7 @@ import re
 import sys
 import time
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from bs4 import BeautifulSoup
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
@@ -35,6 +36,9 @@ TIPO_DOCUMENTO = ""
 # Filtro de anos: lista de strings, ex. ["2023"] ou ["2022", "2023"].
 # Lista vazia = baixa TODOS os anos encontrados na página.
 ANOS_FILTRO = []
+
+# Conexões paralelas para baixar PDFs (painel VPS: OPTO_DOWNLOAD_WORKERS).
+DOWNLOAD_WORKERS = 1
 
 # Uma ou várias páginas. Pode ser só a URL (str) ou dict com overrides:
 #   {"url": "https://...", "tipo": "Parecer TC"}
@@ -888,19 +892,63 @@ def processar_pagina(entrada):
         pulados = 0
         erros = 0
 
-        for nome_arquivo, url_pdf in pdfs:
-            _abortar_se_cancelado()
-            item = baixar_pdf(nome_arquivo, url_pdf, pasta_ano)
+        workers = max(1, min(12, int(DOWNLOAD_WORKERS or 1)))
+
+        def _processar_item(item):
             status = item.get("status")
             if status == "ok":
-                ok += 1
-            elif status == "pulado":
-                pulados += 1
-                lista_pulados.append(item)
-            else:
-                erros += 1
-                lista_erros.append(item)
-            time.sleep(0.5)
+                return "ok", item
+            if status == "pulado":
+                return "pulado", item
+            return "erro", item
+
+        if workers <= 1:
+            for nome_arquivo, url_pdf in pdfs:
+                _abortar_se_cancelado()
+                item = baixar_pdf(nome_arquivo, url_pdf, pasta_ano)
+                kind, item = _processar_item(item)
+                if kind == "ok":
+                    ok += 1
+                elif kind == "pulado":
+                    pulados += 1
+                    lista_pulados.append(item)
+                else:
+                    erros += 1
+                    lista_erros.append(item)
+                time.sleep(0.5)
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {
+                    pool.submit(baixar_pdf, nome_arquivo, url_pdf, pasta_ano): (
+                        nome_arquivo,
+                        url_pdf,
+                    )
+                    for nome_arquivo, url_pdf in pdfs
+                }
+                for fut in as_completed(futures):
+                    _abortar_se_cancelado()
+                    try:
+                        item = fut.result()
+                    except Cancelado:
+                        raise
+                    except Exception as erro:
+                        nome_arquivo, url_pdf = futures[fut]
+                        item = {
+                            "status": "erro",
+                            "nome": nome_arquivo,
+                            "motivo": str(erro),
+                            "pasta": pasta_ano,
+                        }
+                    kind, item = _processar_item(item)
+                    if kind == "ok":
+                        ok += 1
+                    elif kind == "pulado":
+                        pulados += 1
+                        lista_pulados.append(item)
+                    else:
+                        erros += 1
+                        lista_erros.append(item)
+            time.sleep(0.2)
 
         tamanho_mb = sum(
             os.path.getsize(os.path.join(pasta_ano, arquivo))

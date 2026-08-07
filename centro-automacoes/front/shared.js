@@ -1545,7 +1545,7 @@
       }
 
       const serverHint =
-        "Os arquivos ficam no servidor enquanto roda. Ao terminar, o ZIP baixa no seu PC.";
+        "Os arquivos ficam na sua pasta no servidor (por usuário). Ao terminar, baixe o ZIP no seu PC.";
 
       ids.forEach((id) => {
         const node = el(id);
@@ -2391,7 +2391,7 @@
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home55";
+    s.src = "/assets/shader-background.js?v=home56";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {

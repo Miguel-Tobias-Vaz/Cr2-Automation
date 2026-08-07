@@ -21,7 +21,7 @@ from backend import auth  # noqa: E402
 from backend.config import JOB_TIMEOUT_S  # noqa: E402
 from backend.deps import get_optional_user, require_admin, require_user  # noqa: E402
 from backend.jobs import JobManager, JobStatus, QueueFullError  # noqa: E402
-from backend.job_output import build_download_zip  # noqa: E402
+from backend.job_output import ZIP_LOGIC_VERSION, build_download_zip  # noqa: E402
 from backend import cleanup  # noqa: E402
 from backend.milagre_routes import router as milagre_router  # noqa: E402
 from backend.runners import dispatch  # noqa: E402
@@ -432,7 +432,7 @@ def create_job(body: JobCreate, user=Depends(require_user)):
     if body.service_id not in SERVICES or body.service_id in SERVICES_OCULTOS:
         raise HTTPException(400, "Serviço inválido")
     owner = user.username if auth.is_enabled() else None
-    config = apply_user_defaults(body.config, owner)
+    config = apply_user_defaults(body.config, owner, service_id=body.service_id)
     try:
         job = jobs.enqueue(body.service_id, config, dispatch, owner=owner)
     except QueueFullError as exc:
@@ -498,7 +498,11 @@ def download_job(job_id: str, user=Depends(require_user)):
     _assert_can_access_job(job, user)
 
     zip_path = job.result.get("zip")
-    if not zip_path or not Path(zip_path).is_file():
+    if (
+        not zip_path
+        or not Path(zip_path).is_file()
+        or job.result.get("_zip_v") != ZIP_LOGIC_VERSION
+    ):
         build_download_zip(job)
         zip_path = job.result.get("zip")
     if zip_path and Path(zip_path).is_file():

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from backend.config import DOWNLOAD_WORKERS
 from backend.runners.base import SCRIPTS, apply_globals, load_module, run_main_with_logs
 
 
@@ -22,7 +23,10 @@ def run(job) -> None:
         "TIPO_DOCUMENTO": (cfg.get("tipo_documento") or "").strip(),
         "URLS_PAGINAS": urls,
         "ANOS_FILTRO": anos_filtro,
+        "DOWNLOAD_WORKERS": DOWNLOAD_WORKERS,
     })
+    if DOWNLOAD_WORKERS > 1:
+        job.emit("info", "Downloads paralelos: {0} conexões".format(DOWNLOAD_WORKERS))
     if anos_filtro:
         job.emit("info", "Filtro de anos: {0}".format(", ".join(anos_filtro)))
     else:

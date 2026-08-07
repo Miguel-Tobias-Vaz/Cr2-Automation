@@ -78,22 +78,18 @@ def _protected_job_ids(manager: JobManager) -> set[str]:
 
 
 def _finished_job_dirs(manager: JobManager, older_than_days: int = 0) -> list[Path]:
+    from backend.job_paths import iter_all_job_dirs
     from backend.jobs import JobStatus
 
     protected = _protected_job_ids(manager)
     cutoff = time.time() - max(0, older_than_days) * 86400
     dirs: list[Path] = []
 
-    if not DATA_JOBS.is_dir():
-        return dirs
-
     mem: dict[str, Any] = {}
     with manager._lock:
         mem = {j.id: j for j in manager._jobs.values()}
 
-    for p in sorted(DATA_JOBS.iterdir()):
-        if not p.is_dir():
-            continue
+    for p in iter_all_job_dirs():
         jid = p.name
         if jid in protected:
             continue

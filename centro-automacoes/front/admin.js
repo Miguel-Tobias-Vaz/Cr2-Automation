@@ -442,7 +442,7 @@
         ${pendingList ? `<p class="admin-muted">Fila:</p><ul class="admin-queue-list">${pendingList}</ul>` : '<p class="admin-muted">Fila vazia.</p>'}
         <p class="admin-muted">Playwright (${["publicacao", "sessao", "pub_repasses", "contratos", "dic_est_ter"].join(", ")}) roda em <strong>subprocesso isolado</strong> por job.</p>
         <p class="admin-muted">A fila persiste em disco — jobs pending sobrevivem a reinício do servidor.</p>
-        <p class="admin-muted">Variáveis: <code>OPTO_MAX_JOBS</code>, <code>OPTO_MAX_QUEUE</code>, <code>OPTO_JOB_TIMEOUT_S</code>, <code>OPTO_USERS</code></p>`;
+        <p class="admin-muted">Variáveis: <code>OPTO_MAX_JOBS</code>, <code>OPTO_MAX_QUEUE</code>, <code>OPTO_DOWNLOAD_WORKERS</code>, <code>OPTO_JOB_TIMEOUT_S</code>, <code>OPTO_USERS</code></p>`;
     }
     renderCleanup(data.cleanup_preview);
   }

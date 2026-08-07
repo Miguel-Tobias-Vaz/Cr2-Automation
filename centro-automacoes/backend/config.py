@@ -31,3 +31,6 @@ USE_SUBPROCESS = os.getenv("OPTO_SUBPROCESS", "1").strip().lower() not in (
 # Timeout automático por job running (0 = desligado). Ex.: 21600 = 6 h
 JOB_TIMEOUT_S = max(0, int(os.getenv("OPTO_JOB_TIMEOUT_S", "0")))
 
+# Downloads HTTP paralelos nos scripts de extração (documentos, etc.)
+DOWNLOAD_WORKERS = max(1, min(12, int(os.getenv("OPTO_DOWNLOAD_WORKERS", "4"))))
+

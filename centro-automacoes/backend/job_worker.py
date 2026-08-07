@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backend.jobs import DATA, JobCancelled  # noqa: E402
+from backend.job_paths import find_job_dir  # noqa: E402
+from backend.jobs import JobCancelled  # noqa: E402
 from backend.worker_job import WorkerJob  # noqa: E402
 
 
@@ -30,7 +31,10 @@ def main() -> int:
 
     job_id = sys.argv[1].strip()
     service_id = sys.argv[2].strip()
-    work_dir = DATA / job_id
+    work_dir = find_job_dir(job_id)
+    if not work_dir:
+        print("[ERRO] pasta do job não encontrada: {0}".format(job_id), file=sys.stderr)
+        return 1
     runtime_path = work_dir / "runtime.json"
 
     if not runtime_path.is_file():

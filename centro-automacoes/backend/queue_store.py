@@ -64,8 +64,13 @@ def save_runtime_config(job: Job) -> None:
         json.dump(job.config or {}, fh, ensure_ascii=False, indent=2)
 
 
-def load_runtime_config(job_id: str) -> dict[str, Any] | None:
-    path = DATA / job_id / "runtime.json"
+def load_runtime_config(job_id: str, owner: str | None = None) -> dict[str, Any] | None:
+    from backend.job_paths import find_job_dir
+
+    found = find_job_dir(job_id, owner)
+    if not found:
+        return None
+    path = found / "runtime.json"
     if not path.is_file():
         return None
     try:
@@ -104,7 +109,8 @@ def restore(manager: JobManager) -> int:
                 continue
             if job_id in manager._jobs:
                 continue
-            config = load_runtime_config(job_id)
+            owner_raw = raw.get("owner")
+            config = load_runtime_config(job_id, owner_raw)
             if config is None:
                 continue
 
@@ -126,7 +132,7 @@ def restore(manager: JobManager) -> int:
                 created_at=float(raw.get("created_at") or time.time()),
                 started_at=None,
                 cancel_requested=bool(raw.get("cancel_requested")),
-                owner=raw.get("owner"),
+                owner=owner_raw,
                 queue_rank=int(raw.get("queue_rank") or 0),
             )
             manager._jobs[job_id] = job
@@ -142,8 +148,13 @@ def restore(manager: JobManager) -> int:
     return restored
 
 
-def cleanup_runtime(job_id: str) -> None:
-    path = DATA / job_id / "runtime.json"
+def cleanup_runtime(job_id: str, owner: str | None = None) -> None:
+    from backend.job_paths import find_job_dir
+
+    found = find_job_dir(job_id, owner)
+    if not found:
+        return
+    path = found / "runtime.json"
     try:
         path.unlink(missing_ok=True)
     except OSError:

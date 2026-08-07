@@ -60,8 +60,9 @@ No topo aparece uma "pilula" verde mostrando se esta Online ou rodando algo.
 3b) VARIAVEIS OPCIONAIS (VPS / servidor)
 --------------------------------------------------------------------------------
 
-  OPTO_MAX_JOBS=4       quantos rodam ao mesmo tempo (padrao: 4)
-  OPTO_MAX_QUEUE=20     tamanho maximo da fila
+  OPTO_MAX_JOBS=4       quantos rodam ao mesmo tempo (padrao: 4; VPS com folga: 5-6)
+  OPTO_MAX_QUEUE=20     tamanho maximo da fila (VPS com folga: 40)
+  OPTO_DOWNLOAD_WORKERS=4  PDFs em paralelo por job (1=sequencial; 4-6=VPS ociosa)
   OPTO_SUBPROCESS=1     Playwright em processo isolado (0 = debug)
   OPTO_JOB_TIMEOUT_S=0  timeout automatico em segundos (0 = desligado; ex. 21600 = 6 h)
 

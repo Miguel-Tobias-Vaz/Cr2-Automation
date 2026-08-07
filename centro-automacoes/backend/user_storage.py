@@ -53,22 +53,75 @@ def user_root(owner: str | None) -> Path:
     return USERS_ROOT / normalize_owner(owner)
 
 
+def user_jobs_dir(owner: str | None) -> Path:
+    p = user_root(owner) / "jobs"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def user_output_dir(owner: str | None, service_id: str | None = None) -> Path:
+    dirs = ensure_user_dirs(owner)
+    if service_id:
+        p = dirs["output"] / service_id
+        p.mkdir(parents=True, exist_ok=True)
+        return p.resolve()
+    return dirs["output"].resolve()
+
+
+def path_belongs_to_user(value: str | Path | None, owner: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        resolved = Path(str(value)).resolve()
+        root = user_root(owner).resolve()
+        if resolved == root:
+            return True
+        return str(resolved).startswith(str(root) + os.sep)
+    except OSError:
+        return False
+
+
+def _should_rewrite_pasta(
+    value: str | None,
+    owner: str | None,
+    service_id: str | None,
+) -> bool:
+    if is_local_mode():
+        return _is_blank_or_win_default(value)
+    if _is_blank_or_win_default(value):
+        return True
+    if not path_belongs_to_user(value, owner):
+        return True
+    if service_id:
+        try:
+            shared = user_output_dir(owner, None)
+            if Path(str(value)).resolve() == shared:
+                return True
+        except OSError:
+            return True
+    return False
+
+
 def ensure_user_dirs(owner: str | None) -> dict[str, Path]:
     base = user_root(owner)
     uploads = base / "uploads"
     output = base / "output"
-    for p in (base, uploads, output):
+    jobs = base / "jobs"
+    for p in (base, uploads, output, jobs):
         p.mkdir(parents=True, exist_ok=True)
-    return {"root": base, "uploads": uploads, "output": output}
+    return {"root": base, "uploads": uploads, "output": output, "jobs": jobs}
 
 
 def workspace_info(owner: str | None) -> dict[str, str]:
     dirs = ensure_user_dirs(owner)
+    user = normalize_owner(owner)
     return {
-        "username": normalize_owner(owner),
+        "username": user,
         "output_dir": str(dirs["output"].resolve()),
         "uploads_dir": str(dirs["uploads"].resolve()),
+        "jobs_dir": str(dirs["jobs"].resolve()),
         "root_dir": str(dirs["root"].resolve()),
+        "layout": "data/users/{0}/{{uploads|output|jobs}}".format(user),
     }
 
 
@@ -84,17 +137,19 @@ def is_local_mode() -> bool:
 
 
 def apply_user_defaults(
-    config: dict[str, Any] | None, owner: str | None
+    config: dict[str, Any] | None,
+    owner: str | None,
+    *,
+    service_id: str | None = None,
 ) -> dict[str, Any]:
-    """Preenche pastas vazias ou defaults Windows com a pasta output do usuário."""
+    """Preenche pastas vazias ou fora do workspace do usuário (VPS)."""
     cfg = dict(config or {})
     if is_local_mode():
         return cfg
-    dirs = ensure_user_dirs(owner)
-    out = str(dirs["output"].resolve())
+    default_out = str(user_output_dir(owner, service_id))
     for key in _PASTA_KEYS:
-        if _is_blank_or_win_default(cfg.get(key)):
-            cfg[key] = out
+        if _should_rewrite_pasta(cfg.get(key), owner, service_id):
+            cfg[key] = default_out
     cfg["_workspace"] = workspace_info(owner)
     return cfg
 

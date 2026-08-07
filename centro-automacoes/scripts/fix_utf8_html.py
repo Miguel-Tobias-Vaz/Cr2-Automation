@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 FRONT = Path(__file__).resolve().parent.parent / "front"
-CACHE = "home55"
+CACHE = "home56"
 
 
 def read_text(path: Path) -> str:
