@@ -1,9 +1,9 @@
-ï»¿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PublicaÃ§Ã£o CR2 â€” Opto AutomaÃ§Ãµes</title>
+    <title>Publicação CR2 — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home44" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home45" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -21,10 +21,10 @@
     <header class="top">
       <a class="brand-mark" href="/">
         <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
-        <span>Opto AutomaÃ§Ãµes</span>
+        <span>Opto Automações</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">Servidor â€¦</span>
+      <span class="api-pill" id="api-pill">Servidor …</span>
     </header>
 
     <main class="page-shell">
@@ -32,28 +32,28 @@
         <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
         <div class="hero-main">
           <header class="hero-copy">
-            <h1>PublicaÃ§Ã£o RGF, RREO, Balancete e BalanÃ§o</h1>
+            <h1>Publicação RGF, RREO, Balancete e Balanço</h1>
             <p class="lede">
-              Publica no portal CR2 com navegador automÃ¡tico. Deixe a URL vazia
-              para desligar aquele tipo. Use modo teste para publicar sÃ³ 1 PDF por tipo.
+              Publica no portal CR2 com navegador automático. Deixe a URL vazia
+              para desligar aquele tipo. Use modo teste para publicar só 1 PDF por tipo.
             </p>
           </header>
           <div class="stream-rail hero-streams">
             <article class="stream is-in"><span class="stream-index">RGF</span><h3>RGF</h3></article>
             <article class="stream is-in"><span class="stream-index">RREO</span><h3>RREO</h3></article>
-            <article class="stream is-in"><span class="stream-index">BAL</span><h3>Balancete / BalanÃ§o</h3></article>
+            <article class="stream is-in"><span class="stream-index">BAL</span><h3>Balancete / Balanço</h3></article>
           </div>
         </div>
       </section>
 
       <section class="painel">
-        <header class="section-head"><h2>Controle da publicaÃ§Ã£o</h2></header>
+        <header class="section-head"><h2>Controle da publicação</h2></header>
         <form class="painel-form" id="form-publicacao">
           <fieldset class="bloco bloco-acesso">
             <legend>Portal CR2</legend>
             <div class="grid-2">
               <label class="field">
-                <span class="field-label"><em>UsuÃ¡rio *</em></span>
+                <span class="field-label"><em>Usuário *</em></span>
                 <input type="email" id="usuario" autocomplete="username" />
               </label>
               <label class="field">
@@ -67,25 +67,25 @@
             <label class="field"><span class="field-label"><em>RGF</em></span><input type="url" id="url_portal_rgf" /></label>
             <label class="field"><span class="field-label"><em>RREO</em></span><input type="url" id="url_portal_rreo" /></label>
             <label class="field"><span class="field-label"><em>Balancete</em></span><input type="url" id="url_portal_balancete" /></label>
-            <label class="field"><span class="field-label"><em>BalanÃ§o / Rel. Anuais</em></span><input type="url" id="url_portal_balanco" /></label>
+            <label class="field"><span class="field-label"><em>Balanço / Rel. Anuais</em></span><input type="url" id="url_portal_balanco" /></label>
           </fieldset>
           <fieldset class="bloco">
             <legend>Pastas locais (opcional)</legend>
             <div class="grid-2">
-              <label class="field"><span class="field-label"><em>Pasta RGF</em></span><input type="text" id="pasta_rgf" placeholder="C:\Downloads\RelatÃ³rio de GestÃ£o Fiscal (RGF)" /></label>
+              <label class="field"><span class="field-label"><em>Pasta RGF</em></span><input type="text" id="pasta_rgf" placeholder="C:\Downloads\Relatório de Gestão Fiscal (RGF)" /></label>
               <label class="field"><span class="field-label"><em>Pasta RREO</em></span><input type="text" id="pasta_rreo" /></label>
               <label class="field"><span class="field-label"><em>Pasta Balancete</em></span><input type="text" id="pasta_balancete" /></label>
-              <label class="field"><span class="field-label"><em>Pasta BalanÃ§o</em></span><input type="text" id="pasta_balanco" /></label>
+              <label class="field"><span class="field-label"><em>Pasta Balanço</em></span><input type="text" id="pasta_balanco" /></label>
             </div>
           </fieldset>
           <fieldset class="bloco">
-            <legend>OpÃ§Ãµes</legend>
+            <legend>Opções</legend>
             <label class="check-row"><input type="checkbox" id="modo_teste" checked /> Modo teste (1 PDF por fila)</label>
-            <label class="check-row"><input type="checkbox" id="auto_confirm" checked /> Pular confirmaÃ§Ãµes (--yes)</label>
-            <label class="check-row"><input type="checkbox" id="headless" /> Navegador invisÃ­vel</label>
+            <label class="check-row"><input type="checkbox" id="auto_confirm" checked /> Pular confirmações (--yes)</label>
+            <label class="check-row"><input type="checkbox" id="headless" /> Navegador invisível</label>
             <label class="field">
               <span class="field-label"><em>Ano a publicar</em></span>
-              <input type="text" id="ano" placeholder="Ex.: 2023  Â·  vazio = todos" />
+              <input type="text" id="ano" placeholder="Ex.: 2023  ·  vazio = todos" />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
                 Filtra pastas RGF/RREO por um ano. Vazio = todos.
               </small>
@@ -100,13 +100,13 @@
       </section>
 
       <section class="log-wrap" id="log">
-        <header class="section-head"><h2>Registro da publicaÃ§Ã£o</h2><p>SituaÃ§Ã£o: <strong id="log-state">Parado</strong></p></header>
+        <header class="section-head"><h2>Registro da publicação</h2><p>Situação: <strong id="log-state">Parado</strong></p></header>
         <div class="log-console" id="log-console"></div>
       </section>
     </main>
 
-        <script src="/assets/fluid-particles.js?v=home44"></script>
-    <script src="/assets/shared.js?v=home44"></script>
+        <script src="/assets/fluid-particles.js?v=home45"></script>
+    <script src="/assets/shared.js?v=home45"></script>
     <script>
       CR2Centro.injectNav("publicacao");
       CR2Centro.pingApi();

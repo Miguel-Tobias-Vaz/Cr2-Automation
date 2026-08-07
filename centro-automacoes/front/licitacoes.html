@@ -1,9 +1,9 @@
-ï»¿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LicitaÃ§Ãµes â€” Opto AutomaÃ§Ãµes</title>
+    <title>Licitações — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home44" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home45" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -21,10 +21,10 @@
     <header class="top">
       <a class="brand-mark" href="/">
         <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
-        <span>Opto AutomaÃ§Ãµes</span>
+        <span>Opto Automações</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">Servidor â€¦</span>
+      <span class="api-pill" id="api-pill">Servidor …</span>
     </header>
 
     <main class="page-shell">
@@ -32,9 +32,9 @@
         <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
         <div class="hero-main">
           <header class="hero-copy">
-            <h1>LicitaÃ§Ãµes</h1>
+            <h1>Licitações</h1>
             <p class="lede">
-              Coleta licitaÃ§Ãµes do portal CR2, baixa anexos e gera as duas
+              Coleta licitações do portal CR2, baixa anexos e gera as duas
               planilhas oficiais para subir no sistema
               (<code>subirLicitacoes.xlsx</code> e
               <code>subirDocumentosLicitacoes.xlsx</code>.
@@ -46,8 +46,8 @@
             <ul>
               <li>Listagem WordPress <code>/c/licitacoes/</code></li>
               <li>Baixa dos anexos por pasta</li>
-              <li>ExtraÃ§Ã£o de valor estimado / homologado</li>
-              <li>SaÃ­das oficiais: <code>subirLicitacoes.xlsx</code> + <code>subirDocumentosLicitacoes.xlsx</code></li>
+              <li>Extração de valor estimado / homologado</li>
+              <li>Saídas oficiais: <code>subirLicitacoes.xlsx</code> + <code>subirDocumentosLicitacoes.xlsx</code></li>
               <li>Auditoria: aba <code>Auditoria</code> em <code>Licitacoes_preenchida.xlsx</code> e em <code>contratos.xlsx</code></li>
             </ul>
           </article>
@@ -69,15 +69,15 @@
               />
             </label>
             <label class="field">
-              <span class="field-label"><em>Pasta de saÃ­da</em></span>
+              <span class="field-label"><em>Pasta de saída</em></span>
               <input type="text" id="pasta_saida" value="C:\Downloads\Licitacoes" />
             </label>
             <label class="field">
               <span class="field-label"><em>Anos a extrair</em></span>
-              <input type="text" id="anos" placeholder="Ex.: 2023  Â·  2023,2024  Â·  vazio = todos" />
+              <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
-                Um ano (<code>2023</code>), vÃ¡rios (<code>2022,2023,2024</code>) ou vazio para todos.
-                        O filtro vale antes da baixa â€” sÃ³ processa licitaÃ§Ãµes desses anos.
+                Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
+                        O filtro vale antes da baixa — só processa licitações desses anos.
               </small>
             </label>
             <label class="field">
@@ -99,8 +99,8 @@
           </fieldset>
 
           <fieldset class="bloco bloco-opcoes">
-            <legend>Modo de execuÃ§Ã£o</legend>
-            <p class="opcoes-intro">Escolha <strong>um</strong> modo. O padrÃ£o baixa, extrai e gera a planilha.</p>
+            <legend>Modo de execução</legend>
+            <p class="opcoes-intro">Escolha <strong>um</strong> modo. O padrão baixa, extrai e gera a planilha.</p>
             <div class="opcoes-grid opcoes-modo">
               <label class="check-row" for="modo_completo">
                 <input type="radio" name="modo" id="modo_completo" value="completo" checked />
@@ -112,15 +112,15 @@
               <label class="check-row" for="modo_so_baixar">
                 <input type="radio" name="modo" id="modo_so_baixar" value="so_baixar" />
                 <span class="check-copy">
-                  <strong>SÃ³ baixar</strong>
-                  <small>SÃ³ baixa anexos â€” sem extrair nem planilha</small>
+                  <strong>Só baixar</strong>
+                  <small>Só baixa anexos — sem extrair nem planilha</small>
                 </span>
               </label>
               <label class="check-row" for="modo_so_planilha">
                 <input type="radio" name="modo" id="modo_so_planilha" value="so_planilha" />
                 <span class="check-copy">
-                  <strong>SÃ³ planilha</strong>
-                  <small>Usa arquivos jÃ¡ baixados â€” sÃ³ extrai e atualiza o Excel</small>
+                  <strong>Só planilha</strong>
+                  <small>Usa arquivos já baixados — só extrai e atualiza o Excel</small>
                 </span>
               </label>
             </div>
@@ -133,35 +133,35 @@
                 <input type="checkbox" id="ocr" checked />
                 <span class="check-copy">
                   <strong>OCR em PDFs escaneados</strong>
-                  <small>JÃ¡ vem no INSTALAR.bat (Tesseract + Poppler). Desmarque sÃ³ se quiser pular.</small>
+                  <small>Já vem no INSTALAR.bat (Tesseract + Poppler). Desmarque só se quiser pular.</small>
                 </span>
               </label>
               <label class="check-row" for="incluir_subcategorias">
                 <input type="checkbox" id="incluir_subcategorias" />
                 <span class="check-copy">
                   <strong>Incluir fracassadas / desertas</strong>
-                  <small>TambÃ©m coleta essas subcategorias</small>
+                  <small>Também coleta essas subcategorias</small>
                 </span>
               </label>
               <label class="check-row" for="so_html">
                 <input type="checkbox" id="so_html" />
                 <span class="check-copy">
-                  <strong>ForÃ§ar coleta HTML</strong>
-                  <small>Ignora a API REST do WordPress (usa sÃ³ a pÃ¡gina)</small>
+                  <strong>Forçar coleta HTML</strong>
+                  <small>Ignora a API REST do WordPress (usa só a página)</small>
                 </span>
               </label>
               <label class="check-row" for="ignorar_ssl">
                 <input type="checkbox" id="ignorar_ssl" />
                 <span class="check-copy">
                   <strong>Ignorar erros de SSL</strong>
-                  <small>SÃ³ se o certificado do site estiver invÃ¡lido</small>
+                  <small>Só se o certificado do site estiver inválido</small>
                 </span>
               </label>
               <label class="check-row" for="refinar_ia">
                 <input type="checkbox" id="refinar_ia" checked />
                 <span class="check-copy">
                   <strong>Refinar com IA local (Ollama)</strong>
-                  <small>LÃª Edital/DFD/TR/HomologaÃ§Ã£o e, nos contratos, todos os PDFs da pasta. GrÃ¡tis no PC.</small>
+                  <small>Lê Edital/DFD/TR/Homologação e, nos contratos, todos os PDFs da pasta. Grátis no PC.</small>
                 </span>
               </label>
             </div>
@@ -187,14 +187,14 @@
       <section class="log-wrap" id="log">
         <header class="section-head">
           <h2>Log</h2>
-          <p>SituaÃ§Ã£o: <strong id="log-state">Parado</strong> Â· Processo: <span id="job-status">â€”</span></p>
+          <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
         </header>
         <div class="log-console" id="log-console"></div>
       </section>
     </main>
 
-        <script src="/assets/fluid-particles.js?v=home44"></script>
-    <script src="/assets/shared.js?v=home44"></script>
+        <script src="/assets/fluid-particles.js?v=home45"></script>
+    <script src="/assets/shared.js?v=home45"></script>
     <script>
       CR2Centro.injectNav("licitacoes");
       CR2Centro.pingApi();
@@ -272,7 +272,7 @@
 
       migrarOpcoesSalvas();
 
-      // Persiste o modo junto com o restante do formulÃ¡rio
+      // Persiste o modo junto com o restante do formulário
       document.getElementById("form-licitacoes").addEventListener("change", () => {
         try {
           const raw = localStorage.getItem(STORAGE_KEY);

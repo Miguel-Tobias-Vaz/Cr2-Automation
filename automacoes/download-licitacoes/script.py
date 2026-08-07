@@ -574,9 +574,22 @@ def split_modalidade_numero(titulo):
 
 
 def extrai_ano(numero):
-    """Ano da licitação. Usa a ÚLTIMA ocorrência de 19xx/20xx, que é o ano
-    (a primeira pode ser parte do número, ex.: '202301/2024-CPL')."""
-    achados = RE_ANO.findall(numero or "")
+    """Ano da licitação a partir do número/título curto.
+
+    Prioridade:
+      1) ano logo após a barra (ex.: '9/2023-200402' → 2023; '202301/2024' → 2024)
+      2) última ocorrência 'solta' de 19xx/20xx (não colada no meio de mais dígitos)
+
+    Evita falso ano em sufixos tipo '-200402' (dia/mês/seq), que quebrava o
+    filtro de anos (lia 2004 e parava a varredura cedo demais).
+    """
+    s = (numero or "").strip()
+    if not s:
+        return ""
+    m = re.search(r"/\s*((?:19|20)\d{2})\b", s)
+    if m:
+        return m.group(1)
+    achados = re.findall(r"(?<!\d)((?:19|20)\d{2})(?!\d)", s)
     return achados[-1] if achados else ""
 
 
@@ -584,6 +597,23 @@ def ano_do_titulo(titulo):
     """Ano extraído do título da licitação (número), ou '' se não houver."""
     _mod, numero = split_modalidade_numero(titulo or "")
     return extrai_ano(numero)
+
+
+def ano_de_data_pub(data_pub):
+    """Ano (YYYY) a partir da data de publicação (datetime, dd/mm/aaaa ou ISO)."""
+    if data_pub is None or data_pub == "":
+        return ""
+    if isinstance(data_pub, datetime):
+        return str(data_pub.year)
+    s = str(data_pub).strip()
+    m = re.match(r"(\d{1,2})/(\d{1,2})/((?:19|20)\d{2})$", s)
+    if m:
+        return m.group(3)
+    m = re.match(r"((?:19|20)\d{2})-\d{2}-\d{2}", s)
+    if m:
+        return m.group(1)
+    m = re.search(r"(?<!\d)((?:19|20)\d{2})(?!\d)", s)
+    return m.group(1) if m else ""
 
 
 def _anos_filtro_set(anos_filtro):
@@ -600,29 +630,43 @@ def _ano_minimo_filtro(anos_set):
     return min(vals) if vals else None
 
 
-def decidir_ano_vs_filtro(ano_str, anos_set, ano_min):
-    """
-    Como tratar um item na listagem (ordem mais recente → mais antiga):
+def _ano_int_ou_none(ano_str):
+    try:
+        return int(ano_str) if ano_str else None
+    except (TypeError, ValueError):
+        return None
 
-      pegar  — entra na coleta (ano no filtro, ou sem ano)
-      pular  — ano fora do filtro, mas ainda mais novo que o mínimo (continua)
-      parar  — achou ano anterior ao mínimo do filtro (ex.: filtro 2023 → 2022)
+
+def decidir_anos_vs_filtro(ano_titulo, ano_pub, anos_set, ano_min):
+    """
+    Filtro de anos considerando NÚMERO (título) e/ou DATA DE PUBLICAÇÃO.
+
+      pegar  — título OU publicação no filtro; ou nenhum ano conhecido
+      pular  — anos conhecidos fora do filtro, mas ainda >= mínimo (continua)
+      parar  — referência de ordenação (pub se houver, senão título) < mínimo
 
     Sem filtro → sempre pegar.
     """
     if not anos_set or ano_min is None:
         return "pegar"
-    try:
-        yi = int(ano_str) if ano_str else None
-    except (TypeError, ValueError):
-        yi = None
-    if yi is None:
+    yt = _ano_int_ou_none(ano_titulo)
+    yp = _ano_int_ou_none(ano_pub)
+    if (yt is not None and str(yt) in anos_set) or (
+        yp is not None and str(yp) in anos_set
+    ):
         return "pegar"
-    if yi < ano_min:
+    if yt is None and yp is None:
+        return "pegar"
+    # Ordenação da listagem costuma ser por data de publicação
+    ref = yp if yp is not None else yt
+    if ref is not None and ref < ano_min:
         return "parar"
-    if str(yi) in anos_set:
-        return "pegar"
     return "pular"
+
+
+def decidir_ano_vs_filtro(ano_str, anos_set, ano_min):
+    """Compat: só ano do título/número (sem data de publicação)."""
+    return decidir_anos_vs_filtro(ano_str, "", anos_set, ano_min)
 
 
 def extrai_objeto(titulo):
@@ -784,14 +828,14 @@ def coletar_posts_api(sessao, base, cat_id, anos_filtro=None):
             titulo = BeautifulSoup(
                 p["title"]["rendered"], "html.parser"
             ).get_text(strip=True)
-            ano = ano_do_titulo(titulo)
-            if not ano and p.get("date"):
-                ano = str(p.get("date") or "")[:4]
-            acao = decidir_ano_vs_filtro(ano, anos_set, ano_min)
+            ano_t = ano_do_titulo(titulo)
+            ano_p = ano_de_data_pub(p.get("date") or "")
+            acao = decidir_anos_vs_filtro(ano_t, ano_p, anos_set, ano_min)
             if acao == "parar":
                 print(
-                    "    · scanner parou: achou ano {0} (filtro desde {1})".format(
-                        ano or "?", ano_min
+                    "    · scanner parou: ano título={0} pub={1} "
+                    "(filtro desde {2})".format(
+                        ano_t or "?", ano_p or "?", ano_min
                     )
                 )
                 parou_ano = True
@@ -851,7 +895,46 @@ def raiz_categoria(url_listagem):
     return u if u.endswith("/") else u + "/"
 
 
+def _ano_pub_perto_do_link(a_tag):
+    """Tenta achar ano de publicação perto do link (time/datetime ou cabeçalho)."""
+    nos = []
+    if a_tag is not None:
+        nos.append(a_tag.parent)
+        for nome in ("article", "li", "div", "tr"):
+            p = a_tag.find_parent(nome)
+            if p is not None:
+                nos.append(p)
+    for parent in nos:
+        if parent is None:
+            continue
+        for t in parent.find_all("time"):
+            dt = (t.get("datetime") or "").strip()
+            if re.match(r"(?:19|20)\d{2}", dt):
+                return dt[:4]
+            txt = t.get_text(" ", strip=True)
+            m = re.search(r"(?<!\d)((?:19|20)\d{2})(?!\d)", txt)
+            if m:
+                return m.group(1)
+        # Cabeçalhos de mês no arquivo: "maio, 2023"
+        for prev in parent.find_all_previous(
+            ["h2", "h3", "h4", "strong", "b"], limit=6
+        ):
+            txt = prev.get_text(" ", strip=True)
+            if re.search(
+                r"(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|janeiro|"
+                r"fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|"
+                r"setembro|outubro|novembro|dezembro)",
+                txt,
+                re.I,
+            ):
+                m = re.search(r"(?<!\d)((?:19|20)\d{2})(?!\d)", txt)
+                if m:
+                    return m.group(1)
+    return ""
+
+
 def filtra_posts_da_pagina(soup, url, dominio):
+    """Retorna {href: (titulo, ano_pub_hint)}."""
     posts = {}
     for a in soup.find_all("a", href=True):
         href = urljoin(url, a["href"].split("#")[0].strip())
@@ -866,7 +949,7 @@ def filtra_posts_da_pagina(soup, url, dominio):
             "lgpd","covid-19"):
             continue
         if titulo and MODALIDADES_RE.search(titulo):
-            posts[href] = titulo
+            posts[href] = (titulo, _ano_pub_perto_do_link(a))
     return posts
 
 
@@ -874,12 +957,14 @@ def coletar_posts_html(sessao, url_listagem, anos_filtro=None):
     """Varre a listagem página a página SEQUENCIALMENTE (/, /page/2/, /page/3/,
     ...) até receber 404, página sem novos posts, ou (com filtro de anos) o
     primeiro post com ano anterior ao mínimo pedido.
+
+    O filtro usa ano do NÚMERO e/ou da DATA DE PUBLICAÇÃO (quando visível).
     """
     anos_set = _anos_filtro_set(anos_filtro)
     ano_min = _ano_minimo_filtro(anos_set)
     raiz = raiz_categoria(url_listagem)
     dominio = urlparse(raiz).netloc
-    posts = {}
+    posts = {}  # href -> (titulo, ano_pub_hint)
     n = 1
     while n <= MAX_PAGINAS:
         url = raiz if n == 1 else f"{raiz}page/{n}/"
@@ -902,19 +987,24 @@ def coletar_posts_html(sessao, url_listagem, anos_filtro=None):
             manter = {}
             parar = False
             ano_parada = ""
-            for href, titulo in inedito.items():
+            for href, (titulo, ano_pub_hint) in inedito.items():
                 ano_t = ano_do_titulo(titulo)
-                acao = decidir_ano_vs_filtro(ano_t, anos_set, ano_min)
+                acao = decidir_anos_vs_filtro(
+                    ano_t, ano_pub_hint, anos_set, ano_min
+                )
                 if acao == "parar":
+                    # Não interrompe no meio da página: a ordem no HTML pode
+                    # misturar itens; só evita ir para /page/N+1 depois.
                     parar = True
-                    ano_parada = ano_t
-                    break
+                    if not ano_parada:
+                        ano_parada = ano_pub_hint or ano_t
+                    continue
                 if acao == "pegar":
-                    manter[href] = titulo
+                    manter[href] = (titulo, ano_pub_hint)
             posts.update(manter)
             if parar:
                 print(
-                    "    · scanner parou na página {0}: achou ano {1} "
+                    "    · scanner parou após a página {0}: achou ano {1} "
                     "(filtro desde {2})".format(n, ano_parada or "?", ano_min)
                 )
                 break
@@ -923,7 +1013,8 @@ def coletar_posts_html(sessao, url_listagem, anos_filtro=None):
 
         n += 1
         time.sleep(PAUSA)
-    return list(posts.items())
+    # Compat com callers: lista de (href, titulo)
+    return [(h, t) for h, (t, _ano) in posts.items()]
 
 
 RE_META_PUB = re.compile(
@@ -958,18 +1049,6 @@ def coletar_via_html(sessao, listagens, anos_filtro=None):
             f"    {len(posts)} licitação(ões) no filtro — abrindo posts p/ anexos..."
         )
         for i, (url_post, titulo) in enumerate(posts, 1):
-            acao = decidir_ano_vs_filtro(
-                ano_do_titulo(titulo), anos_set, ano_min
-            )
-            if acao == "parar":
-                print(
-                    "    · parou de abrir posts: ano anterior ao filtro ({0})".format(
-                        ano_do_titulo(titulo) or "?"
-                    )
-                )
-                break
-            if acao == "pular":
-                continue
             if i == 1 or i % 20 == 0 or i == len(posts):
                 print(f"    · anexos {i}/{len(posts)}…")
             time.sleep(PAUSA)
@@ -982,6 +1061,16 @@ def coletar_via_html(sessao, listagens, anos_filtro=None):
             except Exception as e:
                 print(f"    ! Erro em {url_post}: {e}")
                 anexos, data_pub = [], ""
+            # Confirma filtro com título + data real de publicação do post
+            if anos_set and ano_min is not None:
+                acao = decidir_anos_vs_filtro(
+                    ano_do_titulo(titulo),
+                    ano_de_data_pub(data_pub),
+                    anos_set,
+                    ano_min,
+                )
+                if acao != "pegar":
+                    continue
             res.append({"titulo": titulo, "link": url_post,
                         "data_pub": data_pub, "anexos": anexos})
     return res
@@ -2240,18 +2329,28 @@ def main():
             ano = extrai_ano(numero)
             objeto = extrai_objeto(titulo)
 
-            # --- FILTRO DE ANOS: aplicado ANTES do download (economiza banda).
-            # Licitação sem ano identificável é mantida, com aviso, para não
-            # perder registro por falha de parsing do número.
+            # --- FILTRO DE ANOS: número do título E/OU data de publicação.
+            # Sem nenhum dos dois → mantém (não perde por falha de parsing).
             if anos_filtro:
-                if ano and ano not in anos_filtro:
+                ano_pub_chk = ano_de_data_pub(lic.get("data_pub"))
+                anos_set_chk = _anos_filtro_set(anos_filtro)
+                ano_min_chk = _ano_minimo_filtro(anos_set_chk)
+                acao_ano = decidir_anos_vs_filtro(
+                    ano, ano_pub_chk, anos_set_chk, ano_min_chk
+                )
+                if acao_ano != "pegar":
                     puladas_ano += 1
-                    _log("  · [{0}/{1}] pulada (ano {2} fora do filtro)",
-                         idx, total_lic, ano)
+                    _log(
+                        "  · [{0}/{1}] pulada (ano título={2} pub={3} "
+                        "fora do filtro)",
+                        idx, total_lic, ano or "?", ano_pub_chk or "?",
+                    )
                     continue
-                if not ano:
-                    _log("  ! [{0}/{1}] sem ano identificável (mantida): {2}",
-                         idx, total_lic, titulo[:55])
+                if not ano and not ano_pub_chk:
+                    _log(
+                        "  ! [{0}/{1}] sem ano (título/pub) — mantida: {2}",
+                        idx, total_lic, titulo[:55],
+                    )
 
             pasta = os.path.join(args.saida, nome_pasta(titulo))
             os.makedirs(pasta, exist_ok=True)

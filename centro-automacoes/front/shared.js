@@ -20,7 +20,7 @@
   async function guardAuth() {
     if (location.pathname.includes("login.html")) return;
     try {
-      const r = await fetch(`${API}/api/auth/me`);
+      const r = await authFetch(`${API}/api/auth/me`);
       if (!r.ok) return;
       const d = await r.json();
       if (d.auth_required && !d.user) {
@@ -1742,7 +1742,7 @@
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home44";
+    s.src = "/assets/shader-background.js?v=home45";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {

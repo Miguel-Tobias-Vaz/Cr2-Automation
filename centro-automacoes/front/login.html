@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Login — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
-    <link rel="stylesheet" href="/assets/styles.css?v=home44" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home45" />
   </head>
   <body class="login-page">
     <div class="noise" aria-hidden="true"></div>
@@ -29,7 +29,7 @@
         Sem usuários configurados? O painel funciona sem login (modo local).
       </p>
     </main>
-    <script src="/assets/shared.js?v=home44"></script>
+    <script src="/assets/shared.js?v=home45"></script>
     <script>
       (function () {
         const params = new URLSearchParams(location.search);
@@ -68,7 +68,11 @@
             btn.disabled = false;
           }
         });
-        fetch("/api/auth/me")
+        const meFetch =
+          window.OptoAutomacoes && OptoAutomacoes.authFetch
+            ? OptoAutomacoes.authFetch
+            : fetch;
+        meFetch("/api/auth/me")
           .then((r) => r.json())
           .then((d) => {
             if (!d.auth_required) location.href = next;

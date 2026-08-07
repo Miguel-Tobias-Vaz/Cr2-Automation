@@ -1,9 +1,9 @@
-ï»¿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Contratos â€” Opto AutomaÃ§Ãµes</title>
+    <title>Contratos — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home44" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home45" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -21,10 +21,10 @@
     <header class="top">
       <a class="brand-mark" href="/">
         <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
-        <span>Opto AutomaÃ§Ãµes</span>
+        <span>Opto Automações</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">Servidor â€¦</span>
+      <span class="api-pill" id="api-pill">Servidor …</span>
     </header>
 
     <main class="page-shell">
@@ -43,10 +43,10 @@
             <h3>O que faz</h3>
             <ul>
               <li>Listagem paginada no portal Governo Transparente</li>
-              <li>ExtraÃ§Ã£o dos dados de cada contrato/aditivo</li>
+              <li>Extração dos dados de cada contrato/aditivo</li>
               <li>Baixa dos anexos por pasta</li>
               <li>Planilha <code>Relacao de contratos e aditivos.xlsx</code></li>
-              <li>Retomada automÃ¡tica via checkpoint</li>
+              <li>Retomada automática via checkpoint</li>
             </ul>
           </article>
         </div>
@@ -58,16 +58,16 @@
           <fieldset class="bloco">
             <legend>Fonte e destino</legend>
             <label class="field">
-              <span class="field-label"><em>ID do Ã³rgÃ£o *</em></span>
+              <span class="field-label"><em>ID do órgão *</em></span>
               <input type="text" id="orgao" value="43559588" required />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
-                NÃºmero na URL do portal, ex.:
+                Número na URL do portal, ex.:
                 <code>.../acessoinfo/<strong>43559588</strong>/consultarcontratoaditivo</code>
               </small>
             </label>
             <div class="opcoes-grid" style="grid-template-columns:1fr 1fr;gap:1rem">
               <label class="field">
-                <span class="field-label"><em>Data inÃ­cio *</em></span>
+                <span class="field-label"><em>Data início *</em></span>
                 <input type="text" id="inicio" value="01/01/2023" placeholder="dd/mm/aaaa" required />
               </label>
               <label class="field">
@@ -76,7 +76,7 @@
               </label>
             </div>
             <label class="field">
-              <span class="field-label"><em>Pasta de saÃ­da</em></span>
+              <span class="field-label"><em>Pasta de saída</em></span>
               <input type="text" id="pasta_saida" value="C:\Downloads\Contratos" />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
                 Cria <code>contratos/</code>, <code>dados/</code>, <code>logs/</code> e <code>checkpoint/</code> dentro desta pasta.
@@ -89,34 +89,34 @@
           </fieldset>
 
           <fieldset class="bloco bloco-opcoes">
-            <legend>OpÃ§Ãµes</legend>
+            <legend>Opções</legend>
             <div class="opcoes-grid">
               <label class="check-row" for="headed">
                 <input type="checkbox" id="headed" />
                 <span class="check-copy">
                   <strong>Mostrar navegador</strong>
-                  <small>Abre o Chromium visÃ­vel (Ãºtil para depurar)</small>
+                  <small>Abre o Chromium visível (útil para depurar)</small>
                 </span>
               </label>
               <label class="check-row" for="apenas_listagem">
                 <input type="checkbox" id="apenas_listagem" />
                 <span class="check-copy">
                   <strong>Apenas listagem</strong>
-                  <small>SÃ³ varre a tabela â€” sem detalhes nem downloads</small>
+                  <small>Só varre a tabela — sem detalhes nem downloads</small>
                 </span>
               </label>
               <label class="check-row" for="reset_checkpoint">
                 <input type="checkbox" id="reset_checkpoint" />
                 <span class="check-copy">
                   <strong>Resetar checkpoint</strong>
-                  <small>RecomeÃ§a do zero (ignora retomada)</small>
+                  <small>Recomeça do zero (ignora retomada)</small>
                 </span>
               </label>
               <label class="check-row" for="sem_retry_erros">
                 <input type="checkbox" id="sem_retry_erros" />
                 <span class="check-copy">
-                  <strong>NÃ£o retentar erros</strong>
-                  <small>Pula registros que falharam em execuÃ§Ãµes anteriores</small>
+                  <strong>Não retentar erros</strong>
+                  <small>Pula registros que falharam em execuções anteriores</small>
                 </span>
               </label>
             </div>
@@ -133,14 +133,14 @@
       <section class="log-wrap" id="log">
         <header class="section-head">
           <h2>Log</h2>
-          <p>SituaÃ§Ã£o: <strong id="log-state">Parado</strong> Â· Processo: <span id="job-status">â€”</span></p>
+          <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
         </header>
         <div class="log-console" id="log-console"></div>
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home44"></script>
-    <script src="/assets/shared.js?v=home44"></script>
+    <script src="/assets/fluid-particles.js?v=home45"></script>
+    <script src="/assets/shared.js?v=home45"></script>
     <script>
       CR2Centro.injectNav("contratos");
       CR2Centro.pingApi();
