@@ -1435,7 +1435,11 @@ def upload_em_criar_documento(page, caminho) -> Path:
 
 
 def _clicar_lapis_editar_arquivo(page, path: Path) -> None:
-    """Clica no botao azul (lapis) na linha do PDF — Passo 2."""
+    """Clica no botao verde (lapis) na linha do PDF — Passo 2.
+
+    No portal atual o botao Editar e verde/teal (nao azul). Sem isso o Finalizar
+    fica cinza/desabilitado.
+    """
     stem = path.stem
     trecho = stem[:36]
     _aguardar_modal_texto(page, r"Passo\s*2", 20)
@@ -1447,10 +1451,15 @@ def _clicar_lapis_editar_arquivo(page, path: Path) -> None:
         pass
     time.sleep(0.4)
 
-    def _achar_box_lapis():
+    def _marcar_e_obter_via():
+        """Marca o botao certo com data-cr2-lapis e devolve a estrategia usada."""
         return page.evaluate(
             r"""
             (trecho) => {
+                document.querySelectorAll('[data-cr2-lapis]').forEach(el => {
+                    el.removeAttribute('data-cr2-lapis');
+                });
+
                 function visivel(el) {
                     if (!el) return false;
                     const s = window.getComputedStyle(el);
@@ -1459,25 +1468,41 @@ def _clicar_lapis_editar_arquivo(page, path: Path) -> None:
                     const r = el.getBoundingClientRect();
                     return r.width > 8 && r.height > 8;
                 }
-                function azul(el) {
+                function rgb(el) {
                     const s = window.getComputedStyle(el);
                     const bg = s.backgroundColor || '';
                     const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-                    if (!m) return false;
-                    const r = +m[1], g = +m[2], b = +m[3];
-                    return b >= 140 && b > r + 20 && b > g + 20;
+                    if (!m) return null;
+                    return { r: +m[1], g: +m[2], b: +m[3] };
+                }
+                // Verde / teal do botao Editar (UI atual). Aceita azul legado.
+                function corEditar(el) {
+                    const c = rgb(el);
+                    if (!c) return false;
+                    const { r, g, b } = c;
+                    const verdeTeal = g >= 120 && g > r + 15 && g >= b - 10;
+                    const azulLegado = b >= 140 && b > r + 20 && b > g + 20;
+                    return verdeTeal || azulLegado;
                 }
                 function icone(el) {
                     const r = el.getBoundingClientRect();
-                    return r.width >= 22 && r.width <= 64 && r.height >= 22 && r.height <= 64;
+                    return r.width >= 18 && r.width <= 72 && r.height >= 18 && r.height <= 72;
                 }
+                function clicavel(el) {
+                    if (!el) return null;
+                    return el.closest(
+                        '.clickable-element, button, [role=button], a'
+                    ) || el;
+                }
+
                 const nodes = Array.from(document.querySelectorAll('div, span, p, a'));
                 let alvoTxt = null;
                 for (const el of nodes) {
                     const t = (el.innerText || '').replace(/\s+/g, ' ').trim();
-                    if (!t || t.length > 180) continue;
+                    if (!t || t.length > 220) continue;
                     if (t.indexOf(trecho) >= 0 && visivel(el)
-                        && t.indexOf('Passo') < 0 && t.toLowerCase().indexOf('clique') < 0) {
+                        && t.indexOf('Passo') < 0
+                        && t.toLowerCase().indexOf('clique') < 0) {
                         alvoTxt = el;
                         break;
                     }
@@ -1486,7 +1511,7 @@ def _clicar_lapis_editar_arquivo(page, path: Path) -> None:
                     const curto = (trecho.split(' - ')[0] || trecho.slice(0, 18));
                     for (const el of nodes) {
                         const t = (el.innerText || '').replace(/\s+/g, ' ').trim();
-                        if (!t || t.length > 180) continue;
+                        if (!t || t.length > 220) continue;
                         if (t.indexOf(curto) >= 0 && /\.pdf/i.test(t) && visivel(el)) {
                             alvoTxt = el;
                             break;
@@ -1496,22 +1521,42 @@ def _clicar_lapis_editar_arquivo(page, path: Path) -> None:
                 if (!alvoTxt) return null;
 
                 let row = alvoTxt;
-                for (let up = 0; up < 12 && row; up++) {
-                    const kids = Array.from(row.querySelectorAll('div, button, a, span'))
-                        .filter(el => visivel(el) && icone(el));
-                    const blue = kids.find(azul);
-                    if (blue) {
-                        const r = blue.getBoundingClientRect();
-                        return { x: r.x, y: r.y, w: r.width, h: r.height, via: 'blue' };
+                for (let up = 0; up < 14 && row; up++) {
+                    const kids = Array.from(
+                        row.querySelectorAll('div, button, a, span, i')
+                    ).filter(el => visivel(el) && icone(el));
+
+                    // 1) Preferir botao verde/teal (lapis Editar)
+                    const green = kids.find(corEditar);
+                    if (green) {
+                        const alvo = clicavel(green);
+                        alvo.setAttribute('data-cr2-lapis', '1');
+                        return { via: 'green' };
                     }
+
+                    // 2) Tres icones na linha: check | editar | lixeira → o do meio
                     if (kids.length >= 3) {
-                        kids.sort((a, b) => a.getBoundingClientRect().x - b.getBoundingClientRect().x);
+                        kids.sort((a, b) =>
+                            a.getBoundingClientRect().x - b.getBoundingClientRect().x
+                        );
+                        // Preferir o que tiver fundo colorido entre os 3 primeiros
                         let best = kids[1];
                         for (const k of kids.slice(0, 3)) {
-                            if (azul(k)) { best = k; break; }
+                            if (corEditar(k)) { best = k; break; }
                         }
-                        const rb = best.getBoundingClientRect();
-                        return { x: rb.x, y: rb.y, w: rb.width, h: rb.height, via: 'middle' };
+                        // Se o do meio for cinza e o 2o da direita for colorido…
+                        const mid = kids[1];
+                        const cMid = rgb(mid);
+                        const cinza = cMid && Math.abs(cMid.r - cMid.g) < 12
+                            && Math.abs(cMid.g - cMid.b) < 12;
+                        if (cinza) {
+                            for (const k of kids.slice(0, 4)) {
+                                if (corEditar(k)) { best = k; break; }
+                            }
+                        }
+                        const alvo = clicavel(best);
+                        alvo.setAttribute('data-cr2-lapis', '1');
+                        return { via: 'middle' };
                     }
                     row = row.parentElement;
                 }
@@ -1522,26 +1567,56 @@ def _clicar_lapis_editar_arquivo(page, path: Path) -> None:
         )
 
     aberto = False
-    for tentativa in range(1, 5):
-        box = None
+    for tentativa in range(1, 6):
+        info = None
         try:
-            box = _achar_box_lapis()
+            info = _marcar_e_obter_via()
         except Exception:
-            box = None
-        if not box:
+            info = None
+        if not info:
             time.sleep(0.35)
             continue
+
+        clicou = False
+        # Clique no elemento marcado (mais confiavel que coordenada no Bubble)
         try:
-            page.mouse.click(box["x"] + box["w"] / 2, box["y"] + box["h"] / 2)
-            print(
-                "    Clicou no lapis (via={0}, tentativa {1}).".format(
-                    box.get("via"), tentativa
-                )
-            )
+            loc = page.locator("[data-cr2-lapis='1']").first
+            loc.wait_for(state="visible", timeout=2500)
+            loc.click(timeout=5000)
+            clicou = True
         except Exception:
+            try:
+                page.locator("[data-cr2-lapis='1']").first.click(
+                    force=True, timeout=4000
+                )
+                clicou = True
+            except Exception:
+                try:
+                    page.evaluate(
+                        """
+                        () => {
+                            const el = document.querySelector('[data-cr2-lapis="1"]');
+                            if (!el) return false;
+                            el.click();
+                            return true;
+                        }
+                        """
+                    )
+                    clicou = True
+                except Exception:
+                    clicou = False
+
+        if not clicou:
+            time.sleep(0.3)
             continue
-        time.sleep(0.5)
-        if _aguardar_modal_texto(page, r"Editar\s+Documento", 5) is not None:
+
+        print(
+            "    Clicou no lapis (via={0}, tentativa {1}).".format(
+                info.get("via"), tentativa
+            )
+        )
+        time.sleep(0.55)
+        if _aguardar_modal_texto(page, r"Editar\s+Documento", 6) is not None:
             aberto = True
             break
         time.sleep(0.35)
@@ -1554,23 +1629,30 @@ def _clicar_lapis_editar_arquivo(page, path: Path) -> None:
                 .filter(has_text=re.compile(r"\.pdf", re.I))
                 .last
             )
+            # Botoes da linha: tipicamente [check, editar, lixeira]
             btns = row.locator(".clickable-element, button, [role=button]")
             n = btns.count()
-            if n >= 2:
-                btns.nth(1).click(timeout=4000)
-            elif n == 1:
-                btns.first.click(timeout=4000)
-            time.sleep(0.55)
-            if _aguardar_modal_texto(page, r"Editar\s+Documento", 5) is not None:
-                aberto = True
-                print("    Clicou no lapis (fallback Playwright).")
+            # Tenta o 2o (indice 1); se nao abrir, percorre todos
+            ordem = list(range(min(n, 5)))
+            if 1 in ordem:
+                ordem = [1] + [i for i in ordem if i != 1]
+            for i in ordem:
+                try:
+                    btns.nth(i).click(timeout=3000)
+                except Exception:
+                    continue
+                time.sleep(0.55)
+                if _aguardar_modal_texto(page, r"Editar\s+Documento", 4) is not None:
+                    aberto = True
+                    print("    Clicou no lapis (fallback Playwright idx={0}).".format(i))
+                    break
         except Exception:
             pass
 
     if not aberto:
         salvar_screenshot(page, "SEM_LAPIS_EDITAR")
         raise RuntimeError(
-            "Nao abriu 'Editar Documento' apos clicar no lapis azul do PDF."
+            "Nao abriu 'Editar Documento' apos clicar no lapis verde do PDF."
         )
     time.sleep(0.25)
 

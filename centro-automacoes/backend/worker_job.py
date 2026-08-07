@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -79,7 +80,11 @@ class WorkerJob:
         self._emit_op({"op": "log", "level": level, "msg": str(msg)})
 
     def _emit_op(self, payload: dict[str, Any]) -> None:
-        print(json.dumps(payload, ensure_ascii=False), flush=True)
+        # Usar __stdout__: run_main_with_logs troca sys.stdout por um Tee que
+        # chama job.emit — print() normal reentraria e aninharia NDJSON até estourar.
+        stream = sys.__stdout__ or sys.stdout
+        stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        stream.flush()
 
     def write_result(self) -> None:
         path = self.dir / "result.json"

@@ -125,22 +125,24 @@ SCRIPTS = {
 
 
 class _Tee(io.TextIOBase):
-    def __init__(self, original, callback):
+    def __init__(self, original, callback, *, echo: bool = True):
         self._original = original
         self._callback = callback
+        self._echo = echo
         self._buf = ""
 
     def write(self, s: str) -> int:
         if not s:
             return 0
-        try:
-            self._original.write(s)
-        except UnicodeEncodeError:
-            safe = s.encode("ascii", errors="replace").decode("ascii")
+        if self._echo:
             try:
-                self._original.write(safe)
-            except Exception:
-                pass
+                self._original.write(s)
+            except UnicodeEncodeError:
+                safe = s.encode("ascii", errors="replace").decode("ascii")
+                try:
+                    self._original.write(safe)
+                except Exception:
+                    pass
         # tqdm usa \r — trata como quebra para filtrar progresso sujo
         self._buf += s.replace("\r\n", "\n").replace("\r", "\n")
         while "\n" in self._buf:
@@ -285,6 +287,10 @@ def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
     visto_msgs: set[str] = set()
 
     def on_line(line: str) -> None:
+        raw = (line or "").strip()
+        # Protocolo NDJSON do WorkerJob — não reprocessar (evita loop/aninhamento)
+        if raw.startswith("{") and '"op"' in raw:
+            return
         limpa = _limpar_linha_log(line, visto=visto_msgs)
         if limpa is None:
             return
@@ -310,8 +316,11 @@ def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
         else:
             job.emit("info", limpa)
 
-    tee_out = _Tee(sys.stdout, on_line)
-    tee_err = _Tee(sys.stderr, on_line)
+    # No subprocesso, o emit já manda NDJSON em __stdout__; ecoar o print cru
+    # duplicaria linhas no pai.
+    protocol_job = type(job).__name__ == "WorkerJob"
+    tee_out = _Tee(sys.stdout, on_line, echo=not protocol_job)
+    tee_err = _Tee(sys.stderr, on_line, echo=not protocol_job)
     # Silencia UserWarning das libs enquanto o job roda (ainda filtramos no tee)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)

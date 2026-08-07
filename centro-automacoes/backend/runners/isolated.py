@@ -73,11 +73,25 @@ def _handle_worker_line(job, line: str, visto: set[str]) -> None:
         except json.JSONDecodeError:
             payload = None
         if isinstance(payload, dict) and payload.get("op") == "log":
-            job.emit(str(payload.get("level") or "info"), str(payload.get("msg") or ""))
+            msg = str(payload.get("msg") or "")
+            # Desfaz aninhamento acidental de NDJSON no msg
+            while msg.lstrip().startswith("{") and '"op"' in msg:
+                try:
+                    inner = json.loads(msg)
+                except json.JSONDecodeError:
+                    break
+                if not isinstance(inner, dict) or inner.get("op") != "log":
+                    break
+                payload = inner
+                msg = str(inner.get("msg") or "")
+            job.emit(str(payload.get("level") or "info"), msg)
             return
         if isinstance(payload, dict) and payload.get("op") == "progress":
             _apply_progress(job, payload)
             return
+    # Linha já veio como protocolo — não tratar como texto cru
+    if raw.startswith("{") and '"op"' in raw:
+        return
     limpa = _limpar_linha_log(raw, visto=visto)
     if limpa:
         job.emit("info", limpa)
