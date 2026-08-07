@@ -1126,6 +1126,39 @@ main {
   margin-left: 0;
 }
 
+.opto-dl-banner {
+  position: fixed;
+  top: 3.35rem;
+  left: 0;
+  right: 0;
+  z-index: 39;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem clamp(1rem, 3vw, 2.5rem);
+  background: rgba(20, 48, 36, 0.95);
+  border-bottom: 1px solid rgba(46, 234, 122, 0.25);
+  backdrop-filter: blur(10px);
+}
+
+.opto-dl-banner-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.86rem;
+  color: var(--fog);
+}
+
+body.has-dl-banner.has-subnav {
+  padding-top: 6.5rem;
+}
+
+body.has-dl-banner:not(.has-subnav) .page-shell,
+body.has-dl-banner:not(.has-subnav) main {
+  scroll-margin-top: 5rem;
+}
+
 .field-hint {
   min-height: 0.9em;
   font-family: var(--font-display);
@@ -2791,9 +2824,16 @@ body.admin-sidebar-collapsed .admin-toggle-icon {
 .admin-nav-icon {
   flex-shrink: 0;
   width: 2.75rem;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 0.95rem;
   opacity: 0.85;
+}
+
+.admin-nav-icon svg,
+.admin-toggle-icon svg {
+  display: block;
 }
 
 .admin-nav-label {
@@ -2845,7 +2885,9 @@ body.admin-sidebar-collapsed .admin-toggle-icon {
 
 .admin-toggle-icon {
   width: 2.75rem;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 0.28s var(--ease);
 }
 

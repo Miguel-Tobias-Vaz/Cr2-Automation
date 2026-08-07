@@ -449,6 +449,7 @@
       if (!r.ok) throw new Error();
       const data = await r.json();
       atualizarPillStatus(pill, data);
+      pollDownloadsReady().catch(() => {});
       if (!window.__optoPillTimer) {
         window.__optoPillTimer = setInterval(() => {
           pingApi().catch(() => {});
@@ -462,12 +463,80 @@
     }
   }
 
+  function formatFilaPosicao(n) {
+    const num = Math.max(1, Number(n) || 1);
+    return String(num).padStart(2, "0");
+  }
+
+  function jobDisplayName(job) {
+    if (!job) return "Processo";
+    if (job.nome) return job.nome;
+    const tool = TOOLS[job.service_id];
+    return (tool && tool.nome) || job.service_id || "Processo";
+  }
+
+  function formatJobProgressText(job) {
+    if (!job) return null;
+    const done = job.done;
+    const total = job.total;
+    let pct = job.percent;
+    if (job.status === "running" && pct != null && pct >= 100) pct = 99;
+    if (done != null && total != null && total > 0) {
+      const base = `${done}/${total}`;
+      return pct != null ? `${base} (${pct}%)` : base;
+    }
+    if (pct != null) return `${pct}%`;
+    if (job.label) return job.label;
+    return null;
+  }
+
+  function resolveMyJob(data, serviceId) {
+    const sid = serviceId || boundServiceId || null;
+    if (data && Array.isArray(data.my_jobs)) {
+      if (sid) {
+        return data.my_jobs.find((j) => j.service_id === sid) || null;
+      }
+      return data.my_jobs[0] || null;
+    }
+    if (data && data.my_job && !sid) return data.my_job;
+    if (data && data.auth_required) return null;
+    const mem = readRememberedJob(sid);
+    if (!mem || !mem.jobId) return null;
+    const q = (data && data.queue) || {};
+    const running = (q.running_jobs || []).find((j) => j.id === mem.jobId);
+    if (running) {
+      const prog = running.progress || {};
+      return {
+        id: running.id,
+        service_id: running.service_id,
+        status: "running",
+        percent: prog.percent,
+        cancel_requested: running.cancel_requested,
+      };
+    }
+    const pending = (q.pending_jobs || []).find((j) => j.id === mem.jobId);
+    if (pending) {
+      const prog = pending.progress || {};
+      const pos =
+        (pending.queue && pending.queue.position) || pending.queue_position;
+      return {
+        id: pending.id,
+        service_id: pending.service_id,
+        status: "pending",
+        percent: prog.percent,
+        cancel_requested: pending.cancel_requested,
+        queue_position: pos,
+      };
+    }
+    return null;
+  }
+
   function atualizarPillStatus(pill, data) {
     const queue = (data && data.queue) || {};
     const running = Number(data.running ?? queue.running) || 0;
     const pending = Number(data.pending ?? queue.pending) || 0;
     const maxSlots = Number(data.max_concurrent ?? queue.max_concurrent) || 4;
-    const ativo = data && data.ativo;
+    const myJob = resolveMyJob(data);
     pill.classList.remove("offline");
 
     if (running === 0 && pending === 0) {
@@ -480,21 +549,47 @@
     }
 
     let texto = `Online · ${running}/${maxSlots} rodando`;
-    if (pending > 0) texto += ` · ${pending} na fila`;
-    pill.title = texto;
+    let title = texto;
 
-    if (ativo && ativo.id) {
-      const mem = readRememberedJob();
-      if (mem && mem.jobId === ativo.id) {
-        syncCancelFromHealth(ativo);
+    if (myJob && myJob.status === "running") {
+      if (!boundServiceId || myJob.service_id === boundServiceId) {
+        syncCancelFromHealth(myJob);
       }
-      const nome = ativo.nome || ativo.service_id || "Processo";
-      const pct = ativo.percent;
-      if (pct != null) texto += ` · ${nome} ${pct}%`;
-      else if (ativo.cancel_requested) texto += ` · ${nome} cancelando…`;
+      const nome = jobDisplayName(myJob);
+      const prog = formatJobProgressText(myJob);
+      if (prog) texto += ` · ${nome} ${prog}`;
+      else if (myJob.cancel_requested) texto += ` · ${nome} cancelando…`;
+      else texto += ` · ${nome} rodando`;
+      title = texto;
+    } else if (myJob && myJob.status === "pending") {
+      if (
+        boundServiceId &&
+        myJob.service_id === boundServiceId
+      ) {
+        const mem = readRememberedJob(boundServiceId);
+        if (mem && mem.jobId === myJob.id) {
+          currentJobId = myJob.id;
+          setCancelVisible(true);
+          const runBtn = el("btn-run");
+          if (runBtn) runBtn.disabled = true;
+        }
+      }
+      const nome = jobDisplayName(myJob);
+      const pos = formatFilaPosicao(
+        myJob.queue_position ||
+          (myJob.queue && myJob.queue.position) ||
+          1
+      );
+      texto += ` · ${nome} · Na fila posição ${pos}`;
+      title = `Seu processo aguarda vaga — posição ${pos} na fila`;
+    } else {
+      if (!boundServiceId) syncCancelFromHealth(null);
+      if (pending > 0) texto += ` · ${pending} na fila`;
+      title = "Servidor em uso — aguarde sua vez ou inicie um processo";
     }
 
     pill.textContent = texto;
+    pill.title = title;
     pill.classList.add("online", "running");
   }
 
@@ -1191,6 +1286,7 @@
   };
 
   let es = null;
+  let streamJobId = null;
   let currentJobId = null;
   let noticeShownFor = null;
   let boundServiceId = null;
@@ -1356,7 +1452,8 @@
     });
   }
 
-  async function downloadJobArtifact(jobId) {
+  async function downloadJobArtifact(jobId, opts) {
+    const dismiss = !opts || opts.dismiss !== false;
     try {
       const r = await authFetch(`${API}/api/jobs/${jobId}/download`);
       if (!r.ok) return false;
@@ -1372,35 +1469,174 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      if (dismiss) markDownloadDismissed(jobId);
+      pollDownloadsReady().catch(() => {});
       return true;
     } catch (_) {
       return false;
     }
   }
 
+  function markDownloadDismissed(jobId) {
+    try {
+      sessionStorage.setItem("opto-dl-done-" + jobId, "1");
+    } catch (_) {}
+  }
+
+  function isDownloadDismissed(jobId) {
+    try {
+      return sessionStorage.getItem("opto-dl-done-" + jobId) === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function ensureDownloadButton() {
+    let btn = el("btn-download");
+    if (btn) return btn;
+    btn = document.createElement("a");
+    btn.className = "btn btn-primary btn-sm";
+    btn.id = "btn-download";
+    btn.href = "#";
+    btn.hidden = true;
+    btn.textContent = "Baixar ZIP";
+    const bar =
+      document.querySelector(".job-bar") ||
+      document.querySelector(".acao-row") ||
+      document.querySelector(".log-wrap .section-head");
+    if (bar) bar.prepend(btn);
+    return btn;
+  }
+
+  function showJobDownloadButton(jobId) {
+    if (workspaceCache && workspaceCache.local_mode) return;
+    const btn = ensureDownloadButton();
+    if (!btn) return;
+    btn.hidden = false;
+    btn.textContent = "Baixar ZIP";
+    btn.onclick = (ev) => {
+      ev.preventDefault();
+      downloadJobArtifact(jobId);
+    };
+  }
+
+  function ensureDownloadBanner() {
+    let bar = el("opto-dl-banner");
+    if (bar) return bar;
+    bar = document.createElement("div");
+    bar.id = "opto-dl-banner";
+    bar.className = "opto-dl-banner";
+    bar.hidden = true;
+    bar.setAttribute("role", "status");
+    const header = document.querySelector("header.top");
+    if (header && header.parentNode) {
+      header.insertAdjacentElement("afterend", bar);
+      document.body.classList.add("has-dl-banner");
+    } else {
+      document.body.prepend(bar);
+    }
+    return bar;
+  }
+
+  function renderDownloadBanner(items) {
+    if (workspaceCache && workspaceCache.local_mode) return;
+    const visible = (items || []).filter((j) => !isDownloadDismissed(j.id));
+    const bar = ensureDownloadBanner();
+    if (!bar) return;
+    if (!visible.length) {
+      bar.hidden = true;
+      document.body.classList.remove("has-dl-banner");
+      return;
+    }
+    bar.hidden = false;
+    document.body.classList.add("has-dl-banner");
+    const rows = visible
+      .map((j) => {
+        const label = j.nome || SERVICE_LABELS[j.service_id] || j.service_id;
+        return `<div class="opto-dl-banner-row">
+          <span><strong>${label}</strong> finalizado — ZIP pronto</span>
+          <button type="button" class="btn btn-primary btn-sm" data-dl-job="${j.id}">Baixar ZIP</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-dl-dismiss="${j.id}" title="Ocultar">×</button>
+        </div>`;
+      })
+      .join("");
+    bar.innerHTML = rows;
+    bar.querySelectorAll("[data-dl-job]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        downloadJobArtifact(btn.getAttribute("data-dl-job"));
+      });
+    });
+    bar.querySelectorAll("[data-dl-dismiss]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        markDownloadDismissed(btn.getAttribute("data-dl-dismiss"));
+        pollDownloadsReady().catch(() => {});
+      });
+    });
+  }
+
+  async function pollDownloadsReady() {
+    if (workspaceCache && workspaceCache.local_mode) return;
+    try {
+      const r = await authFetch(`${API}/api/jobs/downloads-ready`);
+      if (!r.ok) return;
+      const data = await r.json();
+      renderDownloadBanner(data.downloads || []);
+    } catch (_) {}
+  }
+
   let queuePollTimer = null;
 
-  const JOB_SESSION_KEY = "opto-active-job";
+  const JOB_SESSION_KEY = "opto-active-jobs";
+  const JOB_SESSION_LEGACY = "opto-active-job";
 
-  function rememberJob(jobId, serviceId) {
-    try {
-      sessionStorage.setItem(
-        JOB_SESSION_KEY,
-        JSON.stringify({ jobId, serviceId: serviceId || "", t: Date.now() })
-      );
-    } catch (_) {}
-  }
-
-  function forgetJob() {
-    try {
-      sessionStorage.removeItem(JOB_SESSION_KEY);
-    } catch (_) {}
-  }
-
-  function readRememberedJob() {
+  function readJobMap() {
     try {
       const raw = sessionStorage.getItem(JOB_SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (raw) {
+        const map = JSON.parse(raw);
+        if (map && typeof map === "object" && !map.jobId) return map;
+      }
+      const leg = sessionStorage.getItem(JOB_SESSION_LEGACY);
+      if (leg) {
+        const one = JSON.parse(leg);
+        if (one && one.jobId && one.serviceId) {
+          const map = { [one.serviceId]: one };
+          sessionStorage.setItem(JOB_SESSION_KEY, JSON.stringify(map));
+          sessionStorage.removeItem(JOB_SESSION_LEGACY);
+          return map;
+        }
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  function rememberJob(jobId, serviceId) {
+    const sid = serviceId || boundServiceId;
+    if (!sid) return;
+    try {
+      const map = readJobMap();
+      map[sid] = { jobId, serviceId: sid, t: Date.now() };
+      sessionStorage.setItem(JOB_SESSION_KEY, JSON.stringify(map));
+      sessionStorage.removeItem(JOB_SESSION_LEGACY);
+    } catch (_) {}
+  }
+
+  function forgetJob(serviceId) {
+    const sid = serviceId || boundServiceId;
+    if (!sid) return;
+    try {
+      const map = readJobMap();
+      delete map[sid];
+      sessionStorage.setItem(JOB_SESSION_KEY, JSON.stringify(map));
+    } catch (_) {}
+  }
+
+  function readRememberedJob(serviceId) {
+    const sid = serviceId || boundServiceId;
+    if (!sid) return null;
+    try {
+      const map = readJobMap();
+      return map[sid] || null;
     } catch (_) {
       return null;
     }
@@ -1444,29 +1680,35 @@
       es.close();
       es = null;
     }
+    streamJobId = null;
   }
 
   function attachStream(jobId) {
+    if (!jobId || jobId !== currentJobId) return;
     closeStream();
+    streamJobId = jobId;
+    const streamFor = jobId;
     es = new EventSource(`${API}/api/jobs/${jobId}/logs/stream`);
     es.onmessage = (ev) => {
+      if (streamJobId !== streamFor || currentJobId !== streamFor) return;
       try {
         const data = JSON.parse(ev.data);
         if (data.level === "done") {
           closeStream();
-          refreshStatus(jobId);
+          refreshStatus(streamFor);
           return;
         }
         appendLog(data, data.level);
         if ((data.msg || "").includes("— fim —")) {
           closeStream();
-          refreshStatus(jobId);
+          refreshStatus(streamFor);
         }
       } catch (_) {}
     };
     es.onerror = () => {
+      if (streamJobId !== streamFor) return;
       closeStream();
-      refreshStatus(jobId);
+      refreshStatus(streamFor);
     };
   }
 
@@ -1545,10 +1787,10 @@
   async function resumeActiveJob(serviceId) {
     ensureCancelButton();
     let ativo = null;
-    const mem = readRememberedJob();
+    const mem = readRememberedJob(serviceId);
     if (mem && mem.jobId) {
       try {
-          const r = await authFetch(`${API}/api/jobs/${mem.jobId}`);
+        const r = await authFetch(`${API}/api/jobs/${mem.jobId}`);
         if (r.ok) {
           const job = await r.json();
           if (job.status === "running" || job.status === "pending") {
@@ -1562,6 +1804,12 @@
                 queue: job.queue,
               };
             }
+          } else if (job.status === "completed" && job.has_download) {
+            if (!serviceId || job.service_id === serviceId) {
+              restoreFinishedJob(job);
+              return true;
+            }
+            forgetJob();
           } else {
             forgetJob();
           }
@@ -1603,13 +1851,35 @@
     return true;
   }
 
+  function restoreFinishedJob(job) {
+    stopQueuePoll();
+    setCancelVisible(false);
+    currentJobId = job.id;
+    const st = el("job-status");
+    if (st) st.textContent = STATUS_PT[job.status] || job.status;
+    setLogState(STATUS_PT[job.status] || "Finalizado");
+    const runBtn = el("btn-run");
+    if (runBtn) runBtn.disabled = false;
+    if (job.has_download) {
+      showJobDownloadButton(job.id);
+      showNotice(
+        (job.result && job.result.mensagem) ||
+          `${SERVICE_LABELS[job.service_id] || job.service_id} finalizado — clique em Baixar ZIP.`,
+        "ok"
+      );
+    }
+    pollDownloadsReady().catch(() => {});
+  }
+
   function syncCancelFromHealth(ativo) {
     if (!el("btn-run") && !el("btn-cancel")) return;
-    const mem = readRememberedJob();
+    if (!boundServiceId) return;
+    if (ativo && ativo.service_id && ativo.service_id !== boundServiceId) return;
+    const mem = readRememberedJob(boundServiceId);
     if (!mem || !mem.jobId) return;
     if (ativo && ativo.id && ativo.id !== mem.jobId) return;
     if (!ativo || !ativo.id) {
-      if (currentJobId && !es) {
+      if (currentJobId === mem.jobId && !es) {
         refreshStatus(currentJobId).catch(() => {});
       }
       return;
@@ -1620,7 +1890,6 @@
     const runBtn = el("btn-run");
     if (runBtn) runBtn.disabled = true;
     if (
-      boundServiceId &&
       ativo.service_id === boundServiceId &&
       !es &&
       !resumedOnce &&
@@ -1694,9 +1963,10 @@
       if (cancelBtn) cancelBtn.textContent = "Cancelar fila";
 
       const dl = el("btn-download");
-      if (dl) {
-        dl.hidden = !job.has_download;
-        if (job.has_download) dl.href = `${API}/api/jobs/${jobId}/download`;
+      if (dl && job.has_download && !workspaceCache?.local_mode) {
+        showJobDownloadButton(jobId);
+      } else if (dl) {
+        dl.hidden = true;
       }
 
       const label = SERVICE_LABELS[job.service_id] || job.service_id || "Automação";
@@ -1745,26 +2015,13 @@
           noticeShownFor = jobId;
           showNotice(
             (job.result && job.result.mensagem) ||
-              `${label} finalizado com sucesso.`,
+              `${label} finalizado — clique em Baixar ZIP para baixar.`,
             "ok"
           );
         }
-        const dlKey = `opto-dl-${jobId}`;
-        if (!workspaceCache?.local_mode && !sessionStorage.getItem(dlKey)) {
-          sessionStorage.setItem(dlKey, "1");
-          downloadJobArtifact(jobId).then((ok) => {
-            if (!ok) return;
-            appendLog({ msg: "Download do resultado iniciado.", level: "info" }, "info");
-            const dl = el("btn-download");
-            if (dl) {
-              dl.hidden = false;
-              dl.href = "#";
-              dl.onclick = (ev) => {
-                ev.preventDefault();
-                downloadJobArtifact(jobId);
-              };
-            }
-          });
+        if (job.has_download && !workspaceCache?.local_mode) {
+          showJobDownloadButton(jobId);
+          pollDownloadsReady().catch(() => {});
         }
       } else if (job.status === "running" && job.cancel_requested) {
         setLogState("Parando…");
@@ -1822,6 +2079,7 @@
     if (!form) return;
     boundServiceId = serviceId;
     ensureCancelButton();
+    ensureDownloadButton();
     loadForm(serviceId, fieldIds);
     loadWorkspace(fieldIds.filter((f) => f.startsWith("pasta")));
     resumeActiveJob(serviceId).catch(() => {});
@@ -1866,11 +2124,14 @@
   guardAuth().catch(() => {});
   ensureLogoutButton();
   applyNavAuth().catch(() => {});
+  loadWorkspace()
+    .catch(() => null)
+    .then(() => pollDownloadsReady().catch(() => {}));
 
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home49";
+    s.src = "/assets/shader-background.js?v=home53";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {

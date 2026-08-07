@@ -43,6 +43,34 @@
     return (labels && labels[id]) || id || "—";
   }
 
+  function formatProgress(j) {
+    const prog = j.progress || {};
+    const done = prog.done ?? j.done;
+    const total = prog.total ?? j.total;
+    let pct = prog.percent ?? j.percent;
+    if (j.status === "running" && pct != null && pct >= 100) pct = 99;
+    if (done != null && total != null && total > 0) {
+      const p = pct != null ? pct : Math.round((100 * done) / total);
+      return `${done}/${total} (${p}%)`;
+    }
+    if (pct != null) return `${pct}%`;
+    const label = prog.label || j.label;
+    if (label) return label;
+    return "—";
+  }
+
+  function progressBarWidth(j) {
+    const prog = j.progress || {};
+    let pct = prog.percent ?? j.percent;
+    const done = prog.done ?? j.done;
+    const total = prog.total ?? j.total;
+    if (pct == null && done != null && total != null && total > 0) {
+      pct = Math.round((100 * done) / total);
+    }
+    if (j.status === "running" && pct != null && pct >= 100) pct = 99;
+    return pct != null ? pct : 0;
+  }
+
   async function fetchOverview() {
     const fetchFn =
       window.OptoAutomacoes && OptoAutomacoes.authFetch
@@ -114,8 +142,7 @@
     }
 
     const row = (j, kind) => {
-      const prog = j.progress || {};
-      const pct = prog.percent != null ? prog.percent + "%" : "—";
+      const pct = formatProgress(j);
       const pos =
         kind === "pending" && j.queue && j.queue.position
           ? "#" + j.queue.position
@@ -171,7 +198,8 @@
     if (cancelBtn) cancelBtn.hidden = false;
     box.innerHTML = running
       .map((a) => {
-        const pct = a.percent != null ? a.percent + "%" : "—";
+        const pct = formatProgress(a);
+        const bar = progressBarWidth(a);
         return `
       <div class="admin-active-job">
         <div class="admin-active-head">
@@ -181,7 +209,7 @@
         <p class="admin-active-name">${a.nome}</p>
         <p class="admin-muted">${a.label || "Em andamento…"}</p>
         <div class="admin-progress">
-          <div class="admin-progress-bar" style="width:${a.percent != null ? a.percent : 0}%"></div>
+          <div class="admin-progress-bar" style="width:${bar}%"></div>
         </div>
         <p class="admin-stat-hint">Progresso: ${pct}</p>
         <button type="button" class="btn btn-ghost btn-sm" data-view-job="${a.id}">Ver log</button>
@@ -261,8 +289,7 @@
       : (data.stats && data.stats.recent) || [];
     tbody.innerHTML = recent
       .map((j) => {
-        const prog = j.progress || {};
-        const pct = prog.percent != null ? prog.percent + "%" : "—";
+        const pct = formatProgress(j);
         const pos =
           j.status === "pending" && j.queue && j.queue.position
             ? `#${j.queue.position}`

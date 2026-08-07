@@ -265,6 +265,16 @@ def health(user=Depends(get_optional_user)):
     }
     if ativo is not None:
         payload["ativo"] = _job_summary(ativo)
+    if user:
+        my_jobs: list[dict] = []
+        for mine in jobs.user_jobs_for_owner(user.username):
+            summary = _job_summary(mine)
+            summary["status"] = mine.status.value
+            if mine.status.value == "pending":
+                summary["queue_position"] = jobs.queue_position(mine.id)
+            my_jobs.append(summary)
+        payload["my_jobs"] = my_jobs
+        payload["my_job"] = my_jobs[0] if my_jobs else None
     return payload
 
 
@@ -276,6 +286,24 @@ def list_services():
 @app.get("/api/jobs")
 def list_jobs():
     return jobs.list_jobs()
+
+
+@app.get("/api/jobs/downloads-ready")
+def jobs_downloads_ready(user=Depends(require_user)):
+    """ZIPs prontos para download (mesmo se o usuário saiu da página do job)."""
+    admin = auth.is_panel_admin(user) if auth.is_enabled() else True
+    owner = user.username if auth.is_enabled() else None
+    items = jobs.list_downloads_ready(owner, admin=admin)
+    labels = SERVICE_LABELS
+    return {
+        "downloads": [
+            {
+                **row,
+                "nome": labels.get(row["service_id"], row["service_id"]),
+            }
+            for row in items
+        ]
+    }
 
 
 @app.get("/api/queue")

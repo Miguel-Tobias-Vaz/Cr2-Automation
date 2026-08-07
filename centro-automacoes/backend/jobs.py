@@ -67,7 +67,10 @@ class Job:
     def progress_percent(self) -> int | None:
         if self.progress_total > 0:
             pct = int(round(100.0 * self.progress_done / self.progress_total))
-            return max(0, min(100, pct))
+            pct = max(0, min(100, pct))
+            if self.status == JobStatus.RUNNING and pct >= 100:
+                return 99
+            return pct
         return None
 
     def set_progress(
@@ -303,6 +306,32 @@ class JobManager:
             items = [j for j in self._jobs.values() if j.status == JobStatus.RUNNING]
         return sorted(items, key=lambda j: j.started_at or j.created_at, reverse=True)
 
+    def user_jobs_for_owner(self, owner: str) -> list[Job]:
+        """Jobs RUNNING e PENDING do usuario (running primeiro)."""
+        with self._lock:
+            running = sorted(
+                [
+                    j
+                    for j in self._jobs.values()
+                    if j.status == JobStatus.RUNNING and j.owner == owner
+                ],
+                key=lambda j: j.started_at or j.created_at,
+            )
+            pending = [j for j in self._pending_jobs_locked() if j.owner == owner]
+        return running + pending
+
+    def user_job_for_owner(
+        self, owner: str, service_id: str | None = None
+    ) -> Job | None:
+        """Job RUNNING ou PENDING do usuario (prioriza running; filtra por ferramenta)."""
+        jobs_list = self.user_jobs_for_owner(owner)
+        if service_id:
+            for job in jobs_list:
+                if job.service_id == service_id:
+                    return job
+            return None
+        return jobs_list[0] if jobs_list else None
+
     def create(self, service_id: str, config: dict[str, Any]) -> Job:
         job = Job(id=uuid.uuid4().hex[:12], service_id=service_id, config=config)
         with self._lock:
@@ -349,6 +378,35 @@ class JobManager:
         with self._lock:
             items = sorted(self._jobs.values(), key=lambda j: j.created_at, reverse=True)
         return [j.to_dict(self) for j in items[:40]]
+
+    def list_downloads_ready(
+        self,
+        owner: str | None = None,
+        *,
+        admin: bool = False,
+        limit: int = 12,
+    ) -> list[dict[str, Any]]:
+        """Jobs concluídos com ZIP disponível (para botão de download)."""
+        with self._lock:
+            items = list(self._jobs.values())
+        ready: list[dict[str, Any]] = []
+        for j in items:
+            if j.status != JobStatus.COMPLETED:
+                continue
+            if not j.result.get("zip"):
+                continue
+            if owner and not admin and j.owner not in (None, owner):
+                continue
+            ready.append(
+                {
+                    "id": j.id,
+                    "service_id": j.service_id,
+                    "finished_at": j.finished_at,
+                    "has_download": True,
+                }
+            )
+        ready.sort(key=lambda x: float(x.get("finished_at") or 0), reverse=True)
+        return ready[:limit]
 
     def admin_snapshot(self) -> dict[str, Any]:
         with self._lock:

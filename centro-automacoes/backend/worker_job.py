@@ -45,7 +45,10 @@ class WorkerJob:
     def progress_percent(self) -> int | None:
         if self.progress_total > 0:
             pct = int(round(100.0 * self.progress_done / self.progress_total))
-            return max(0, min(100, pct))
+            pct = max(0, min(100, pct))
+            if self.status == "running" and pct >= 100:
+                return 99
+            return pct
         return None
 
     def _sync_cancel(self) -> None:

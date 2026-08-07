@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Admin ? Opto Automações</title>
+    <title>Admin &mdash; Opto Automa&ccedil;&otilde;es</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home49" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home53" />
   </head>
   <body class="admin-page">
     <div class="noise" aria-hidden="true"></div>
@@ -22,7 +22,7 @@
           <a class="admin-brand" href="/">
             <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="32" height="32" />
             <span class="admin-brand-text">
-              <strong>Opto Automações</strong>
+              <strong>Opto Automa&ccedil;&otilde;es</strong>
               <small>Painel Admin</small>
             </span>
           </a>
@@ -30,31 +30,43 @@
 
         <nav class="admin-nav">
           <button type="button" class="admin-nav-item is-active" data-panel="overview">
-            <span class="admin-nav-icon" aria-hidden="true">?</span>
-            <span class="admin-nav-label">Visão geral</span>
+            <span class="admin-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </span>
+            <span class="admin-nav-label">Vis&atilde;o geral</span>
           </button>
           <button type="button" class="admin-nav-item" data-panel="jobs">
-            <span class="admin-nav-icon" aria-hidden="true">?</span>
+            <span class="admin-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            </span>
             <span class="admin-nav-label">Processos</span>
             <span class="admin-nav-badge" id="badge-jobs" hidden>0</span>
           </button>
           <button type="button" class="admin-nav-item" data-panel="services">
-            <span class="admin-nav-icon" aria-hidden="true">?</span>
+            <span class="admin-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            </span>
             <span class="admin-nav-label">Ferramentas</span>
           </button>
           <button type="button" class="admin-nav-item" data-panel="system">
-            <span class="admin-nav-icon" aria-hidden="true">?</span>
+            <span class="admin-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            </span>
             <span class="admin-nav-label">Sistema</span>
           </button>
         </nav>
 
         <div class="admin-sidebar-foot">
           <a class="admin-nav-item admin-nav-link" href="/">
-            <span class="admin-nav-icon" aria-hidden="true">?</span>
+            <span class="admin-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            </span>
             <span class="admin-nav-label">Voltar ao painel</span>
           </a>
           <button type="button" class="admin-toggle" id="admin-sidebar-toggle" title="Recolher menu">
-            <span class="admin-toggle-icon" aria-hidden="true">?</span>
+            <span class="admin-toggle-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+            </span>
             <span class="admin-nav-label">Recolher</span>
           </button>
         </div>
@@ -63,11 +75,11 @@
       <div class="admin-main">
         <header class="admin-topbar">
           <div>
-            <h1 class="admin-title" id="admin-page-title">Visão geral</h1>
+            <h1 class="admin-title" id="admin-page-title">Vis&atilde;o geral</h1>
             <p class="admin-subtitle" id="admin-page-sub">Monitoramento em tempo real</p>
           </div>
           <div class="admin-topbar-actions">
-            <span class="api-pill" id="api-pill">?</span>
+            <span class="api-pill" id="api-pill">&hellip;</span>
             <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">Atualizar</button>
             <button type="button" class="btn btn-stop btn-sm" id="btn-cancel-active" hidden>
               Cancelar processo
@@ -124,7 +136,7 @@
             <article class="admin-card">
               <header class="admin-card-head">
                 <h2>Todos os processos</h2>
-                <p class="admin-muted">Últimos jobs na memória do servidor</p>
+                <p class="admin-muted">&Uacute;ltimos jobs na mem&oacute;ria do servidor</p>
               </header>
               <div class="admin-table-wrap">
                 <table class="admin-table" id="jobs-table">
@@ -134,9 +146,9 @@
                       <th>Ferramenta</th>
                       <th>Status</th>
                       <th>Fila</th>
-                      <th>Usuário</th>
+                      <th>Usu&aacute;rio</th>
                       <th>Progresso</th>
-                      <th>Início</th>
+                      <th>In&iacute;cio</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -172,14 +184,14 @@
             <article class="admin-card">
               <header class="admin-card-head">
                 <h2>Limpeza de arquivos</h2>
-                <p class="admin-muted">Remove logs, prints de tela, jobs antigos e cache ? n?o mexe na fila ativa</p>
+                <p class="admin-muted">Remove logs, prints de tela, jobs antigos e cache &mdash; n&atilde;o mexe na fila ativa</p>
               </header>
               <div class="admin-card-body" id="cleanup-panel">
-                <p class="admin-muted">Carregando?</p>
+                <p class="admin-muted">Carregando&hellip;</p>
               </div>
             </article>
             <article class="admin-card">
-              <header class="admin-card-head"><h2>Fila de execu??o</h2></header>
+              <header class="admin-card-head"><h2>Fila de execu&ccedil;&atilde;o</h2></header>
               <div class="admin-card-body" id="queue-info"></div>
             </article>
           </section>
@@ -187,8 +199,8 @@
       </div>
     </div>
 
-    <script src="/assets/shader-background.js?v=home49"></script>
-    <script src="/assets/shared.js?v=home49"></script>
-    <script src="/assets/admin.js?v=home50"></script>
+    <script src="/assets/shader-background.js?v=home53"></script>
+    <script src="/assets/shared.js?v=home53"></script>
+    <script src="/assets/admin.js?v=home53"></script>
   </body>
 </html>

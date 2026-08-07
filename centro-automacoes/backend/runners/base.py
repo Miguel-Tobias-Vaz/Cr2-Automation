@@ -7,6 +7,7 @@ import io
 import os
 import re
 import sys
+import threading
 import warnings
 from pathlib import Path
 from types import ModuleType
@@ -23,7 +24,6 @@ _RE_PROGRESSO_TOTAL = re.compile(
 _RE_PROGRESSO_ITEM = re.compile(
     # [3/40]  ou  [3/40 · 12%]  ou  [3/40 - 12%]
     r"\[\s*(\d+)\s*/\s*(\d+)(?:\s*[·•.\-–—]\s*\d+\s*%?)?\s*\]|"
-    r"\((\d+)\s*/\s*(\d+)\)|"
     r"(?:publicando|baixando|processando|item|sess[aã]o|pdf|licita[cç][aã]o)\s+(\d+)\s*(?:de|/)\s*(\d+)",
     re.I,
 )
@@ -161,6 +161,53 @@ class _Tee(io.TextIOBase):
             self._buf = ""
 
 
+# Redirecionamento por thread — evita misturar stdout quando 2+ jobs rodam juntos.
+_log_tls = threading.local()
+_real_stdout = sys.stdout
+_real_stderr = sys.stderr
+_dispatch_installed = False
+
+
+class _ThreadDispatchStream(io.TextIOBase):
+    """Encaminha prints para o _Tee da thread atual."""
+
+    def __init__(self, *, stderr: bool = False):
+        self._stderr = stderr
+
+    def _target(self) -> io.TextIOBase:
+        key = "tee_err" if self._stderr else "tee_out"
+        stream = getattr(_log_tls, key, None)
+        if stream is not None:
+            return stream
+        return _real_stderr if self._stderr else _real_stdout
+
+    def write(self, s: str) -> int:
+        return self._target().write(s)
+
+    def flush(self) -> None:
+        self._target().flush()
+
+    def fileno(self) -> int:
+        return self._target().fileno()
+
+    def isatty(self) -> bool:
+        try:
+            return self._target().isatty()
+        except Exception:
+            return False
+
+
+def _ensure_thread_dispatch_streams() -> None:
+    global _dispatch_installed, _real_stdout, _real_stderr
+    if _dispatch_installed:
+        return
+    _real_stdout = sys.stdout
+    _real_stderr = sys.stderr
+    sys.stdout = _ThreadDispatchStream(stderr=False)
+    sys.stderr = _ThreadDispatchStream(stderr=True)
+    _dispatch_installed = True
+
+
 def _limpar_linha_log(line: str, *, visto: set[str] | None = None) -> str | None:
     """
     Filtra ruído de libs e reescreve mensagens úteis.
@@ -248,7 +295,9 @@ def _atualizar_progresso_do_log(job, line: str) -> None:
     if m_tot:
         try:
             total = next(int(g) for g in m_tot.groups() if g is not None)
-            if total > 0:
+            if total > 0 and (
+                job.progress_total <= 0 or total >= job.progress_total
+            ):
                 job.set_progress(total=total)
         except (ValueError, StopIteration):
             pass
@@ -264,6 +313,9 @@ def _atualizar_progresso_do_log(job, line: str) -> None:
     except ValueError:
         return
     if total <= 0 or done < 0 or done > max(total, 1) * 2:
+        return
+    # Ignora [1/2] workaround quando o job já tem fila maior (ex. 40 licitações).
+    if job.progress_total > 0 and total < job.progress_total:
         return
     job.set_progress(done=done, total=total)
 
@@ -319,28 +371,32 @@ def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
     # No subprocesso, o emit já manda NDJSON em __stdout__; ecoar o print cru
     # duplicaria linhas no pai.
     protocol_job = type(job).__name__ == "WorkerJob"
-    tee_out = _Tee(sys.stdout, on_line, echo=not protocol_job)
-    tee_err = _Tee(sys.stderr, on_line, echo=not protocol_job)
+    _ensure_thread_dispatch_streams()
+    tee_out = _Tee(_real_stdout, on_line, echo=not protocol_job)
+    tee_err = _Tee(_real_stderr, on_line, echo=not protocol_job)
+    prev_out = getattr(_log_tls, "tee_out", None)
+    prev_err = getattr(_log_tls, "tee_err", None)
+    _log_tls.tee_out = tee_out
+    _log_tls.tee_err = tee_err
     # Silencia UserWarning das libs enquanto o job roda (ainda filtramos no tee)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         warnings.simplefilter("ignore", FutureWarning)
         try:
-            old_out, old_err = sys.stdout, sys.stderr
-            sys.stdout, sys.stderr = tee_out, tee_err
-            try:
-                fn()
-            finally:
-                tee_out.flush()
-                tee_err.flush()
-                sys.stdout, sys.stderr = old_out, old_err
+            fn()
         except Exception as exc:
             if _is_cancel_exc(exc) or job.cancel_requested:
                 job.cancel_requested = True
                 return
             raise
+        finally:
+            tee_out.flush()
+            tee_err.flush()
+            _log_tls.tee_out = prev_out
+            _log_tls.tee_err = prev_err
 
     if job.cancel_requested:
         return
     if hasattr(job, "set_progress") and job.progress_total > 0:
-        job.set_progress(done=job.progress_total)
+        if job.progress_done < job.progress_total:
+            job.set_progress(label="Finalizando…")
