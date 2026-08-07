@@ -35,6 +35,16 @@ class Session:
     username: str
     role: str
     expires_at: float
+    nome: str = ""
+    user_id: str = ""
+
+    def to_public(self) -> dict[str, str]:
+        out = {"username": self.username, "role": self.role}
+        if self.nome:
+            out["nome"] = self.nome
+        if self.user_id:
+            out["id"] = self.user_id
+        return out
 
 
 _lock = threading.RLock()
@@ -143,12 +153,22 @@ def reload_users() -> None:
         _users = loaded
 
 
+def is_supabase() -> bool:
+    from backend import supabase_auth
+
+    return supabase_auth.is_configured()
+
+
 def is_enabled() -> bool:
+    if is_supabase():
+        return True
     with _lock:
         return bool(_users)
 
 
 def login(username: str, password: str) -> Session | None:
+    if is_supabase():
+        return None
     with _lock:
         user = _users.get(username.strip())
         if not user or not verify_password(password, user):
@@ -182,6 +202,10 @@ def _clean_expired() -> None:
 def session_from_token(token: str | None) -> Session | None:
     if not token:
         return None
+    if is_supabase():
+        from backend import supabase_auth
+
+        return supabase_auth.session_from_token(token, _sessions, _lock)
     _clean_expired()
     with _lock:
         sess = _sessions.get(token)

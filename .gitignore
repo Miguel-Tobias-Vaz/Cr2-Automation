@@ -13,3 +13,4 @@ centro-automacoes/data/jobs/
 # Segredos / ambiente
 .env
 *.auth-state.json
+centro-automacoes/front/supabase-config.js

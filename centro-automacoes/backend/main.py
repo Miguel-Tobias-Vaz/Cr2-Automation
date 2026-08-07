@@ -174,6 +174,22 @@ def _assert_can_cancel(job, user) -> None:
         raise HTTPException(403, "Sem permissão para cancelar este processo.")
 
 
+@app.get("/api/auth/config")
+def auth_config():
+    """Modo de login para o front (Supabase ou local)."""
+    from backend import supabase_auth
+
+    if supabase_auth.is_configured():
+        return {
+            "mode": "supabase",
+            "supabase_url": supabase_auth.supabase_url(),
+            "supabase_anon_key": supabase_auth.supabase_anon_key(),
+        }
+    if auth.is_enabled():
+        return {"mode": "local"}
+    return {"mode": "off"}
+
+
 @app.get("/api/auth/me")
 def auth_me(user=Depends(get_optional_user)):
     if not auth.is_enabled():
@@ -182,7 +198,7 @@ def auth_me(user=Depends(get_optional_user)):
         return {"auth_required": True, "user": None}
     return {
         "auth_required": True,
-        "user": {"username": user.username, "role": user.role},
+        "user": user.to_public(),
     }
 
 
@@ -190,6 +206,11 @@ def auth_me(user=Depends(get_optional_user)):
 def auth_login(body: LoginBody):
     if not auth.is_enabled():
         raise HTTPException(400, "Autenticação não configurada neste servidor.")
+    if auth.is_supabase():
+        raise HTTPException(
+            400,
+            "Este servidor usa login Supabase (e-mail). Use a tela de login.",
+        )
     sess = auth.login(body.username.strip(), body.password)
     if not sess:
         raise HTTPException(401, "Usuário ou senha inválidos.")
@@ -216,7 +237,7 @@ def health(user=Depends(get_optional_user)):
         "auth_required": auth.is_enabled(),
         "local_mode": is_local_mode(),
         "user": (
-            {"username": user.username, "role": user.role} if user else None
+            user.to_public() if user else None
         ),
         "job_timeout_s": JOB_TIMEOUT_S,
         "ativos": jobs.ativos(),

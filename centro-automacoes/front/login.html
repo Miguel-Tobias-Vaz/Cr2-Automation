@@ -5,17 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Login — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
-    <link rel="stylesheet" href="/assets/styles.css?v=home45" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home46" />
   </head>
   <body class="login-page">
     <div class="noise" aria-hidden="true"></div>
     <main class="login-card">
       <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="48" height="48" />
       <h1>Opto Automações</h1>
-      <p class="login-lede">Entre com seu usuário para usar o painel.</p>
+      <p class="login-lede" id="login-lede">Entre para usar o painel.</p>
       <form id="login-form" class="login-form">
-        <label>
-          Usuário
+        <label id="login-user-label">
+          <span id="login-user-caption">Usuário</span>
           <input type="text" id="login-user" autocomplete="username" required />
         </label>
         <label>
@@ -25,58 +25,148 @@
         <p id="login-error" class="login-error" hidden></p>
         <button type="submit" class="btn btn-primary" id="login-btn">Entrar</button>
       </form>
-      <p class="login-hint admin-muted">
+      <p class="login-hint admin-muted" id="login-hint">
         Sem usuários configurados? O painel funciona sem login (modo local).
       </p>
     </main>
-    <script src="/assets/shared.js?v=home45"></script>
+    <script src="/assets/supabase-config.js?v=1" onerror="void 0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/assets/shared.js?v=home46"></script>
     <script>
       (function () {
         const params = new URLSearchParams(location.search);
         const next = params.get("next") || "/";
         const form = document.getElementById("login-form");
         const err = document.getElementById("login-error");
+        const userInput = document.getElementById("login-user");
+        const userCaption = document.getElementById("login-user-caption");
+        const lede = document.getElementById("login-lede");
+        const hint = document.getElementById("login-hint");
+
+        let authMode = "local";
+        let supabaseClient = null;
+
+        async function loadAuthConfig() {
+          if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+            return {
+              mode: "supabase",
+              supabase_url: window.SUPABASE_URL,
+              supabase_anon_key: window.SUPABASE_ANON_KEY,
+            };
+          }
+          const r = await fetch("/api/auth/config");
+          if (!r.ok) return { mode: "off" };
+          return r.json();
+        }
+
+        function applyMode(cfg) {
+          authMode = cfg.mode || "off";
+          if (authMode === "supabase") {
+            userCaption.textContent = "E-mail";
+            userInput.type = "email";
+            userInput.autocomplete = "email";
+            lede.textContent = "Entre com seu e-mail (Supabase Auth).";
+            hint.textContent =
+              "Conta desativada ou sem perfil? Peça ao administrador.";
+            if (window.supabase && cfg.supabase_url && cfg.supabase_anon_key) {
+              supabaseClient = window.supabase.createClient(
+                cfg.supabase_url,
+                cfg.supabase_anon_key
+              );
+            }
+          } else if (authMode === "local") {
+            lede.textContent = "Entre com seu usuário para usar o painel.";
+          } else {
+            hint.textContent = "Modo local — login não exigido neste servidor.";
+          }
+        }
+
+        async function loginSupabase(email, password) {
+          if (!supabaseClient) {
+            throw new Error("Supabase não configurado neste servidor.");
+          }
+          const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (error) throw new Error(error.message || "Falha no login");
+          const token = data.session && data.session.access_token;
+          if (!token) throw new Error("Sessão inválida");
+
+          const { data: profile, error: pErr } = await supabaseClient
+            .from("profiles")
+            .select("role, ativo, nome, email")
+            .eq("id", data.user.id)
+            .maybeSingle();
+
+          if (pErr) throw new Error(pErr.message || "Erro ao ler perfil");
+          if (!profile) {
+            throw new Error("Perfil não encontrado. Confira o trigger no Supabase.");
+          }
+          if (profile.ativo === false) {
+            await supabaseClient.auth.signOut();
+            throw new Error("Conta desativada. Contacte o administrador.");
+          }
+
+          if (window.OptoAutomacoes && OptoAutomacoes.setAuthToken) {
+            OptoAutomacoes.setAuthToken(token);
+          }
+          location.href = next;
+        }
+
+        async function loginLocal(username, password) {
+          const r = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            throw new Error(
+              (typeof data.detail === "string" && data.detail) ||
+                data.detail ||
+                "Falha no login"
+            );
+          }
+          if (window.OptoAutomacoes && OptoAutomacoes.setAuthToken) {
+            OptoAutomacoes.setAuthToken(data.token);
+          }
+          location.href = next;
+        }
+
         form.addEventListener("submit", async (ev) => {
           ev.preventDefault();
           err.hidden = true;
           const btn = document.getElementById("login-btn");
           btn.disabled = true;
+          const ident = userInput.value.trim();
+          const pass = document.getElementById("login-pass").value;
           try {
-            const r = await fetch("/api/auth/login", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                username: document.getElementById("login-user").value.trim(),
-                password: document.getElementById("login-pass").value,
-              }),
-            });
-            const data = await r.json().catch(() => ({}));
-            if (!r.ok) {
-              throw new Error(
-                (typeof data.detail === "string" && data.detail) ||
-                  data.detail ||
-                  "Falha no login"
-              );
+            if (authMode === "supabase") {
+              await loginSupabase(ident, pass);
+            } else {
+              await loginLocal(ident, pass);
             }
-            if (window.OptoAutomacoes && OptoAutomacoes.setAuthToken) {
-              OptoAutomacoes.setAuthToken(data.token);
-            }
-            location.href = next;
           } catch (e) {
             err.textContent = e.message || "Erro ao entrar";
             err.hidden = false;
             btn.disabled = false;
           }
         });
-        const meFetch =
-          window.OptoAutomacoes && OptoAutomacoes.authFetch
-            ? OptoAutomacoes.authFetch
-            : fetch;
-        meFetch("/api/auth/me")
-          .then((r) => r.json())
-          .then((d) => {
-            if (!d.auth_required) location.href = next;
-            else if (d.user) location.href = next;
+
+        loadAuthConfig()
+          .then((cfg) => {
+            applyMode(cfg);
+            const meFetch =
+              window.OptoAutomacoes && OptoAutomacoes.authFetch
+                ? OptoAutomacoes.authFetch
+                : fetch;
+            return meFetch("/api/auth/me")
+              .then((r) => r.json())
+              .then((d) => {
+                if (!d.auth_required) location.href = next;
+                else if (d.user) location.href = next;
+              });
           })
           .catch(() => {});
       })();

@@ -13,6 +13,8 @@ from backend.jobs import JobManager, JobStatus
 
 @pytest.fixture
 def auth_users(monkeypatch):
+    monkeypatch.delenv("OPTO_SUPABASE_URL", raising=False)
+    monkeypatch.delenv("OPTO_SUPABASE_ANON_KEY", raising=False)
     monkeypatch.setenv("OPTO_USERS", "admin:secret:admin,maria:123:user")
     monkeypatch.setattr(auth, "USERS_FILE", auth.AUTH_DIR / "users.test.json")
     auth.reload_users()

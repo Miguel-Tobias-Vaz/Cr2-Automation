@@ -14,6 +14,7 @@ echo "==> rsync (preserva venv e data)"
 rsync -a --delete \
   --exclude venv \
   --exclude centro-automacoes/venv \
+  --exclude centro-automacoes/deploy/opto.env \
   --exclude __pycache__ \
   --exclude .git \
   --exclude centro-automacoes/data \
@@ -41,6 +42,7 @@ else
   sudo -u "$APP_USER" "$APP_DIR/centro-automacoes/venv/bin/pip" install -r "$APP_DIR/automacoes/requirements.txt" -q
 fi
 
+systemctl reset-failed opto 2>/dev/null || true
 systemctl restart opto
 sleep 2
 systemctl status opto --no-pager || true
