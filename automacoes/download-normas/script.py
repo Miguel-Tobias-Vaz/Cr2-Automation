@@ -282,8 +282,17 @@ _RE_TIPO_PRIORIDADE = [
     ("Instrução Normativa", re.compile(r"instru[cç][aã]o(?:es)?\s+normativa", re.I)),
     ("Requerimento de Autoria Técnica", re.compile(
         r"requerimento\s+de\s+autoria\s+t[eé]cnica", re.I)),
+    # Certidão ANTES de Lei/Ofício — evita "Lei Nº527-2011" (citação da LAI 12.527)
+    ("Certidão", re.compile(
+        r"certid[aã]o\s+de\s+publica[cç][aã]o|"
+        r"certid[aã]o\s+d[aeo]\s+|"
+        r"certifico\s+para\s+os\s+devidos\s+fins|"
+        r"\bcertid[aã]o\b",
+        re.I,
+    )),
     ("Ata de Audiência Pública", re.compile(
         r"ata\s+de\s+audi[eê]ncia\s+p[uú]blica", re.I)),
+    ("Ata", re.compile(r"\bata\s+d[aeo]\b|\batas?\b", re.I)),
     ("Ato Legislativo Especial", re.compile(r"ato\s+legislativo\s+especial", re.I)),
     ("Ato de Convocação", re.compile(r"ato\s+de\s+convoca[cç][aã]o", re.I)),
     ("Ato da Presidência", re.compile(r"ato\s+da\s+presid[eê]ncia", re.I)),
@@ -330,7 +339,13 @@ _RE_TIPO_PRIORIDADE = [
     ("Edital", re.compile(r"\beditais?\b", re.I)),
     ("Moção", re.compile(r"\bmo[cç][aã]o(?:es)?\b", re.I)),
     ("Requerimento", re.compile(r"\brequerimentos?\b", re.I)),
-    ("Lei", re.compile(r"\b(?:lei(?:s)?\s+municipal(?:is)?|leis?)\b", re.I)),
+    # Lei municipal real — não casa "em cumprimento a Lei 12.527/2011"
+    ("Lei", re.compile(
+        r"\blei\s+municipal\b|"
+        r"\bleis\s+municipais\b|"
+        r"(?:^|[\n\r.;])\s*lei\s+(?:n[º°o.]?\s*)?\d{1,4}\s*[/\-]",
+        re.I,
+    )),
 ]
 
 _LINK_GENERICO = re.compile(
@@ -364,15 +379,51 @@ def _extrair_numero_ano(*textos: str):
     return None, None
 
 
+def _alvo_da_certidao(texto: str) -> str:
+    """Documento citado na certidão de publicação → nome curto para o arquivo."""
+    t = _normalizar_texto(texto or "")
+    pares = [
+        ("Ata", r"\bata\b"),
+        ("Edital", r"\bedital\b"),
+        ("Contrato", r"\bcontrato\b"),
+        ("Portaria", r"\bportaria\b"),
+        ("Decreto", r"\bdecreto\b"),
+        ("Resolução", r"\bresolu[cç][aã]o\b"),
+        ("Ofício", r"\bof[ií]cio\b"),
+        ("Lei", r"\blei\s+municipal\b|(?:^|[\n\r.;])\s*lei\s+n"),
+        ("Projeto de Lei", r"projeto\s+de\s+lei\b"),
+        ("Homologação", r"homologa"),
+        ("Pauta", r"\bpauta\b"),
+    ]
+    for nome, rx in pares:
+        if re.search(rx, t, re.I):
+            return nome
+    return ""
+
+
 def _detectar_tipo(*textos: str, pasta_hint: str = "") -> str | None:
     """Detecta o tipo em cada texto na ordem dada (primeiro sinal válido vence)."""
+    # Certidão manda: mesmo se o link/título diga "Ata (2)" / "Lei"
+    rx_cert = None
+    for tipo, rx in _RE_TIPO_PRIORIDADE:
+        if tipo == "Certidão":
+            rx_cert = rx
+            break
+    if rx_cert:
+        for texto in textos:
+            blob = _normalizar_texto(texto)
+            if blob and rx_cert.search(blob[:500]):
+                return "Certidão"
+
     for texto in textos:
         blob = _normalizar_texto(texto)
         if not blob:
             continue
         # Só o cabeçalho (evita 'revoga a Portaria X' no corpo do decreto)
-        cabeca = blob[:320]
+        cabeca = blob[:400]
         for tipo, rx in _RE_TIPO_PRIORIDADE:
+            if tipo == "Certidão":
+                continue
             if rx.search(cabeca):
                 return tipo
     hint = limpar_nome_pasta(pasta_hint or "")
@@ -590,6 +641,7 @@ def montar_nome_documento(
 ) -> str:
     """
     Retorna nome lógico sem extensão, ex.: 'Portaria Nº010/2025'
+    Certidão de publicação → 'Ata e Certidão' / 'Lei e Certidão' …
     Se não estiver no catálogo, usa o título/item da página.
     """
     basename = os.path.basename(urlparse(url_pdf).path) if url_pdf else ""
@@ -598,13 +650,29 @@ def montar_nome_documento(
         link_util = texto_link
 
     tipo = _detectar_tipo(
+        (texto_pdf or "")[:500],
         link_util,
         titulo_post,
-        (texto_pdf or "")[:400],
         basename,
         pasta_hint=pasta_hint,
     )
     num, ano = _extrair_numero_ano(link_util, titulo_post, texto_pdf, basename)
+
+    # Certidão: nome no formato «Documento e Certidão»
+    if tipo == "Certidão":
+        alvo = _alvo_da_certidao(
+            " ".join([link_util, titulo_post, (texto_pdf or "")[:800], basename])
+        )
+        base = f"{alvo} e Certidão" if alvo else "Certidão"
+        # Nº só do PDF (link/título costumam estar errados: "Lei 527", "Ofício…")
+        num_c, ano_c = _extrair_numero_ano(texto_pdf, basename)
+        if num_c is not None and ano_c is not None:
+            return f"{base} Nº{str(num_c).zfill(3)}/{ano_c}"
+        if num_c is not None and ano_fallback:
+            return f"{base} Nº{str(num_c).zfill(3)}/{ano_fallback}"
+        if ano_fallback and not re.search(r"20\d{2}|19\d{2}", base):
+            return f"{base} {ano_fallback}"
+        return base
 
     nomes_catalogo = {nome for nome, _ in _RE_TIPO_PRIORIDADE}
     tipo_catalogo = bool(tipo and tipo in nomes_catalogo)
@@ -1295,8 +1363,10 @@ def baixar_e_salvar(
             nome = nome_logico
 
         # Regra geral: Pautas/Atas/Presença/Votações → pasta por sessão
+        # (+ listas mensais → _Mensais e cópia em todas as sessões do mês)
         pasta_destino = pasta
         org = None
+        mod_sess = None
         try:
             mod_sess = _carregar_modulo_local("organizar_sessao")
             org = mod_sess.organizar_destino_sessao(
@@ -1314,7 +1384,21 @@ def baixar_e_salvar(
                 pasta_destino = org["pasta"]
                 nome = org["nome_logico"]
                 meta = org["meta"]
-                if meta.get("doc_tipo") == "declaracao":
+                if org.get("mensal"):
+                    print(
+                        "    [MENSAL]   {0} ({1}) → {2}".format(
+                            meta.get("doc_nome_sessao") or meta.get("doc_nome"),
+                            meta.get("mes_nome") or "?",
+                            meta.get("doc_nome"),
+                        )
+                    )
+                elif org.get("comissao") or meta.get("tipo") == "Comissão":
+                    print(
+                        "    [COMISSAO] Comissões → {0}".format(
+                            meta.get("doc_nome") or "Documento",
+                        )
+                    )
+                elif meta.get("doc_tipo") == "declaracao":
                     print(
                         "    [SESSAO]   Declarações → {0}".format(meta.get("doc_nome"))
                     )
@@ -1350,6 +1434,26 @@ def baixar_e_salvar(
         arquivo = nome_arquivo_final(nome)
         caminho = os.path.join(pasta_destino, arquivo)
 
+        def _propagar_se_mensal(caminho_pdf: str) -> None:
+            if not (org and org.get("mensal") and mod_sess):
+                return
+            try:
+                pasta_ano = str(Path(org["pasta"]).parent)
+                n_copias = mod_sess.propagar_doc_mensal(
+                    caminho_pdf, org["meta"], pasta_ano
+                )
+                if n_copias:
+                    print(
+                        "    [MENSAL]   Copiado para {0} sessão(ões) de {1}".format(
+                            n_copias,
+                            (org["meta"] or {}).get("mes_nome") or "?",
+                        )
+                    )
+            except Exception as exc:
+                print(
+                    "    [MENSAL]   propagação falhou ({0})".format(str(exc)[:80])
+                )
+
         textos_data = [
             textos_extras[0] if textos_extras else "",
             textos_extras[1] if len(textos_extras) > 1 else "",
@@ -1369,6 +1473,7 @@ def baixar_e_salvar(
             if _arquivo_mesmo_conteudo(caminho, data):
                 print(f"    [PULADO]  {arquivo} (já existe)")
                 _aplicar_mtime_arquivo(caminho, ts_doc)
+                _propagar_se_mensal(caminho)
                 _tentar_extrair_diarias(
                     data,
                     texto_pdf=texto_pdf,
@@ -1404,6 +1509,7 @@ def baixar_e_salvar(
                 if _arquivo_mesmo_conteudo(alt_path, data):
                     print(f"    [PULADO]  {alt} (já existe)")
                     _aplicar_mtime_arquivo(alt_path, ts_doc)
+                    _propagar_se_mensal(alt_path)
                     _registrar_norma_planilha(
                         status="pulado",
                         pasta_hint=pasta_hint,
@@ -1431,6 +1537,7 @@ def baixar_e_salvar(
         except UnicodeEncodeError:
             print(f"    [OK]      {arquivo} ({round(kb, 1)} KB)")
 
+        _propagar_se_mensal(caminho)
         _tentar_extrair_diarias(
             data,
             texto_pdf=texto_pdf,
@@ -1826,6 +1933,27 @@ def main():
             if saida:
                 planilha_diarias = str(saida)
                 print(f"  [DIARIAS] Planilha: {planilha_diarias} ({len(REGISTROS_DIARIAS)} linhas)")
+
+    # Listas mensais → todas as pastas de sessão do mês (também se a sessão veio depois)
+    # + junção Certidão → Ata/Pauta
+    try:
+        mod_sess_fim = _carregar_modulo_local("organizar_sessao")
+        n_mensal = mod_sess_fim.propagar_todos_mensais(PASTA_BASE)
+        if n_mensal:
+            print(
+                "  [MENSAL] Propagados {0} documento(s) mensais às pastas de sessão".format(
+                    n_mensal
+                )
+            )
+        n_juncao = mod_sess_fim.fundir_certidoes_em_sessoes(PASTA_BASE)
+        if n_juncao:
+            print(
+                "  [JUNÇÃO] {0} certidão(ões) anexada(s) aos documentos principais".format(
+                    n_juncao
+                )
+            )
+    except Exception as exc:
+        print("  [SESSAO] Pós-processamento falhou ({0})".format(str(exc)[:80]))
 
     planilha_sessoes = ""
     try:

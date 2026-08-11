@@ -754,12 +754,17 @@ def _eh_pasta_declaracoes(nome: str) -> bool:
     return normalizar(nome) in ("declaracoes", "declaracao")
 
 
+def _eh_pasta_comissoes(nome: str) -> bool:
+    return normalizar(nome) in ("comissoes", "comissao")
+
+
 def _pastas_sessao_recursivas(root: Path) -> list[Path]:
     """
     Aceita:
       pasta/18ª Sessão Ordinária - 16-11-2023/
       pasta/2023/18ª Sessão Ordinária - 16-11-2023/
     Ignora pastas só de ano (2019) mesmo com PDF solto.
+    Ignora Declarações e Comissões (não vão no modal de sessão do portal).
     """
     root = Path(root)
     if not root.is_dir():
@@ -767,11 +772,11 @@ def _pastas_sessao_recursivas(root: Path) -> list[Path]:
     achadas = []
     for dirpath, dirnames, filenames in os.walk(root):
         p = Path(dirpath)
-        if _eh_pasta_declaracoes(p.name) or _eh_pasta_ano(p.name):
-            # ano: continua descendo nas subpastas de sessão
-            if _eh_pasta_ano(p.name):
-                continue
+        if _eh_pasta_declaracoes(p.name) or _eh_pasta_comissoes(p.name):
             dirnames.clear()
+            continue
+        if _eh_pasta_ano(p.name):
+            # ano: continua descendo nas subpastas de sessão
             continue
         pdfs = [f for f in filenames if f.lower().endswith(".pdf")]
         if not pdfs:

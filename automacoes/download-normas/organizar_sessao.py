@@ -20,9 +20,19 @@ Tipos (filtro do portal):
 Pasta destino (agrupa tudo da mesma sessão):
   18ª Sessão Ordinária - 16-11-2023/
     Pauta.pdf
-    Ata.pdf
+    Ata e Certidão.pdf   ← certidão anexada ao fim da ata
     Lista de Presença.pdf
     Votações Nominais.pdf
+
+Comissões (uma pasta só por ano; data no nome do arquivo):
+  {ano}/Comissões/
+    Pauta - 22-11-2023.pdf
+    Ata - 08-11-2023.pdf
+
+Listas mensais (portal agrupa por mês, sem nº de sessão):
+  Lista de votação nominal – abril
+    → {ano}/_Mensais/Votações Nominais - Abril.pdf
+    → cópia em TODAS as pastas de sessão com data …-04-YYYY/
 """
 
 from __future__ import annotations
@@ -30,6 +40,7 @@ from __future__ import annotations
 import datetime
 import os
 import re
+import shutil
 import unicodedata
 from pathlib import Path
 from typing import Any
@@ -79,12 +90,22 @@ _RE_FONTE_SESSOES = re.compile(
 
 _RE_DECLARACAO = re.compile(
     r"declara[cç][aã]o\s+de\s+pautas|sem\s+pautas|recesso|"
-    r"declara[cç][aã]o\s+de\s+atas|comiss[oõ]es|"
+    r"declara[cç][aã]o\s+de\s+atas|"
     r"n[aã]o\s+houve\s+sess[aã]o|declara[cç][aã]o\s*:\s*n[aã]o\s+houve",
     re.I,
 )
 
+# Reunião / sessão em conjunto das comissões permanentes
+_RE_COMISSAO = re.compile(
+    r"(?:reuni[aã]o|sess[aã]o).{0,80}?comiss[oõ]es|"
+    r"comiss[oõ]es\s+permanentes|"
+    r"em\s+conjunto\s+(?:das?\s+)?comiss",
+    re.I,
+)
+
 PASTA_DECLARACOES = "Declarações"
+PASTA_COMISSOES = "Comissões"
+PASTA_MENSAIS = "_Mensais"
 
 # ATA Nº 018 DA SESSÃO ORDINÁRIA, DE 16 DE NOVEMBRO DE 2023
 _RE_DOC_SESSAO = re.compile(
@@ -120,7 +141,50 @@ _DOC_ARQUIVO = {
     "ata": "Ata",
     "presenca": "Lista de Presença",
     "votacoes": "Votações Nominais",
+    "certidao": "Certidão",
 }
+
+_MESES_NOME = {
+    1: "Janeiro",
+    2: "Fevereiro",
+    3: "Março",
+    4: "Abril",
+    5: "Maio",
+    6: "Junho",
+    7: "Julho",
+    8: "Agosto",
+    9: "Setembro",
+    10: "Outubro",
+    11: "Novembro",
+    12: "Dezembro",
+}
+
+# Lista mensal: "Lista de votação nominal – abril" (sem nº de sessão)
+_RE_DOC_MENSAL = re.compile(
+    r"(?:"
+    r"lista\s+de\s+(?:presen[cç]a|vota[cç][aã]o)|"
+    r"vota[cç][oõ]es?\s+nominais?|"
+    r"vota[cç][aã]o\s+nominal|"
+    r"lista\s+de\s+frequ[eê]ncia|"
+    r"presen[cç]a|"
+    r"frequ[eê]ncia"
+    r").{0,80}?"
+    r"(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|"
+    r"setembro|outubro|novembro|dezembro)",
+    re.I,
+)
+
+_RE_MES_NO_TEXTO = re.compile(
+    r"\b(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|"
+    r"setembro|outubro|novembro|dezembro)\b",
+    re.I,
+)
+
+_RE_DATA_PASTA_SESSAO = re.compile(
+    r"-\s*(\d{2})-(\d{2})-(\d{4})\s*$"
+)
+
+_RE_ANO_NO_TEXTO = re.compile(r"\b(20\d{2})\b")
 
 
 def _norm(txt: str) -> str:
@@ -234,7 +298,18 @@ def _tipo_documento(texto: str) -> str | None:
     n = _norm(texto)
     if not n:
         return None
-    if re.search(r"vota[cç][oõ]es?\s*nomin|vota[cç][aã]o\s*nominal", n):
+    if re.search(
+        r"certid[aã]o\s+de\s+publica|"
+        r"certid[aã]o\s+d[aeo]\s+|"
+        r"certifico\s+para\s+os\s+devidos\s+fins|"
+        r"\bcertid[aã]o\b",
+        n,
+    ):
+        return "certidao"
+    if re.search(
+        r"vota[cç][oõ]es?\s*nomin|vota[cç][aã]o\s*nominal|lista\s*de\s*vota",
+        n,
+    ):
         return "votacoes"
     if re.search(r"lista\s*de\s*presen|presen[cç]a|frequ[eê]ncia", n):
         return "presenca"
@@ -243,6 +318,26 @@ def _tipo_documento(texto: str) -> str | None:
     if re.search(r"\bata\b", n):
         return "ata"
     return None
+
+
+def _pasta_compativel_tipo(nome_pasta: str, tipo: str, evento: str = "") -> bool:
+    """True se a pasta existente parece ser do mesmo tipo (e evento, se houver)."""
+    n = _norm(nome_pasta)
+    if not n:
+        return False
+    achou_tipo = False
+    for nome, rx in _TIPOS_SESSAO:
+        if nome != tipo:
+            continue
+        if rx.search(n):
+            achou_tipo = True
+        break
+    if not achou_tipo:
+        # pasta sem o tipo explícito — só aceita se o tipo pedido for genérico
+        return False
+    if evento and _norm(evento) not in n:
+        return False
+    return True
 
 
 def _parse_data_extenso(m: re.Match) -> tuple[str, int] | tuple[str, None]:
@@ -283,14 +378,74 @@ def _extrair_data(*textos: str) -> tuple[str, int | None]:
 
 
 def parece_declaracao(*textos: str) -> bool:
-    """Declarações de pautas/atas, recesso, comissões — não são sessão numerada."""
+    """Declarações de pautas/atas, recesso — não são sessão nem comissão."""
     blob = "\n".join(t for t in textos if t)
     if not blob.strip():
+        return False
+    if parece_comissao(*textos):
         return False
     # Se for pauta/ata de sessão numerada, não é só declaração
     if _RE_DOC_SESSAO.search(blob):
         return False
     return bool(_RE_DECLARACAO.search(blob))
+
+
+def parece_comissao(*textos: str) -> bool:
+    """Reunião/sessão em conjunto das comissões permanentes."""
+    blob = "\n".join(t for t in textos if t)
+    if not blob.strip():
+        return False
+    return bool(_RE_COMISSAO.search(blob))
+
+
+def parse_comissao(*textos: str, ano_fallback: int | None = None) -> dict[str, Any] | None:
+    """
+    Ex.: PAUTA DA REUNIÃO EM CONJUNTO DAS COMISSÕES PERMANENTES, DE 08 DE NOVEMBRO DE 2023
+    Tudo vai para uma única pasta Comissões/; a data entra no nome do arquivo.
+    """
+    if not parece_comissao(*textos):
+        return None
+    blob = "\n".join(t for t in textos if t)
+
+    doc_tipo = None
+    for texto in textos:
+        if texto and _tipo_documento(texto) == "certidao":
+            doc_tipo = "certidao"
+            break
+    if not doc_tipo:
+        for texto in textos:
+            if not texto or len(texto) > 400:
+                continue
+            doc_tipo = _tipo_documento(texto)
+            if doc_tipo:
+                break
+    if not doc_tipo:
+        nblob = _norm(blob)
+        if re.search(r"\bata\b", nblob):
+            doc_tipo = "ata"
+        elif re.search(r"\bpauta\b", nblob):
+            doc_tipo = "pauta"
+        else:
+            doc_tipo = "pauta"
+
+    data, ano = _extrair_data(*textos)
+    ano = ano or ano_fallback
+
+    base = _DOC_ARQUIVO.get(doc_tipo, "Documento")
+    if data:
+        doc_nome = "{0} - {1}".format(base, data)
+    else:
+        doc_nome = base
+
+    return {
+        "numero": None,
+        "tipo": "Comissão",
+        "evento": "",
+        "data": data,
+        "ano": ano,
+        "doc_tipo": doc_tipo,
+        "doc_nome": doc_nome,
+    }
 
 
 def _limpar_nome_arquivo(nome: str) -> str:
@@ -317,10 +472,13 @@ def nome_arquivo_declaracao(*textos: str) -> str:
 def parse_sessao(*textos: str) -> dict[str, Any] | None:
     """
     Extrai metadados da sessão.
-    Aceita com número (18ª Ordinária) ou só com evento (Sessão Especial Dia dos Pais).
+    Aceita com número (18ª Ordinária), só com evento (Sessão Especial Dia dos Pais)
+    ou só com tipo + data (PAUTA DA SESSÃO ORDINÁRIA, DE 04 DE DEZEMBRO DE 2023).
     """
     blob = "\n".join(t for t in textos if t)
     if not blob.strip():
+        return None
+    if parece_comissao(*textos):
         return None
     if parece_declaracao(*textos):
         return None
@@ -329,6 +487,12 @@ def parse_sessao(*textos: str) -> dict[str, Any] | None:
     numero = None
     tipo_sessao = None
     evento = ""
+
+    # Certidão no PDF/cabeçalho vence título enganoso ("Ata", "Ata (2)")
+    for texto in textos:
+        if texto and _tipo_documento(texto) == "certidao":
+            doc_tipo = "certidao"
+            break
 
     for texto in textos:
         if not texto:
@@ -368,17 +532,26 @@ def parse_sessao(*textos: str) -> dict[str, Any] | None:
     if not tipo_sessao:
         return None
 
-    # Evento (Dia dos Pais, etc.) — útil sobretudo sem número
+    # Evento (Dia dos Pais, etc.) — só em título/link curtos (PDF gera falso positivo)
     for texto in textos:
-        if not texto:
+        if not texto or len(texto) > 280:
             continue
-        evento = _extrair_evento(texto, tipo_sessao)
-        if evento:
-            break
+        cand = _extrair_evento(texto, tipo_sessao)
+        if not cand:
+            continue
+        cn = _norm(cand)
+        if cn in ("dia", "de", "da", "do", "em", "no", "na") or re.fullmatch(r"dia\s+\d+", cn):
+            continue
+        evento = cand
+        break
+
+    data, ano = _extrair_data(*textos)
 
     if numero is None and not evento:
-        # Sem número e sem evento: só tipos “temáticos”
-        if tipo_sessao not in (
+        # Pauta/Ata de ordinária/extraordinária costuma vir SÓ com a data no título.
+        if data:
+            pass
+        elif tipo_sessao in (
             "Especial",
             "Solene",
             "Audiência Pública",
@@ -386,11 +559,11 @@ def parse_sessao(*textos: str) -> dict[str, Any] | None:
             "Preparatória",
             "Itinerante",
         ):
-            return None
-        if not doc_tipo:
+            if not doc_tipo:
+                return None
+        else:
             return None
 
-    data, ano = _extrair_data(*textos)
     if not doc_tipo:
         nblob = _norm(blob)
         if re.search(r"\bata\b", nblob):
@@ -427,29 +600,86 @@ def nome_pasta_sessao(meta: dict[str, Any]) -> str:
 def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
     """
     Reusa pasta existente da mesma sessão:
+      - mesma data (DD-MM-YYYY) + tipo  → une pauta s/nº com ata 766ª do mesmo dia
       - com número: mesmo nº + tipo
-      - sem número: mesmo tipo + evento
+      - sem número: mesmo tipo + evento (+ data)
     """
     root = Path(pasta_ano)
     root.mkdir(parents=True, exist_ok=True)
     numero = meta.get("numero")
     tipo = meta.get("tipo") or "Ordinária"
     evento = (meta.get("evento") or "").strip()
-
-    if numero is not None:
-        prefix = prefixo_pasta_sessao(numero, tipo, "")
-    else:
-        prefix = prefixo_pasta_sessao(None, tipo, evento)
+    data = (meta.get("data") or "").strip()
 
     try:
-        existentes = sorted(
-            p for p in root.iterdir() if p.is_dir() and p.name.startswith(prefix)
-        )
+        dirs = [p for p in root.iterdir() if p.is_dir()]
     except OSError:
-        existentes = []
-    if existentes:
-        return existentes[0]
-    return root / nome_pasta_sessao(meta)
+        dirs = []
+
+    def _eh_pasta_sessao(p: Path) -> bool:
+        if p.name in (PASTA_MENSAIS, PASTA_DECLARACOES) or p.name.startswith("_"):
+            return False
+        return True
+
+    # 1) Mesma data + tipo → mesma sessão (pauta sem nº encontra ata numerada)
+    if data:
+        mesmos: list[Path] = []
+        for p in dirs:
+            if not _eh_pasta_sessao(p):
+                continue
+            m = _RE_DATA_PASTA_SESSAO.search(p.name)
+            if not m:
+                continue
+            data_pasta = "{0}-{1}-{2}".format(m.group(1), m.group(2), m.group(3))
+            if data_pasta != data:
+                continue
+            if _pasta_compativel_tipo(p.name, tipo, evento):
+                mesmos.append(p)
+        if mesmos:
+            # Prefere pasta já numerada (766ª …) e nome mais completo
+            def _chave(p: Path) -> tuple:
+                tem_num = 0 if re.search(r"\d+\s*ª", p.name) else 1
+                return (tem_num, -len(p.name), p.name)
+
+            escolhida = sorted(mesmos, key=_chave)[0]
+            # Pauta veio antes sem nº → renomeia quando a ata traz o número
+            if numero is not None and not re.search(r"\d+\s*ª", escolhida.name):
+                novo = root / nome_pasta_sessao(meta)
+                if escolhida.resolve() != novo.resolve() and not novo.exists():
+                    try:
+                        escolhida.rename(novo)
+                        return novo
+                    except OSError:
+                        pass
+            return escolhida
+
+    # 2) Mesmo número + tipo
+    if numero is not None:
+        prefix = prefixo_pasta_sessao(numero, tipo, "")
+        existentes = sorted(
+            p for p in dirs if _eh_pasta_sessao(p) and p.name.startswith(prefix)
+        )
+        if existentes:
+            return existentes[0]
+
+    # 3) Sem número: tipo + evento (e data no nome final)
+    alvo = nome_pasta_sessao(meta)
+    if (root / alvo).is_dir():
+        return root / alvo
+
+    if numero is None:
+        prefix = prefixo_pasta_sessao(None, tipo, evento)
+        candidatos = [
+            p for p in dirs if _eh_pasta_sessao(p) and p.name.startswith(prefix)
+        ]
+        if data:
+            com_data = [p for p in candidatos if p.name.endswith(data) or data in p.name]
+            if com_data:
+                return sorted(com_data, key=lambda p: p.name)[0]
+        elif evento and candidatos:
+            return sorted(candidatos, key=lambda p: p.name)[0]
+
+    return root / alvo
 
 
 def nome_arquivo_sessao(meta: dict[str, Any], pasta: str | Path) -> str:
@@ -500,7 +730,22 @@ def organizar_destino_sessao(
             "meta": meta,
         }
 
-    # Declarações / recesso / comissões → pasta Declarações
+    # Reuniões / sessões de comissões → uma pasta só: {ano}/Comissões/
+    meta_c = parse_comissao(*textos, ano_fallback=ano_fallback)
+    if meta_c and (fonte_ok or parece_comissao(*textos)):
+        ano = meta_c.get("ano") or ano_fallback or "sem_ano"
+        pasta = Path(pasta_base) / pasta_hint / str(ano) / PASTA_COMISSOES
+        pasta.mkdir(parents=True, exist_ok=True)
+        arquivo = nome_arquivo_sessao(meta_c, pasta)
+        return {
+            "pasta": str(pasta),
+            "arquivo": arquivo,
+            "nome_logico": arquivo[:-4] if arquivo.lower().endswith(".pdf") else arquivo,
+            "meta": meta_c,
+            "comissao": True,
+        }
+
+    # Declarações / recesso → pasta Declarações
     if fonte_ok and parece_declaracao(*textos):
         data, ano_doc = _extrair_data(*textos)
         ano = ano_doc or ano_fallback or "sem_ano"
@@ -524,4 +769,575 @@ def organizar_destino_sessao(
             },
         }
 
+    # Listas mensais (presença / votação nominal – abril) → _Mensais + cópia nas sessões
+    org_m = organizar_destino_mensal(
+        pasta_base=pasta_base,
+        pasta_hint=pasta_hint,
+        ano_fallback=ano_fallback,
+        textos=textos,
+        url_fonte=url_fonte,
+    )
+    if org_m:
+        return org_m
+
     return None
+
+
+def parece_doc_mensal(*textos: str) -> bool:
+    """
+    True para 'Lista de votação nominal – abril' / 'Lista de Presença – junho'
+    (por mês, sem número/tipo de sessão).
+    """
+    blob = "\n".join(t for t in textos if t)
+    if not blob.strip():
+        return False
+    if _RE_DOC_SESSAO.search(blob) or _RE_SESSAO_NUM_TIPO.search(blob):
+        return False
+    n = _norm(blob)
+    if not re.search(
+        r"lista\s+de\s+(?:presen|vota)|"
+        r"vota[cç][oõ]es?\s*nomin|vota[cç][aã]o\s*nominal|"
+        r"presen[cç]a|frequ[eê]ncia",
+        n,
+    ):
+        return False
+    return bool(_RE_DOC_MENSAL.search(blob) or _RE_MES_NO_TEXTO.search(blob))
+
+
+def parse_doc_mensal(
+    *textos: str,
+    ano_fallback: int | None = None,
+) -> dict[str, Any] | None:
+    """Extrai mês/ano e tipo (presença ou votações) de um documento mensal."""
+    if not parece_doc_mensal(*textos):
+        return None
+    blob = "\n".join(t for t in textos if t)
+    doc_tipo = _tipo_documento(blob)
+    if doc_tipo not in ("presenca", "votacoes"):
+        # Título genérico com mês — assume votação se "vota", senão presença
+        n = _norm(blob)
+        doc_tipo = "votacoes" if re.search(r"vota", n) else "presenca"
+
+    mes = None
+    m = _RE_DOC_MENSAL.search(blob)
+    mes_bruto = m.group(1) if m else None
+    if not mes_bruto:
+        m2 = _RE_MES_NO_TEXTO.search(blob)
+        mes_bruto = m2.group(1) if m2 else None
+    if mes_bruto:
+        mes_txt = _norm(mes_bruto).replace("ç", "c")
+        mes = _MESES.get(mes_txt) or _MESES.get(mes_bruto.lower())
+        if not mes:
+            for k, v in _MESES.items():
+                if _norm(k) == mes_txt:
+                    mes = v
+                    break
+    if not mes:
+        return None
+
+    ano = None
+    m_ano = _RE_ANO_NO_TEXTO.search(blob)
+    if m_ano:
+        ano = int(m_ano.group(1))
+    ano = ano or ano_fallback
+
+    mes_nome = _MESES_NOME[mes]
+    doc_base = _DOC_ARQUIVO.get(doc_tipo, "Documento")
+    return {
+        "mes": mes,
+        "mes_nome": mes_nome,
+        "ano": ano,
+        "doc_tipo": doc_tipo,
+        "doc_nome": "{0} - {1}".format(doc_base, mes_nome),
+        "doc_nome_sessao": doc_base,
+        "tipo": "Mensal",
+    }
+
+
+def organizar_destino_mensal(
+    *,
+    pasta_base: str,
+    pasta_hint: str,
+    ano_fallback: int | None,
+    textos: list[str],
+    url_fonte: str = "",
+) -> dict[str, Any] | None:
+    """
+    Salva o canônico em {hint}/{ano}/_Mensais/Votações Nominais - Abril.pdf
+    (a propagação para pastas de sessão fica a cargo de propagar_doc_mensal).
+    """
+    titulo = textos[1] if len(textos) > 1 else (textos[0] if textos else "")
+    fonte_ok = parece_fonte_sessoes(
+        url=url_fonte,
+        pasta_hint=pasta_hint,
+        titulo=titulo,
+    )
+    # Aceita se a fonte for de sessões OU o título já deixar claro que é lista mensal
+    if not fonte_ok and not parece_doc_mensal(*textos):
+        return None
+
+    meta = parse_doc_mensal(*textos, ano_fallback=ano_fallback)
+    if not meta:
+        return None
+
+    ano = meta.get("ano") or ano_fallback or "sem_ano"
+    pasta = Path(pasta_base) / pasta_hint / str(ano) / PASTA_MENSAIS
+    pasta.mkdir(parents=True, exist_ok=True)
+    arquivo = nome_arquivo_sessao({"doc_nome": meta["doc_nome"]}, pasta)
+    return {
+        "pasta": str(pasta),
+        "arquivo": arquivo,
+        "nome_logico": arquivo[:-4] if arquivo.lower().endswith(".pdf") else arquivo,
+        "meta": meta,
+        "mensal": True,
+    }
+
+
+def pastas_sessao_do_mes(pasta_ano: str | Path, mes: int) -> list[Path]:
+    """Pastas '… - DD-MM-YYYY' cujo mês bate com `mes` (1–12)."""
+    root = Path(pasta_ano)
+    if not root.is_dir():
+        return []
+    out: list[Path] = []
+    try:
+        entradas = list(root.iterdir())
+    except OSError:
+        return []
+    for p in entradas:
+        if not p.is_dir():
+            continue
+        if p.name in (PASTA_MENSAIS, PASTA_DECLARACOES) or p.name.startswith("_"):
+            continue
+        m = _RE_DATA_PASTA_SESSAO.search(p.name)
+        if m and int(m.group(2)) == int(mes):
+            out.append(p)
+    return out
+
+
+def propagar_doc_mensal(
+    caminho_origem: str | Path,
+    meta: dict[str, Any],
+    pasta_ano: str | Path,
+) -> int:
+    """
+    Copia o PDF mensal para todas as pastas de sessão daquele mês
+    como Lista de Presença.pdf / Votações Nominais.pdf.
+    Não sobrescreve se já existir arquivo no destino.
+    Retorna quantas cópias novas foram feitas.
+    """
+    mes = meta.get("mes")
+    if not mes:
+        return 0
+    origem = Path(caminho_origem)
+    if not origem.is_file():
+        return 0
+    nome_dest = "{0}.pdf".format(
+        meta.get("doc_nome_sessao")
+        or _DOC_ARQUIVO.get(meta.get("doc_tipo") or "", "Documento")
+    )
+    n = 0
+    for pasta in pastas_sessao_do_mes(pasta_ano, int(mes)):
+        dest = pasta / nome_dest
+        if dest.exists():
+            continue
+        try:
+            shutil.copy2(origem, dest)
+            n += 1
+        except OSError:
+            continue
+    return n
+
+
+def propagar_todos_mensais(pasta_base: str | Path) -> int:
+    """
+    Percorre todas as pastas _Mensais sob pasta_base e propaga
+    para as sessões do mês correspondente (útil no fim do download,
+    quando sessões chegam depois das listas).
+    """
+    root = Path(pasta_base)
+    if not root.is_dir():
+        return 0
+    total = 0
+    try:
+        pastas_mensais = [p for p in root.rglob(PASTA_MENSAIS) if p.is_dir()]
+    except OSError:
+        return 0
+    for mensais in pastas_mensais:
+        pasta_ano = mensais.parent
+        ano_fb = None
+        try:
+            ano_fb = int(pasta_ano.name)
+        except ValueError:
+            ano_fb = None
+        try:
+            pdfs = list(mensais.glob("*.pdf"))
+        except OSError:
+            continue
+        for pdf in pdfs:
+            meta = parse_doc_mensal(pdf.stem, ano_fallback=ano_fb)
+            if not meta:
+                continue
+            total += propagar_doc_mensal(pdf, meta, pasta_ano)
+    return total
+
+
+# ---------------------------------------------------------------------------
+# Junção Certidão → documento principal (Ata/Pauta/…)
+# ---------------------------------------------------------------------------
+
+_RE_NOME_CERTIDAO = re.compile(
+    r"^certid[aã]o(?:\s*\(\d+\))?(?:\s*-\s*\d{2}-\d{2}-\d{4})?$",
+    re.I,
+)
+
+
+def _data_no_nome_arquivo(stem: str) -> str:
+    m = re.search(r"(\d{2}-\d{2}-\d{4})\s*$", (stem or "").strip())
+    return m.group(1) if m else ""
+
+
+def _ler_cabecalho_pdf(caminho: str | Path, max_paginas: int = 2) -> str:
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        try:
+            from PyPDF2 import PdfReader  # type: ignore
+        except ImportError:
+            return ""
+    try:
+        reader = PdfReader(str(caminho))
+        partes = []
+        for i, page in enumerate(reader.pages):
+            if i >= max_paginas:
+                break
+            partes.append(page.extract_text() or "")
+        return "\n".join(partes)
+    except Exception:
+        return ""
+
+
+def juntar_pdfs_principal_mais_anexo(
+    path_principal: str | Path,
+    path_anexo: str | Path,
+) -> bool:
+    """Anexa páginas do anexo ao fim do principal. Sobrescreve o principal."""
+    try:
+        from pypdf import PdfReader, PdfWriter
+    except ImportError:
+        try:
+            from PyPDF2 import PdfReader, PdfWriter  # type: ignore
+        except ImportError:
+            return False
+    principal = Path(path_principal)
+    anexo = Path(path_anexo)
+    if not principal.is_file() or not anexo.is_file():
+        return False
+    if principal.resolve() == anexo.resolve():
+        return False
+    try:
+        writer = PdfWriter()
+        for page in PdfReader(str(principal)).pages:
+            writer.add_page(page)
+        for page in PdfReader(str(anexo)).pages:
+            writer.add_page(page)
+        tmp = str(principal) + ".tmp_merge.pdf"
+        with open(tmp, "wb") as fh:
+            writer.write(fh)
+        os.replace(tmp, principal)
+        return True
+    except Exception:
+        tmp = str(principal) + ".tmp_merge.pdf"
+        try:
+            if os.path.isfile(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
+        return False
+
+
+def _eh_pdf_certidao_avulsa(path: Path) -> bool:
+    """True para Certidão.pdf / Certidão (2).pdf — não para 'Ata e Certidão'."""
+    if path.suffix.lower() != ".pdf":
+        return False
+    stem = (path.stem or "").strip()
+    if _RE_NOME_CERTIDAO.match(stem):
+        return True
+    n = _norm(stem)
+    if n.startswith("certidao") and " e certidao" not in n:
+        return True
+    return False
+
+
+def _alvo_certidao_na_sessao(texto: str, pasta: Path) -> str:
+    """Devolve chave doc_tipo: ata, pauta, presenca, votacoes."""
+    t = _norm(texto or "")
+    pares = (
+        ("pauta", r"\bpauta\b"),
+        ("ata", r"\bata\b"),
+        ("presenca", r"lista\s+de\s+presen|presen[cç]a|frequ[eê]ncia"),
+        ("votacoes", r"vota[cç]"),
+    )
+    for chave, rx in pares:
+        if re.search(rx, t):
+            return chave
+    # Fallback: documento principal que existir na pasta
+    for chave in ("ata", "pauta", "presenca", "votacoes"):
+        if _achar_principal_sessao(pasta, chave) is not None:
+            return chave
+    return "ata"
+
+
+def _achar_principal_sessao(pasta: Path, doc_tipo: str) -> Path | None:
+    """Localiza Ata.pdf / Ata e Certidão.pdf / Pauta.pdf …"""
+    base = _DOC_ARQUIVO.get(doc_tipo)
+    if not base:
+        return None
+    base_n = _norm(base)
+    candidatos: list[Path] = []
+    try:
+        pdfs = list(pasta.glob("*.pdf"))
+    except OSError:
+        return None
+    for f in pdfs:
+        if _eh_pdf_certidao_avulsa(f):
+            continue
+        stem_n = _norm(f.stem)
+        if stem_n == base_n:
+            candidatos.append(f)
+            continue
+        if stem_n.startswith(base_n + " e certidao"):
+            candidatos.append(f)
+            continue
+        if re.match(re.escape(base_n) + r"\s*\(\d+\)$", stem_n):
+            candidatos.append(f)
+    if not candidatos:
+        return None
+
+    def _score(p: Path) -> tuple:
+        sn = _norm(p.stem)
+        # Prefere já fundido, depois nome exato, depois maior arquivo
+        ja_fundido = 0 if "e certidao" in sn else 1
+        exato = 0 if sn == base_n else 1
+        try:
+            tam = -p.stat().st_size
+        except OSError:
+            tam = 0
+        return (ja_fundido, exato, tam, p.name.lower())
+
+    return sorted(candidatos, key=_score)[0]
+
+
+def fundir_certidoes_na_pasta_sessao(pasta: str | Path) -> int:
+    """
+    Em uma pasta de sessão: anexa cada Certidão.pdf ao principal citado
+    (Ata / Pauta / …), remove a certidão avulsa e renomeia para
+    «Ata e Certidão.pdf».
+    Retorna quantas certidões foram fundidas.
+    """
+    root = Path(pasta)
+    if not root.is_dir():
+        return 0
+    try:
+        pdfs = [p for p in root.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"]
+    except OSError:
+        return 0
+
+    certs = sorted(
+        (p for p in pdfs if _eh_pdf_certidao_avulsa(p)),
+        key=lambda p: p.name.lower(),
+    )
+    if not certs:
+        return 0
+
+    fundidas = 0
+    for cert in certs:
+        if not cert.is_file():
+            continue
+        cab = _ler_cabecalho_pdf(cert, max_paginas=2)
+        alvo = _alvo_certidao_na_sessao(cab, root)
+        principal = _achar_principal_sessao(root, alvo)
+        if principal is None:
+            for alt in ("ata", "pauta", "presenca", "votacoes"):
+                principal = _achar_principal_sessao(root, alt)
+                if principal is not None:
+                    alvo = alt
+                    break
+        if principal is None:
+            continue
+        if not juntar_pdfs_principal_mais_anexo(principal, cert):
+            continue
+        try:
+            cert.unlink()
+        except OSError:
+            pass
+
+        base = _DOC_ARQUIVO.get(alvo, "Documento")
+        destino = root / "{0} e Certidão.pdf".format(base)
+        if principal.resolve() != destino.resolve():
+            if not destino.exists():
+                try:
+                    principal.rename(destino)
+                    principal = destino
+                except OSError:
+                    pass
+            elif destino.resolve() != principal.resolve():
+                # Já existe fundido: anexa o que restou do principal e remove
+                if juntar_pdfs_principal_mais_anexo(destino, principal):
+                    try:
+                        principal.unlink()
+                    except OSError:
+                        pass
+                    principal = destino
+        fundidas += 1
+    return fundidas
+
+
+def _achar_principal_comissao(
+    pasta: Path,
+    doc_tipo: str,
+    data: str,
+) -> Path | None:
+    """Localiza 'Pauta - 22-11-2023.pdf' / 'Ata e Certidão - 22-11-2023.pdf'."""
+    base = _DOC_ARQUIVO.get(doc_tipo)
+    if not base:
+        return None
+    base_n = _norm(base)
+    data = (data or "").strip()
+    candidatos: list[Path] = []
+    try:
+        pdfs = list(pasta.glob("*.pdf"))
+    except OSError:
+        return None
+    for f in pdfs:
+        if _eh_pdf_certidao_avulsa(f):
+            continue
+        if data and _data_no_nome_arquivo(f.stem) != data:
+            continue
+        stem_n = _norm(f.stem)
+        if stem_n == base_n or stem_n.startswith(base_n + " -") or stem_n.startswith(
+            base_n + " e certidao"
+        ):
+            candidatos.append(f)
+    if not candidatos:
+        return None
+
+    def _score(p: Path) -> tuple:
+        sn = _norm(p.stem)
+        ja = 0 if "e certidao" in sn else 1
+        try:
+            tam = -p.stat().st_size
+        except OSError:
+            tam = 0
+        return (ja, tam, p.name.lower())
+
+    return sorted(candidatos, key=_score)[0]
+
+
+def fundir_certidoes_na_pasta_comissoes(pasta: str | Path) -> int:
+    """
+    Pasta única Comissões/: junta 'Certidão - DD-MM-YYYY' em
+    'Ata - DD-MM-YYYY' → 'Ata e Certidão - DD-MM-YYYY.pdf'.
+    """
+    root = Path(pasta)
+    if not root.is_dir():
+        return 0
+    try:
+        pdfs = [p for p in root.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"]
+    except OSError:
+        return 0
+
+    certs = sorted(
+        (p for p in pdfs if _eh_pdf_certidao_avulsa(p)),
+        key=lambda p: p.name.lower(),
+    )
+    if not certs:
+        return 0
+
+    fundidas = 0
+    for cert in certs:
+        if not cert.is_file():
+            continue
+        cab = _ler_cabecalho_pdf(cert, max_paginas=2)
+        data = _data_no_nome_arquivo(cert.stem)
+        if not data:
+            data, _ = _extrair_data(cab)
+        alvo = _alvo_certidao_na_sessao(cab, root)
+        principal = _achar_principal_comissao(root, alvo, data)
+        if principal is None:
+            for alt in ("ata", "pauta", "presenca", "votacoes"):
+                principal = _achar_principal_comissao(root, alt, data)
+                if principal is not None:
+                    alvo = alt
+                    break
+        if principal is None:
+            continue
+        if not juntar_pdfs_principal_mais_anexo(principal, cert):
+            continue
+        try:
+            cert.unlink()
+        except OSError:
+            pass
+
+        base = _DOC_ARQUIVO.get(alvo, "Documento")
+        data_final = data or _data_no_nome_arquivo(principal.stem)
+        if data_final:
+            destino_nome = "{0} e Certidão - {1}.pdf".format(base, data_final)
+        else:
+            destino_nome = "{0} e Certidão.pdf".format(base)
+        destino = root / destino_nome
+        if principal.resolve() != destino.resolve():
+            if not destino.exists():
+                try:
+                    principal.rename(destino)
+                except OSError:
+                    pass
+            elif destino.resolve() != principal.resolve():
+                if juntar_pdfs_principal_mais_anexo(destino, principal):
+                    try:
+                        principal.unlink()
+                    except OSError:
+                        pass
+        fundidas += 1
+    return fundidas
+
+
+def fundir_certidoes_em_sessoes(pasta_base: str | Path) -> int:
+    """Percorre pastas de sessão (e Comissões/) sob pasta_base e funde certidões."""
+    root = Path(pasta_base)
+    if not root.is_dir():
+        return 0
+    total = 0
+    try:
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in (PASTA_MENSAIS,) and not d.startswith(".")
+            ]
+            p = Path(dirpath)
+            if p.name in (PASTA_MENSAIS, PASTA_DECLARACOES):
+                continue
+            if p.name == PASTA_COMISSOES or _norm(p.name) in ("comissoes", "comissao"):
+                n = fundir_certidoes_na_pasta_comissoes(p)
+                if n:
+                    total += n
+                    print(
+                        "  [JUNÇÃO]  Comissões: {0} certidão(ões) → documento principal".format(
+                            n
+                        )
+                    )
+                continue
+            if not _RE_DATA_PASTA_SESSAO.search(p.name):
+                continue
+            if not any(f.lower().endswith(".pdf") for f in filenames):
+                continue
+            n = fundir_certidoes_na_pasta_sessao(p)
+            if n:
+                total += n
+                print(
+                    "  [JUNÇÃO]  {0}: {1} certidão(ões) → documento principal".format(
+                        p.name[:60], n
+                    )
+                )
+    except OSError:
+        return total
+    return total
