@@ -645,10 +645,23 @@
           ? OptoAutomacoes.authFetch
           : fetch;
       const r = await fetchFn(API + "/api/jobs/" + jobId);
-      if (!r.ok) throw new Error("Job não encontrado");
+      if (r.status === 401) throw new Error("Sessão expirada — faça login novamente.");
+      if (r.status === 403) throw new Error("Sem permissão para ver este log.");
+      if (r.status === 404) throw new Error("Processo não encontrado (pode ter sido limpo do disco).");
+      if (!r.ok) throw new Error("Falha ao carregar log (" + r.status + ")");
       const job = await r.json();
-      const lines = (job.logs || []).map((e) => `${e.t} [${e.level}] ${e.msg}`);
-      logEl.textContent = lines.length ? lines.join("\n") : "(sem logs)";
+      const lines = (job.logs || []).map((e) => {
+        const t = e.t ? e.t + " " : "";
+        return `${t}[${e.level}] ${e.msg}`;
+      });
+      const header = [];
+      if (job.from_disk) header.push("(lido do disco)");
+      if (job.status) header.push("Status: " + (STATUS_LABEL[job.status] || job.status));
+      if (job.owner) header.push("Usuário: " + job.owner);
+      if (job.error) header.push("ERRO: " + job.error);
+      if (job.result && job.result.mensagem) header.push("Resultado: " + job.result.mensagem);
+      const body = lines.length ? lines.join("\n") : "(sem linhas de log)";
+      logEl.textContent = (header.length ? header.join("\n") + "\n\n" : "") + body;
       logEl.scrollTop = logEl.scrollHeight;
       if (head && canCancelJob(job)) {
         detailCancel = document.createElement("button");

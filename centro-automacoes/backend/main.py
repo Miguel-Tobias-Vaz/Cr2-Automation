@@ -531,11 +531,36 @@ async def upload_file(
 
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str, user=Depends(require_user)):
+    from backend.job_log import disk_job_payload, read_job_log_entries
+
     job = jobs.get(job_id)
-    if not job:
+    if job:
+        _assert_can_access_job(job, user)
+        logs = list(job.logs[-200:])
+        if len(logs) < 5:
+            disk_logs = read_job_log_entries(job.dir, limit=400)
+            if len(disk_logs) > len(logs):
+                logs = disk_logs[-400:]
+        payload = {**job.to_dict(jobs), "logs": logs}
+        if job.error and not any(
+            (e.get("level") == "error" and job.error in str(e.get("msg") or ""))
+            for e in logs[-20:]
+        ):
+            payload["logs"] = logs + [
+                {"t": "", "level": "error", "msg": "Erro: {0}".format(job.error)}
+            ]
+        return payload
+
+    # Job saiu da memória (restart) — tenta disco
+    disk = disk_job_payload(job_id)
+    if not disk:
         raise HTTPException(404, "Processo não encontrado")
-    _assert_can_access_job(job, user)
-    return {**job.to_dict(jobs), "logs": job.logs[-200:]}
+
+    class _DiskJob:
+        owner = disk.get("owner")
+
+    _assert_can_access_job(_DiskJob(), user)
+    return disk
 
 
 @app.post("/api/jobs")
@@ -707,9 +732,25 @@ def page_dic_est_ter():
 @app.get("/api/admin/overview")
 def admin_overview(_admin=Depends(require_admin)):
     """Dados agregados para o painel admin."""
+    from backend.job_log import list_recent_disk_jobs
+
     snap = jobs.admin_snapshot()
     ativo = jobs.job_ativo()
     queue = jobs.queue_snapshot()
+    # Junta histórico em memória com meta no disco (após restart)
+    mem_ids = {j.get("id") for j in (snap.get("recent") or []) if j.get("id")}
+    disk_recent = []
+    for row in list_recent_disk_jobs(limit=40):
+        if row["id"] in mem_ids:
+            continue
+        disk_recent.append(row)
+    if disk_recent:
+        combined = list(snap.get("recent") or []) + disk_recent
+        combined.sort(
+            key=lambda x: float(x.get("finished_at") or x.get("created_at") or 0),
+            reverse=True,
+        )
+        snap = {**snap, "recent": combined[:40]}
     payload = {
         "ok": True,
         "version": app.version,

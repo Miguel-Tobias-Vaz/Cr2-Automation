@@ -540,6 +540,12 @@ class JobManager:
                 msg = "Removido da fila (timeout enfileirado)."
             job.emit("warn", msg)
             job.emit("info", "— fim —")
+            try:
+                from backend.job_log import write_job_meta
+
+                write_job_meta(job)
+            except Exception:
+                pass
             self._persist()
             queue_store.cleanup_runtime(job.id, job.owner)
             return job
@@ -636,6 +642,12 @@ class JobManager:
                 job.emit("info", "— fim —")
         finally:
             job.finished_at = time.time()
+            try:
+                from backend.job_log import write_job_meta
+
+                write_job_meta(job)
+            except Exception:
+                pass
             self._persist()
             queue_store.cleanup_runtime(job.id, job.owner)
             self._dispatch()

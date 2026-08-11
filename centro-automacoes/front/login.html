@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Login — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
-    <link rel="stylesheet" href="/assets/styles.css?v=home61" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home63" />
   </head>
   <body class="login-page">
     <div class="noise" aria-hidden="true"></div>
@@ -31,7 +31,7 @@
     </main>
     <script src="/assets/supabase-config.js?v=1" onerror="void 0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="/assets/shared.js?v=home61"></script>
+    <script src="/assets/shared.js?v=home63"></script>
     <script>
       (function () {
         const params = new URLSearchParams(location.search);
@@ -71,7 +71,15 @@
             if (window.supabase && cfg.supabase_url && cfg.supabase_anon_key) {
               supabaseClient = window.supabase.createClient(
                 cfg.supabase_url,
-                cfg.supabase_anon_key
+                cfg.supabase_anon_key,
+                {
+                  auth: {
+                    persistSession: true,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: false,
+                    storage: window.localStorage,
+                  },
+                }
               );
             }
           } else if (authMode === "local") {
@@ -79,6 +87,18 @@
           } else {
             hint.textContent = "Modo local — login não exigido neste servidor.";
           }
+        }
+
+        function saveSessionTokens(session) {
+          if (!session || !session.access_token) return;
+          if (window.OptoAutomacoes && OptoAutomacoes.setAuthToken) {
+            OptoAutomacoes.setAuthToken(session.access_token);
+          }
+          try {
+            if (session.refresh_token) {
+              localStorage.setItem("opto-auth-refresh", session.refresh_token);
+            }
+          } catch (_) {}
         }
 
         async function loginSupabase(email, password) {
@@ -90,8 +110,8 @@
             password,
           });
           if (error) throw new Error(error.message || "Falha no login");
-          const token = data.session && data.session.access_token;
-          if (!token) throw new Error("Sessão inválida");
+          const session = data.session;
+          if (!session || !session.access_token) throw new Error("Sessão inválida");
 
           const { data: profile, error: pErr } = await supabaseClient
             .from("profiles")
@@ -108,9 +128,7 @@
             throw new Error("Conta desativada. Contacte o administrador.");
           }
 
-          if (window.OptoAutomacoes && OptoAutomacoes.setAuthToken) {
-            OptoAutomacoes.setAuthToken(token);
-          }
+          saveSessionTokens(session);
           location.href = next;
         }
 
@@ -155,8 +173,14 @@
         });
 
         loadAuthConfig()
-          .then((cfg) => {
+          .then(async (cfg) => {
             applyMode(cfg);
+            if (authMode === "supabase" && supabaseClient) {
+              try {
+                const { data } = await supabaseClient.auth.getSession();
+                if (data && data.session) saveSessionTokens(data.session);
+              } catch (_) {}
+            }
             const meFetch =
               window.OptoAutomacoes && OptoAutomacoes.authFetch
                 ? OptoAutomacoes.authFetch

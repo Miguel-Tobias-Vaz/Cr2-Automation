@@ -15,6 +15,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 AUTH_DIR = ROOT / "data" / "auth"
 USERS_FILE = AUTH_DIR / "users.json"
+SESSIONS_FILE = AUTH_DIR / "sessions.json"
 SESSION_TTL_S = int(os.getenv("OPTO_SESSION_TTL_H", "168")) * 3600  # 7 dias
 
 
@@ -50,6 +51,71 @@ class Session:
 _lock = threading.RLock()
 _users: dict[str, User] = {}
 _sessions: dict[str, Session] = {}
+
+
+def _sessions_to_disk() -> None:
+    """Persiste sessões locais para sobreviver a reinício do servidor."""
+    try:
+        if is_supabase():
+            return
+    except Exception:
+        pass
+    try:
+        AUTH_DIR.mkdir(parents=True, exist_ok=True)
+        now = time.time()
+        payload = []
+        with _lock:
+            for sess in _sessions.values():
+                if sess.expires_at <= now:
+                    continue
+                payload.append(
+                    {
+                        "token": sess.token,
+                        "username": sess.username,
+                        "role": sess.role,
+                        "expires_at": sess.expires_at,
+                        "nome": sess.nome,
+                        "user_id": sess.user_id,
+                    }
+                )
+        tmp = SESSIONS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(SESSIONS_FILE)
+    except OSError:
+        pass
+
+
+def _sessions_from_disk() -> None:
+    if not SESSIONS_FILE.is_file():
+        return
+    try:
+        data = json.loads(SESSIONS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(data, list):
+        return
+    now = time.time()
+    loaded: dict[str, Session] = {}
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        token = str(item.get("token") or "").strip()
+        username = str(item.get("username") or "").strip()
+        if not token or not username:
+            continue
+        exp = float(item.get("expires_at") or 0)
+        if exp <= now:
+            continue
+        loaded[token] = Session(
+            token=token,
+            username=username,
+            role=str(item.get("role") or "user"),
+            expires_at=exp,
+            nome=str(item.get("nome") or ""),
+            user_id=str(item.get("user_id") or ""),
+        )
+    with _lock:
+        _sessions.update(loaded)
 
 
 def _hash_password(password: str, salt: str) -> str:
@@ -181,6 +247,7 @@ def login(username: str, password: str) -> Session | None:
             expires_at=time.time() + SESSION_TTL_S,
         )
         _sessions[token] = sess
+        _sessions_to_disk()
         return sess
 
 
@@ -189,14 +256,19 @@ def logout(token: str | None) -> None:
         return
     with _lock:
         _sessions.pop(token, None)
+    _sessions_to_disk()
 
 
 def _clean_expired() -> None:
     now = time.time()
+    changed = False
     with _lock:
         dead = [t for t, s in _sessions.items() if s.expires_at <= now]
         for t in dead:
             _sessions.pop(t, None)
+            changed = True
+    if changed:
+        _sessions_to_disk()
 
 
 def session_from_token(token: str | None) -> Session | None:
@@ -261,3 +333,7 @@ def can_cancel_job(sess: Session | None, owner: str | None) -> bool:
 
 
 reload_users()
+try:
+    _sessions_from_disk()
+except Exception:
+    pass
