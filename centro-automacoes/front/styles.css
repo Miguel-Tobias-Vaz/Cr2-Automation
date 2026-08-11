@@ -1242,8 +1242,8 @@ main {
   background: var(--accent);
   color: #04140a;
   border-color: transparent;
-  box-shadow: 0 0 0 0 rgba(46, 234, 122, 0.35);
-  animation: opto-dl-pulse 2.2s ease-in-out infinite;
+  box-shadow: none;
+  animation: none;
 }
 
 .btn-download-ready:hover {
