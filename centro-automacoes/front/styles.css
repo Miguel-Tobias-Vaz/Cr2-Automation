@@ -36,7 +36,7 @@ body {
   font-size: 1rem;
   line-height: 1.55;
   letter-spacing: -0.011em;
-  background: #0a0a1a;
+  background: #000;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -71,9 +71,23 @@ html.has-shader-bg body::before {
     );
 }
 
+/* Sem animação / WebGL indisponível / prefers-reduced-motion → fundo preto */
 html.shader-bg-static body,
 html:not(.has-shader-bg) body {
-  background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 50%, #2a1050 100%);
+  background: #000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body {
+    background: #000 !important;
+  }
+
+  .orb,
+  .noise,
+  .shader-background,
+  .fluid-particles {
+    display: none !important;
+  }
 }
 
 html.has-shader-bg .orb {
