@@ -422,7 +422,7 @@ def get_queue(user=Depends(require_user)):
 
 @app.post("/api/jobs/cancel-active")
 def cancel_active_job(user=Depends(require_user)):
-    """Cancela processo em andamento (do usuário; admin principal pode cancelar qualquer)."""
+    """Cancela todos os processos em andamento/na fila (do usuário; admin principal: todos)."""
     with jobs._lock:
         alive = [
             j
@@ -431,23 +431,24 @@ def cancel_active_job(user=Depends(require_user)):
         ]
     if auth.is_enabled() and not _sees_all_jobs(user):
         alive = [j for j in alive if _owners_match(j.owner, user.username)]
-    alive.sort(key=lambda j: j.started_at or j.created_at, reverse=True)
-    job = alive[0] if alive else None
-    if not job:
+    if not alive:
         return {
             "ok": True,
             "estava_rodando": False,
+            "cancelados": 0,
             "msg": "Nenhuma fila ativa (estado liberado).",
         }
-    _assert_can_cancel(job, user)
-    jobs.cancel(job.id)
+    cancelled: list[str] = []
+    for job in alive:
+        _assert_can_cancel(job, user)
+        jobs.cancel(job.id)
+        cancelled.append(job.id)
     return {
         "ok": True,
         "estava_rodando": True,
-        "job_id": job.id,
-        "status": job.status.value,
-        "cancel_requested": job.cancel_requested,
-        "msg": "Cancelamento solicitado — a fila deste processo sera interrompida.",
+        "cancelados": len(cancelled),
+        "job_ids": cancelled,
+        "msg": "Cancelamento solicitado em {0} processo(s).".format(len(cancelled)),
     }
 
 

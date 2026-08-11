@@ -525,6 +525,13 @@ class JobManager:
         if job.status not in (JobStatus.PENDING, JobStatus.RUNNING):
             return job
         job.cancel_requested = True
+        # Sinal imediato para subprocessos (não depende do loop de logs acordar).
+        try:
+            flag = Path(job.dir) / "cancel.flag"
+            flag.parent.mkdir(parents=True, exist_ok=True)
+            flag.write_text("1", encoding="utf-8")
+        except OSError:
+            pass
         if job.status == JobStatus.PENDING:
             job.status = JobStatus.CANCELLED
             job.finished_at = time.time()

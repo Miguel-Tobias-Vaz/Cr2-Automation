@@ -3503,6 +3503,21 @@ body.admin-sidebar-collapsed .admin-toggle-icon {
   font-size: 1rem;
 }
 
+.admin-job-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-canceling {
+  font-size: 0.78rem;
+}
+
+.admin-card-head .btn-stop {
+  margin-left: auto;
+}
+
 .admin-active-head {
   display: flex;
   align-items: center;

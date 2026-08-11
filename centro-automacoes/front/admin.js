@@ -71,6 +71,70 @@
     return pct != null ? pct : 0;
   }
 
+  function canCancelJob(j) {
+    return j && (j.status === "running" || j.status === "pending") && !j.cancel_requested;
+  }
+
+  function jobActionButtons(j) {
+    const logBtn =
+      '<button type="button" class="btn btn-ghost btn-sm" data-view-job="' +
+      j.id +
+      '">Log</button>';
+    if (j.cancel_requested && (j.status === "running" || j.status === "pending")) {
+      return (
+        '<div class="admin-job-actions">' +
+        logBtn +
+        '<span class="admin-muted admin-canceling">Cancelando…</span></div>'
+      );
+    }
+    if (!canCancelJob(j)) {
+      return '<div class="admin-job-actions">' + logBtn + "</div>";
+    }
+    return (
+      '<div class="admin-job-actions">' +
+      logBtn +
+      '<button type="button" class="btn btn-stop btn-sm" data-cancel-job="' +
+      j.id +
+      '" title="Interrompe este processo">Cancelar</button></div>'
+    );
+  }
+
+  async function cancelJobById(jobId) {
+    if (!jobId) return;
+    if (!confirm("Cancelar o processo " + jobId + "?")) return;
+    const fetchFn =
+      window.OptoAutomacoes && OptoAutomacoes.authFetch
+        ? OptoAutomacoes.authFetch
+        : fetch;
+    const r = await fetchFn(API + "/api/jobs/" + encodeURIComponent(jobId) + "/cancel", {
+      method: "POST",
+    });
+    if (!r.ok) {
+      let msg = "Falha ao cancelar";
+      try {
+        const data = await r.json();
+        msg = data.detail || data.msg || msg;
+      } catch (_) {}
+      alert(msg);
+      return;
+    }
+    await refresh();
+  }
+
+  function bindJobActionButtons(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-view-job]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-view-job");
+        showPanel("jobs");
+        loadJobDetail(id);
+      });
+    });
+    root.querySelectorAll("[data-cancel-job]").forEach((btn) => {
+      btn.addEventListener("click", () => cancelJobById(btn.getAttribute("data-cancel-job")));
+    });
+  }
+
   async function fetchOverview() {
     const fetchFn =
       window.OptoAutomacoes && OptoAutomacoes.authFetch
@@ -157,7 +221,7 @@
         "<td>" + (j.owner || "—") + "</td>" +
         "<td>" + pct + "</td>" +
         '<td><code class="admin-code">' + j.id + "</code></td>" +
-        '<td><button type="button" class="btn btn-ghost btn-sm" data-view-job="' + j.id + '">Log</button></td>' +
+        "<td>" + jobActionButtons(j) + "</td>" +
         "</tr>"
       );
     };
@@ -174,12 +238,7 @@
       pending.map((j) => row(j, "pending")).join("") +
       "</tbody></table></div>";
 
-    box.querySelectorAll("[data-view-job]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        showPanel("jobs");
-        loadJobDetail(btn.getAttribute("data-view-job"));
-      });
-    });
+    bindJobActionButtons(box);
   }
 
   function renderActive(data) {
@@ -200,6 +259,11 @@
       .map((a) => {
         const pct = formatProgress(a);
         const bar = progressBarWidth(a);
+        const canceling = a.cancel_requested
+          ? '<span class="admin-muted admin-canceling">Cancelando…</span>'
+          : canCancelJob(a)
+            ? `<button type="button" class="btn btn-stop btn-sm" data-cancel-job="${a.id}">Cancelar</button>`
+            : "";
         return `
       <div class="admin-active-job">
         <div class="admin-active-head">
@@ -212,16 +276,14 @@
           <div class="admin-progress-bar" style="width:${bar}%"></div>
         </div>
         <p class="admin-stat-hint">Progresso: ${pct}</p>
-        <button type="button" class="btn btn-ghost btn-sm" data-view-job="${a.id}">Ver log</button>
+        <div class="admin-job-actions">
+          <button type="button" class="btn btn-ghost btn-sm" data-view-job="${a.id}">Ver log</button>
+          ${canceling}
+        </div>
       </div>`;
       })
       .join("");
-    box.querySelectorAll("[data-view-job]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        showPanel("jobs");
-        loadJobDetail(btn.getAttribute("data-view-job"));
-      });
-    });
+    bindJobActionButtons(box);
   }
 
   function renderByService(data) {
@@ -303,12 +365,15 @@
           <td>${j.owner || "—"}</td>
           <td>${pct}</td>
           <td>${fmtTime(j.created_at)}</td>
-          <td><button type="button" class="btn btn-ghost btn-sm" data-view-job="${j.id}">Log</button></td>
+          <td>${jobActionButtons(j)}</td>
         </tr>`;
       })
       .join("");
     tbody.querySelectorAll("[data-view-job]").forEach((btn) => {
       btn.addEventListener("click", () => loadJobDetail(btn.getAttribute("data-view-job")));
+    });
+    tbody.querySelectorAll("[data-cancel-job]").forEach((btn) => {
+      btn.addEventListener("click", () => cancelJobById(btn.getAttribute("data-cancel-job")));
     });
   }
 
@@ -567,10 +632,13 @@
     const card = $("job-detail-card");
     const logEl = $("job-detail-log");
     const title = $("job-detail-title");
+    const head = card?.querySelector(".admin-card-head");
     if (!card || !logEl) return;
     card.hidden = false;
     title.textContent = "Job " + jobId;
     logEl.textContent = "Carregando…";
+    let detailCancel = head?.querySelector("[data-cancel-job-detail]");
+    if (detailCancel) detailCancel.remove();
     try {
       const fetchFn =
         window.OptoAutomacoes && OptoAutomacoes.authFetch
@@ -582,6 +650,25 @@
       const lines = (job.logs || []).map((e) => `${e.t} [${e.level}] ${e.msg}`);
       logEl.textContent = lines.length ? lines.join("\n") : "(sem logs)";
       logEl.scrollTop = logEl.scrollHeight;
+      if (head && canCancelJob(job)) {
+        detailCancel = document.createElement("button");
+        detailCancel.type = "button";
+        detailCancel.className = "btn btn-stop btn-sm";
+        detailCancel.setAttribute("data-cancel-job-detail", job.id);
+        detailCancel.textContent = "Cancelar este processo";
+        detailCancel.addEventListener("click", () => cancelJobById(job.id));
+        const closeBtn = $("job-detail-close");
+        if (closeBtn) head.insertBefore(detailCancel, closeBtn);
+        else head.appendChild(detailCancel);
+      } else if (head && job.cancel_requested && (job.status === "running" || job.status === "pending")) {
+        const note = document.createElement("span");
+        note.className = "admin-muted admin-canceling";
+        note.setAttribute("data-cancel-job-detail", "1");
+        note.textContent = "Cancelando…";
+        const closeBtn = $("job-detail-close");
+        if (closeBtn) head.insertBefore(note, closeBtn);
+        else head.appendChild(note);
+      }
     } catch (e) {
       logEl.textContent = String(e.message || e);
     }
@@ -637,12 +724,20 @@
     });
 
     $("btn-cancel-active")?.addEventListener("click", async () => {
-      if (!confirm("Cancelar o processo ativo?")) return;
+      if (!confirm("Cancelar TODOS os processos em andamento e na fila?")) return;
       const fetchFn =
         window.OptoAutomacoes && OptoAutomacoes.authFetch
           ? OptoAutomacoes.authFetch
           : fetch;
-      await fetchFn(API + "/api/jobs/cancel-active", { method: "POST" });
+      const r = await fetchFn(API + "/api/jobs/cancel-active", { method: "POST" });
+      if (!r.ok) {
+        let msg = "Falha ao cancelar";
+        try {
+          const data = await r.json();
+          msg = data.detail || data.msg || msg;
+        } catch (_) {}
+        alert(msg);
+      }
       await refresh();
     });
   }

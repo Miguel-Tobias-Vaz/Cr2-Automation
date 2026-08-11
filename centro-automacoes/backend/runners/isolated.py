@@ -135,6 +135,9 @@ def _terminate_process(proc: subprocess.Popen, job) -> None:
 
 def run_isolated(job) -> None:
     """Roda o runner em subprocesso; logs e progresso voltam via stdout (NDJSON)."""
+    import queue as queue_mod
+    import threading
+
     _write_runtime_config(job)
     cancel_flag = job.dir / "cancel.flag"
     try:
@@ -159,9 +162,20 @@ def run_isolated(job) -> None:
 
     visto: set[str] = set()
     cancel_since: float | None = None
+    lines: queue_mod.Queue[str | None] = queue_mod.Queue()
+
+    def _reader() -> None:
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                lines.put(line)
+        finally:
+            lines.put(None)
+
+    reader = threading.Thread(target=_reader, daemon=True)
+    reader.start()
 
     try:
-        assert proc.stdout is not None
         while True:
             if job.cancel_requested and cancel_since is None:
                 cancel_since = time.time()
@@ -170,11 +184,15 @@ def run_isolated(job) -> None:
                 except OSError:
                     pass
 
-            line = proc.stdout.readline()
+            try:
+                line = lines.get(timeout=0.4)
+            except queue_mod.Empty:
+                line = ""
+
+            if line is None:
+                break
             if line:
                 _handle_worker_line(job, line, visto)
-            elif proc.poll() is not None:
-                break
 
             if cancel_since is not None and proc.poll() is None:
                 if time.time() - cancel_since > CANCEL_WAIT_S:
@@ -182,8 +200,12 @@ def run_isolated(job) -> None:
                     job.cancel_requested = True
                     break
 
-        if proc.stdout:
-            for line in proc.stdout:
+        while True:
+            try:
+                line = lines.get_nowait()
+            except queue_mod.Empty:
+                break
+            if line:
                 _handle_worker_line(job, line, visto)
 
         code = proc.wait()
