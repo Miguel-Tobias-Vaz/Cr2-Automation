@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   const API = "";
   const AUTH_TOKEN_KEY = "opto-auth-token";
 
@@ -1926,15 +1926,13 @@
   }
 
   function ensureDownloadBanner() {
-    let bar = el("opto-dl-banner");
-    if (bar) return bar;
-    bar = document.createElement("div");
-    bar.id = "opto-dl-banner";
-    bar.className = "opto-dl-banner";
-    bar.hidden = true;
-    bar.setAttribute("role", "status");
-    document.body.appendChild(bar);
-    return bar;
+    // Banner flutuante removido — poluía a subnav. Só o botão da página.
+    const bar = el("opto-dl-banner");
+    if (bar) {
+      bar.remove();
+      document.body.classList.remove("has-dl-banner");
+    }
+    return null;
   }
 
   function downloadsForCurrentUser(items) {
@@ -1948,67 +1946,27 @@
       } else if (j.owner) {
         return false;
       }
-      // Só ZIPs que ESTE navegador iniciou — evita ver extração de colega/conta compartilhada
       return isTrackedMyJob(j.id);
     });
-    // No máximo 1 aviso na tela
     return mine.slice(0, 1);
   }
 
-  function renderDownloadBanner(items) {
-    if (workspaceCache && workspaceCache.local_mode) return;
-    const visible = downloadsForCurrentUser(items).filter(
-      (j) => !isDownloadDismissed(j.id)
-    );
-    const bar = ensureDownloadBanner();
-    if (!bar) return;
-    if (!visible.length) {
-      bar.hidden = true;
-      document.body.classList.remove("has-dl-banner");
-      return;
-    }
-    bar.hidden = false;
-    document.body.classList.add("has-dl-banner");
-    const j = visible[0];
-    const svc = servicePrettyName(j.service_id);
-    const full = escapeHtml(
-      j.nome || downloadLabel(j.service_id, j.owner || currentUsername)
-    );
-    bar.innerHTML = `<div class="opto-dl-banner-row">
-      <div class="opto-dl-banner-copy">
-        <strong>ZIP pronto</strong>
-        <span title="${full}">${escapeHtml(svc)}</span>
-      </div>
-      <button type="button" class="btn btn-download btn-download-ready btn-sm" data-dl-job="${j.id}" aria-label="${full}">
-        <span class="btn-download-icon" aria-hidden="true">↓</span>
-        <span class="btn-download-text">Baixar</span>
-      </button>
-      <button type="button" class="opto-dl-dismiss" data-dl-dismiss="${j.id}" title="Ocultar" aria-label="Ocultar">×</button>
-    </div>`;
-    bar.querySelectorAll("[data-dl-job]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        downloadJobArtifact(btn.getAttribute("data-dl-job"));
-      });
-    });
-    bar.querySelectorAll("[data-dl-dismiss]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        markDownloadDismissed(btn.getAttribute("data-dl-dismiss"));
-        pollDownloadsReady().catch(() => {});
-      });
-    });
+  function renderDownloadBanner(_items) {
+    // Não renderiza banner flutuante.
+    ensureDownloadBanner();
   }
 
   async function pollDownloadsReady() {
     if (workspaceCache && workspaceCache.local_mode) return;
     try {
+      ensureDownloadBanner();
       const r = await authFetch(`${API}/api/jobs/downloads-ready`);
       if (!r.ok) return;
       const data = await r.json();
       const downloads = downloadsForCurrentUser(data.downloads || []);
-      renderDownloadBanner(downloads);
       const mem = readRememberedJob(boundServiceId);
       const jid = currentJobId || (mem && mem.jobId);
-      if (jid && downloads.some((d) => d.id === jid)) {
+      if (jid && downloads.some((d) => d.id === jid) && !isDownloadDismissed(jid)) {
         showJobDownloadButton(jid);
       }
     } catch (_) {}
@@ -2582,7 +2540,7 @@
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home57";
+    s.src = "/assets/shader-background.js?v=home61";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {
