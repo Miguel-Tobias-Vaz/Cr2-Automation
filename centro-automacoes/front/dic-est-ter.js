@@ -734,7 +734,7 @@
 
     if (!(await pingApi())) {
       showErros([
-        { text: "Servidor offline. Rode centro-automacoes\\run.bat" },
+        { text: "Servidor offline. Reinicie o painel no servidor." },
       ]);
       setStatus("Servidor offline.", true);
       return false;
@@ -805,7 +805,7 @@
 
     if (!(await pingApi())) {
       showErros([
-        { text: "Servidor offline. Rode centro-automacoes\\run.bat" },
+        { text: "Servidor offline. Reinicie o painel no servidor." },
       ]);
       setStatus("Servidor offline.", true);
       return;
@@ -864,7 +864,7 @@
 
   async function onCancelarLiberar() {
     if (!(await pingApi())) {
-      setStatus("Servidor offline. Reinicie: centro-automacoes\\run.bat", true);
+      setStatus("Servidor offline. Reinicie o painel no servidor.", true);
       return;
     }
     const btn = el("btn-cancelar");
@@ -896,13 +896,13 @@
       setStatus(
         "Cancelar falhou (" +
           e.message +
-          "). Reinicie o painel com centro-automacoes\\run.bat",
+          "). Reinicie o painel no servidor",
         true
       );
       showErros([
         {
           text:
-            "O servidor parou de responder. Reinicie com centro-automacoes\\run.bat",
+            "O servidor parou de responder. Reinicie o painel no servidor.",
         },
       ]);
     } finally {

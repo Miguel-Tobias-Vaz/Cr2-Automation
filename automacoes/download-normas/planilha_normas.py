@@ -153,14 +153,47 @@ def extrair_data(*textos: str) -> tuple[str, str, str]:
             if not mes:
                 mes = _MESES.get(m.group(2).lower(), 0)
             ano = int(m.group(3))
-            if mes:
+            if mes and 1 <= dia <= 31 and 1900 <= ano <= 2100:
                 data = f"{dia:02d}/{mes:02d}/{ano}"
                 return data, rotulo, m.group(0)[:120]
         m = _RE_DATA_NUM.search(t)
         if m:
-            data = f"{int(m.group(1)):02d}/{int(m.group(2)):02d}/{m.group(3)}"
-            return data, rotulo, m.group(0)
+            dia, mes, ano = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if 1 <= dia <= 31 and 1 <= mes <= 12 and 1900 <= ano <= 2100:
+                data = f"{dia:02d}/{mes:02d}/{ano}"
+                return data, rotulo, m.group(0)
     return "", "", ""
+
+
+def data_para_epoch(data: str) -> float | None:
+    """Converte dd/mm/aaaa ou dd-mm-aaaa em timestamp Unix (meio-dia local)."""
+    from datetime import datetime
+
+    t = _norm(data).replace("-", "/")
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/((?:20|19)\d{2})$", t)
+    if not m:
+        return None
+    try:
+        dt = datetime(int(m.group(3)), int(m.group(2)), int(m.group(1)), 12, 0, 0)
+        return dt.timestamp()
+    except ValueError:
+        return None
+
+
+def ano_para_epoch(ano: int | str | None) -> float | None:
+    """Fallback: 01/01/AAAA ao meio-dia — pelo menos o ano fica certo no Explorer."""
+    from datetime import datetime
+
+    try:
+        a = int(str(ano).strip())
+    except (TypeError, ValueError):
+        return None
+    if a < 1900 or a > 2100:
+        return None
+    try:
+        return datetime(a, 1, 1, 12, 0, 0).timestamp()
+    except ValueError:
+        return None
 
 
 def extrair_numero_ano_com_origem(

@@ -1556,6 +1556,19 @@
     return `${withBaixar} - ${ownerShortName(owner)}`;
   }
 
+  function servicePrettyName(serviceId) {
+    const raw = SERVICE_LABELS[serviceId] || serviceId || "Automação";
+    return String(raw).replace(/^baixar\s+/i, "").trim() || "Automação";
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   function ownersMatch(a, b) {
     if (!a || !b) return false;
     return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
@@ -1772,17 +1785,22 @@
       const next = document.createElement("button");
       next.type = "button";
       next.id = "btn-download";
-      next.className = "btn btn-ghost btn-sm";
-      next.textContent = btn.textContent || "Baixar ZIP";
+      next.className = "btn btn-download btn-download-idle btn-sm";
+      next.innerHTML =
+        '<span class="btn-download-icon" aria-hidden="true">↓</span><span class="btn-download-text">Baixar ZIP</span>';
       btn.replaceWith(next);
       btn = next;
     }
-    if (btn) return btn;
+    if (btn) {
+      btn.classList.add("btn-download");
+      return btn;
+    }
     btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "btn btn-ghost btn-sm";
+    btn.className = "btn btn-download btn-download-idle btn-sm";
     btn.id = "btn-download";
-    btn.textContent = "Baixar ZIP";
+    btn.innerHTML =
+      '<span class="btn-download-icon" aria-hidden="true">↓</span><span class="btn-download-text">Baixar ZIP</span>';
     btn.disabled = true;
     btn.setAttribute("aria-disabled", "true");
     let bar = document.querySelector(".log-wrap .job-bar") || document.querySelector(".job-bar");
@@ -1815,22 +1833,34 @@
     btn.hidden = false;
     const waiting = !!(opts && opts.waiting);
     const svc = (opts && opts.serviceId) || boundServiceId;
-    const label = downloadLabel(svc, (opts && opts.owner) || currentUsername);
+    const owner = (opts && opts.owner) || currentUsername;
+    const fullName = downloadLabel(svc, owner);
+    const textEl = () => {
+      let t = btn.querySelector(".btn-download-text");
+      if (!t) {
+        btn.innerHTML =
+          '<span class="btn-download-icon" aria-hidden="true">↓</span><span class="btn-download-text"></span>';
+        t = btn.querySelector(".btn-download-text");
+      }
+      return t;
+    };
     if (ready && jobId) {
       btn.disabled = false;
       btn.removeAttribute("aria-disabled");
-      btn.className = "btn btn-primary btn-sm";
-      btn.textContent = label;
-      btn.title = `Baixar pacote ZIP: ${label}`;
+      btn.className = "btn btn-download btn-download-ready btn-sm";
+      textEl().textContent = "Baixar ZIP";
+      btn.title = fullName;
+      btn.setAttribute("aria-label", fullName);
       btn.onclick = () => downloadJobArtifact(jobId);
     } else {
       btn.disabled = true;
       btn.setAttribute("aria-disabled", "true");
-      btn.className = "btn btn-ghost btn-sm";
-      btn.textContent = label;
+      btn.className = "btn btn-download btn-download-idle btn-sm";
+      textEl().textContent = waiting ? "Preparando ZIP…" : "Baixar ZIP";
       btn.title = waiting
-        ? "Disponível quando o processo terminar e houver arquivos"
-        : "Nenhum arquivo gerado para download";
+        ? "Disponível quando o processo terminar"
+        : fullName;
+      btn.setAttribute("aria-label", btn.title);
       btn.onclick = null;
     }
   }
@@ -1852,13 +1882,7 @@
     bar.className = "opto-dl-banner";
     bar.hidden = true;
     bar.setAttribute("role", "status");
-    const header = document.querySelector("header.top");
-    if (header && header.parentNode) {
-      header.insertAdjacentElement("afterend", bar);
-      document.body.classList.add("has-dl-banner");
-    } else {
-      document.body.prepend(bar);
-    }
+    document.body.appendChild(bar);
     return bar;
   }
 
@@ -1888,12 +1912,21 @@
     document.body.classList.add("has-dl-banner");
     const rows = visible
       .map((j) => {
-        const label =
-          j.nome || downloadLabel(j.service_id, j.owner || currentUsername);
+        const svc = servicePrettyName(j.service_id);
+        const who = ownerShortName(j.owner || currentUsername);
+        const full = escapeHtml(
+          j.nome || downloadLabel(j.service_id, j.owner || currentUsername)
+        );
         return `<div class="opto-dl-banner-row">
-          <span><strong>${label}</strong> finalizado — ZIP pronto</span>
-          <button type="button" class="btn btn-primary btn-sm" data-dl-job="${j.id}">Baixar ZIP</button>
-          <button type="button" class="btn btn-ghost btn-sm" data-dl-dismiss="${j.id}" title="Ocultar">×</button>
+          <div class="opto-dl-banner-copy">
+            <strong>ZIP pronto</strong>
+            <span title="${full}">${escapeHtml(svc)} · ${escapeHtml(who)}</span>
+          </div>
+          <button type="button" class="btn btn-download btn-download-ready btn-sm" data-dl-job="${j.id}" aria-label="${full}">
+            <span class="btn-download-icon" aria-hidden="true">↓</span>
+            <span class="btn-download-text">Baixar</span>
+          </button>
+          <button type="button" class="opto-dl-dismiss" data-dl-dismiss="${j.id}" title="Ocultar" aria-label="Ocultar">×</button>
         </div>`;
       })
       .join("");

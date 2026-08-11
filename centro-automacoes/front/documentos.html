@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home57" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home58" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -98,13 +98,16 @@
         </header>
         <div class="log-console" id="log-console"><p class="log-empty">Aguardando execução…</p></div>
         <div class="job-bar">
-          <button type="button" class="btn btn-ghost btn-sm" id="btn-download" disabled>Baixar ZIP</button>
+          <button type="button" class="btn btn-download btn-download-idle btn-sm" id="btn-download" disabled>
+            <span class="btn-download-icon" aria-hidden="true">↓</span>
+            <span class="btn-download-text">Baixar ZIP</span>
+          </button>
         </div>
       </section>
     </main>
 
         <script src="/assets/fluid-particles.js?v=home57"></script>
-    <script src="/assets/shared.js?v=home57"></script>
+    <script src="/assets/shared.js?v=home58"></script>
     <script>
       CR2Centro.injectNav("documentos");
       CR2Centro.pingApi();

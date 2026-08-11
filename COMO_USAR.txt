@@ -9,21 +9,15 @@ Voce NAO precisa saber programar. Tudo roda por um painel no navegador.
 
 
 --------------------------------------------------------------------------------
-1) INSTALAR E ABRIR (primeira vez neste PC)
+1) ABRIR O PAINEL (servidor)
 --------------------------------------------------------------------------------
 
-1. Botao direito no arquivo ZIP -> "Extrair Tudo..."
-2. Entre na pasta que foi criada
-3. Clique duas vezes em:  COMECE_AQUI.bat
-4. Espere a janela preta terminar (na 1a vez pode levar de 5 a 20 minutos)
-5. O navegador abre sozinho em:  http://127.0.0.1:8765
+O Opto Automações roda no servidor. Acesse a URL do painel no navegador
+(nao use mais scripts .bat do Windows).
 
-IMPORTANTE:
-- Deixe a internet ligada
-- Nao feche a janela preta enquanto estiver instalando ou usando
-- Nao precisa instalar Python na mao — o programa faz isso
+Exemplo: https://seu-servidor/  ou a porta configurada no uvicorn/systemd.
 
-Para abrir de novo no dia seguinte: so clique de novo em COMECE_AQUI.bat
+Se o painel nao abrir, reinicie o servico no servidor e veja os logs.
 
 
 --------------------------------------------------------------------------------

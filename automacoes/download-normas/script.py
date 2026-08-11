@@ -18,6 +18,7 @@ e/ou o título do post para classificar e numerar corretamente.
 """
 from __future__ import annotations
 
+import hashlib
 import html as html_module
 import io
 import json
@@ -486,7 +487,7 @@ def _registrar_norma_planilha(
             num_metodo = "ano_fallback"
 
     data, data_origem, data_trecho = mod.extrair_data(
-        texto_link, titulo, (texto_pdf or "")[:800], url_pdf or ""
+        texto_link, titulo, (texto_pdf or "")[:5000], url_pdf or ""
     )
 
     titulo_limpo = _normalizar_texto(titulo or "")
@@ -1158,6 +1159,69 @@ def ano_permitido(ano) -> bool:
     return str(ano) in filtro
 
 
+def _timestamp_documento(
+    *,
+    org: dict | None,
+    textos: list[str],
+    nome: str,
+    ano_fallback: int | None,
+) -> float | None:
+    """
+    Timestamp do documento para mtime do arquivo (Explorer).
+    Prioridade: data da sessão → data no título/PDF → ano do nome (01/01).
+    """
+    try:
+        mod = _carregar_modulo_local("planilha_normas")
+    except Exception:
+        mod = None
+
+    if org and isinstance(org, dict):
+        meta = org.get("meta") or {}
+        data_sess = meta.get("data") or ""
+        if data_sess and mod:
+            ts = mod.data_para_epoch(str(data_sess).replace("-", "/"))
+            if ts:
+                return ts
+        ano_meta = meta.get("ano")
+        if ano_meta and mod:
+            ts = mod.ano_para_epoch(ano_meta)
+            if ts:
+                return ts
+
+    if mod:
+        data, _, _ = mod.extrair_data(*textos)
+        if data:
+            ts = mod.data_para_epoch(data)
+            if ts:
+                return ts
+
+    ano = extrair_ano(nome, *textos, fallback=ano_fallback)
+    if mod and ano:
+        return mod.ano_para_epoch(ano)
+    return None
+
+
+def _aplicar_mtime_arquivo(caminho: str, ts: float | None) -> None:
+    if not ts or not caminho or not os.path.isfile(caminho):
+        return
+    try:
+        os.utime(caminho, (ts, ts))
+    except OSError:
+        pass
+
+
+def _arquivo_mesmo_conteudo(caminho: str, data: bytes) -> bool:
+    try:
+        if os.path.getsize(caminho) != len(data):
+            return False
+        h_novo = hashlib.sha256(data).digest()
+        with open(caminho, "rb") as f:
+            h_velho = hashlib.sha256(f.read()).digest()
+        return h_novo == h_velho
+    except OSError:
+        return False
+
+
 # =============================================================
 # Download
 # =============================================================
@@ -1286,10 +1350,25 @@ def baixar_e_salvar(
         arquivo = nome_arquivo_final(nome)
         caminho = os.path.join(pasta_destino, arquivo)
 
-        # colisão: mesmo nome, outro conteúdo → sufixo
+        textos_data = [
+            textos_extras[0] if textos_extras else "",
+            textos_extras[1] if len(textos_extras) > 1 else "",
+            (texto_pdf or "")[:5000],
+            url_pdf or "",
+            nome or "",
+        ]
+        ts_doc = _timestamp_documento(
+            org=org,
+            textos=textos_data,
+            nome=nome,
+            ano_fallback=ano_fallback,
+        )
+
+        # colisão: mesmo nome/conteúdo → pula; conteúdo diferente → sufixo
         if os.path.exists(caminho):
-            if os.path.getsize(caminho) == len(data):
+            if _arquivo_mesmo_conteudo(caminho, data):
                 print(f"    [PULADO]  {arquivo} (já existe)")
+                _aplicar_mtime_arquivo(caminho, ts_doc)
                 _tentar_extrair_diarias(
                     data,
                     texto_pdf=texto_pdf,
@@ -1322,10 +1401,28 @@ def baixar_e_salvar(
                     arquivo = alt
                     caminho = alt_path
                     break
+                if _arquivo_mesmo_conteudo(alt_path, data):
+                    print(f"    [PULADO]  {alt} (já existe)")
+                    _aplicar_mtime_arquivo(alt_path, ts_doc)
+                    _registrar_norma_planilha(
+                        status="pulado",
+                        pasta_hint=pasta_hint,
+                        nome=nome,
+                        arquivo=alt,
+                        caminho=alt_path,
+                        url_pdf=url_pdf,
+                        url_fonte=url_fonte or url_ctx,
+                        textos_extras=textos_extras,
+                        texto_pdf=texto_pdf,
+                        ano_fallback=ano_fallback,
+                        observacao="Arquivo já existia",
+                    )
+                    return "pulado"
                 n += 1
 
         with open(caminho, "wb") as f:
             f.write(data)
+        _aplicar_mtime_arquivo(caminho, ts_doc)
         kb = len(data) / 1024
         try:
             print(f"    [OK]      {arquivo} ({round(kb, 1)} KB) <- {nome}")
