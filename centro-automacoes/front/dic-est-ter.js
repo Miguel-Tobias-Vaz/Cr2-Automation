@@ -967,11 +967,15 @@
     { passive: true }
   );
 
-  clearLog();
-  load();
-  loadDefaults().then(() => load()); // defaults preenchidos, local sobrescreve
-  restoreSession().then(() => {
-    ensureEventSource();
-  });
-  setInterval(pingApi, 8000);
+  function boot() {
+    clearLog();
+    load();
+    loadDefaults().then(() => load());
+    restoreSession().then(() => {
+      ensureEventSource();
+    });
+    setInterval(pingApi, 8000);
+  }
+  if (window.OptoAutomacoes) boot();
+  else document.addEventListener("opto-ready", boot);
 })();

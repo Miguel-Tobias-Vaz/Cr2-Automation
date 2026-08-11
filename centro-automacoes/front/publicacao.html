@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home63" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home65" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -70,13 +70,57 @@
             <label class="field"><span class="field-label"><em>Balanço / Rel. Anuais</em></span><input type="url" id="url_portal_balanco" /></label>
           </fieldset>
           <fieldset class="bloco">
-            <legend>Pastas locais (opcional)</legend>
-            <div class="grid-2">
-              <label class="field"><span class="field-label"><em>Pasta RGF</em></span><input type="text" id="pasta_rgf" placeholder="C:\Downloads\Relatório de Gestão Fiscal (RGF)" /></label>
-              <label class="field"><span class="field-label"><em>Pasta RREO</em></span><input type="text" id="pasta_rreo" /></label>
-              <label class="field"><span class="field-label"><em>Pasta Balancete</em></span><input type="text" id="pasta_balancete" /></label>
-              <label class="field"><span class="field-label"><em>Pasta Balanço</em></span><input type="text" id="pasta_balanco" /></label>
+            <legend>Documentos para publicação</legend>
+            <p class="field-hint workspace-hint" id="workspace-hint" hidden></p>
+            <div class="upload-zone" id="upload-publicacao">
+              <input type="file" id="file-publicacao" hidden />
+              <p class="upload-zone-title">Enviar pasta compactada (ZIP)</p>
+              <p class="upload-zone-desc">
+                ZIP com subpastas <code>RGF/</code>, <code>RREO/</code>,
+                <code>Balancete/</code> e <code>Balanco/</code> (PDFs dentro de cada uma).
+              </p>
+              <button type="button" class="btn btn-ghost btn-sm" data-upload-pick>Escolher ZIP</button>
+              <p class="upload-status" id="upload-publicacao-status" hidden></p>
             </div>
+            <div class="acao-row acao-row--inline" style="margin:0.75rem 0">
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-output-hints" hidden>
+                Usar pastas da última extração
+              </button>
+              <a class="btn btn-ghost btn-sm" href="/arquivos.html">Meus arquivos</a>
+            </div>
+            <div class="grid-2">
+              <label class="field field--with-pick">
+                <span class="field-label"><em>Pasta RGF</em></span>
+                <div class="field-pick-row">
+                  <input type="text" id="pasta_rgf" placeholder="Preenchida após upload ou escolha manual" />
+                  <button type="button" class="btn btn-ghost btn-sm" data-folder-pick="pasta_rgf">Escolher…</button>
+                </div>
+              </label>
+              <label class="field field--with-pick">
+                <span class="field-label"><em>Pasta RREO</em></span>
+                <div class="field-pick-row">
+                  <input type="text" id="pasta_rreo" placeholder="Opcional se URL RREO vazia" />
+                  <button type="button" class="btn btn-ghost btn-sm" data-folder-pick="pasta_rreo">Escolher…</button>
+                </div>
+              </label>
+              <label class="field field--with-pick">
+                <span class="field-label"><em>Pasta Balancete</em></span>
+                <div class="field-pick-row">
+                  <input type="text" id="pasta_balancete" placeholder="Opcional" />
+                  <button type="button" class="btn btn-ghost btn-sm" data-folder-pick="pasta_balancete">Escolher…</button>
+                </div>
+              </label>
+              <label class="field field--with-pick">
+                <span class="field-label"><em>Pasta Balanço</em></span>
+                <div class="field-pick-row">
+                  <input type="text" id="pasta_balanco" placeholder="Opcional" />
+                  <button type="button" class="btn btn-ghost btn-sm" data-folder-pick="pasta_balanco">Escolher…</button>
+                </div>
+              </label>
+            </div>
+            <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+              Na VPS: envie o ZIP ou escolha pastas em Meus arquivos. No PC local (<code>OPTO_LOCAL=1</code>): caminhos Windows.
+            </small>
           </fieldset>
           <fieldset class="bloco">
             <legend>Opções</legend>
@@ -105,28 +149,61 @@
       </section>
     </main>
 
-        <script src="/assets/fluid-particles.js?v=home57"></script>
-    <script src="/assets/shared.js?v=home63"></script>
-    <script>
-      CR2Centro.injectNav("publicacao");
-      CR2Centro.pingApi();
-      const fields = ["usuario","senha","url_portal_rgf","url_portal_rreo","url_portal_balancete","url_portal_balanco","pasta_rgf","pasta_rreo","pasta_balancete","pasta_balanco","modo_teste","auto_confirm","headless","ano"];
-      CR2Centro.bindRun("publicacao","form-publicacao",fields,()=>({
-        usuario: document.getElementById("usuario").value.trim(),
-        senha: document.getElementById("senha").value,
-        url_portal_rgf: document.getElementById("url_portal_rgf").value.trim(),
-        url_portal_rreo: document.getElementById("url_portal_rreo").value.trim(),
-        url_portal_balancete: document.getElementById("url_portal_balancete").value.trim(),
-        url_portal_balanco: document.getElementById("url_portal_balanco").value.trim(),
-        pasta_rgf: document.getElementById("pasta_rgf").value.trim(),
-        pasta_rreo: document.getElementById("pasta_rreo").value.trim(),
-        pasta_balancete: document.getElementById("pasta_balancete").value.trim(),
-        pasta_balanco: document.getElementById("pasta_balanco").value.trim(),
-        modo_teste: document.getElementById("modo_teste").checked,
-        auto_confirm: document.getElementById("auto_confirm").checked,
-        headless: document.getElementById("headless").checked,
-        ano: document.getElementById("ano").value.trim(),
-      }), true);
+    <script src="/assets/fluid-particles.js?v=home65"></script>
+    <script type="module" src="/assets/shared.js?v=home65"></script>
+    <script type="module">
+      import { whenReady } from "/assets/modules/core.js?v=home65";
+
+      whenReady(() => {
+        const C = window.OptoAutomacoes;
+        C.injectNav("publicacao");
+        C.pingApi();
+
+        C.bindFileUpload({
+          zoneId: "upload-publicacao",
+          inputId: "file-publicacao",
+          statusId: "upload-publicacao-status",
+          accept: ".zip",
+          extractZip: true,
+        });
+
+        const hintBtn = document.getElementById("btn-output-hints");
+        C.fetchOutputHints().then((hints) => {
+          const keys = Object.keys(hints || {});
+          if (!keys.length || !hintBtn) return;
+          hintBtn.hidden = false;
+          hintBtn.addEventListener("click", () => {
+            for (const [fieldId, path] of Object.entries(hints)) {
+              const node = document.getElementById(fieldId);
+              if (node && path) node.value = path;
+            }
+            C.showNotice("Pastas preenchidas a partir de extrações anteriores.", "ok");
+          });
+        });
+
+        const fields = [
+          "usuario", "senha",
+          "url_portal_rgf", "url_portal_rreo", "url_portal_balancete", "url_portal_balanco",
+          "pasta_rgf", "pasta_rreo", "pasta_balancete", "pasta_balanco",
+          "modo_teste", "auto_confirm", "headless", "ano",
+        ];
+        C.bindRun("publicacao", "form-publicacao", fields, () => ({
+          usuario: document.getElementById("usuario").value.trim(),
+          senha: document.getElementById("senha").value,
+          url_portal_rgf: document.getElementById("url_portal_rgf").value.trim(),
+          url_portal_rreo: document.getElementById("url_portal_rreo").value.trim(),
+          url_portal_balancete: document.getElementById("url_portal_balancete").value.trim(),
+          url_portal_balanco: document.getElementById("url_portal_balanco").value.trim(),
+          pasta_rgf: document.getElementById("pasta_rgf").value.trim(),
+          pasta_rreo: document.getElementById("pasta_rreo").value.trim(),
+          pasta_balancete: document.getElementById("pasta_balancete").value.trim(),
+          pasta_balanco: document.getElementById("pasta_balanco").value.trim(),
+          modo_teste: document.getElementById("modo_teste").checked,
+          auto_confirm: document.getElementById("auto_confirm").checked,
+          headless: document.getElementById("headless").checked,
+          ano: document.getElementById("ano").value.trim(),
+        }), true);
+      });
     </script>
   </body>
 </html>

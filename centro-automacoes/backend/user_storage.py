@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import unicodedata
 import uuid
 import zipfile
 from pathlib import Path
@@ -28,11 +29,28 @@ ALLOWED_SINGLE = frozenset(
 _PASTA_KEYS = (
     "pasta_base",
     "pasta_saida",
+    "pasta_sessoes",
     "pasta_rgf",
     "pasta_rreo",
     "pasta_balancete",
     "pasta_balanco",
 )
+
+_PUBLICACAO_PASTA_KEYS = frozenset(
+    {"pasta_rgf", "pasta_rreo", "pasta_balancete", "pasta_balanco"}
+)
+
+_PUBLICACAO_FOLDER_ALIASES: dict[str, tuple[str, ...]] = {
+    "pasta_rgf": ("rgf", "relatorio de gestao fiscal", "gestao fiscal"),
+    "pasta_rreo": ("rreo", "relatorio resumido", "relatorio rreo"),
+    "pasta_balancete": ("balancete", "balancete financeiro"),
+    "pasta_balanco": (
+        "balanco",
+        "balanco e relatorios",
+        "relatorios anuais",
+        "balanco e relatorio",
+    ),
+}
 
 _WIN_DEFAULTS = (
     r"c:\downloads",
@@ -148,16 +166,171 @@ def apply_user_defaults(
         return cfg
     default_out = str(user_output_dir(owner, service_id))
     for key in _PASTA_KEYS:
+        if key in _PUBLICACAO_PASTA_KEYS:
+            val = cfg.get(key)
+            if _is_blank_or_win_default(val) or not path_belongs_to_user(val, owner):
+                cfg[key] = ""
+            continue
         if _should_rewrite_pasta(cfg.get(key), owner, service_id):
             cfg[key] = default_out
     cfg["_workspace"] = workspace_info(owner)
     return cfg
 
 
+def _fold_ascii(value: str) -> str:
+    text = unicodedata.normalize("NFKD", value)
+    return "".join(c for c in text if not unicodedata.combining(c)).lower()
+
+
+def _match_publicacao_key(folder_name: str) -> str | None:
+    folded = _fold_ascii(folder_name)
+    order = (
+        "pasta_rgf",
+        "pasta_rreo",
+        "pasta_balancete",
+        "pasta_balanco",
+    )
+    for key in order:
+        aliases = _PUBLICACAO_FOLDER_ALIASES[key]
+        if not any(alias in folded for alias in aliases):
+            continue
+        if key == "pasta_balanco" and "balancete" in folded:
+            continue
+        return key
+    return None
+
+
+def detect_publicacao_folders(base: Path) -> dict[str, str]:
+    """Mapeia subpastas conhecidas (RGF, RREO, etc.) para paths absolutos."""
+    if not base.is_dir():
+        return {}
+    found: dict[str, str] = {}
+    scan_roots = [base]
+    for child in base.iterdir():
+        if child.is_dir():
+            scan_roots.append(child)
+    for root in scan_roots:
+        try:
+            entries = list(root.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if not entry.is_dir():
+                continue
+            key = _match_publicacao_key(entry.name)
+            if key and key not in found:
+                found[key] = str(entry.resolve())
+    return found
+
+
+def output_publicacao_hints(owner: str | None) -> dict[str, str]:
+    """Sugere pastas de publicação a partir de extrações anteriores em output/."""
+    hints: dict[str, str] = {}
+    output = user_output_dir(owner, None)
+    roots = [output]
+    try:
+        roots.extend(p for p in output.iterdir() if p.is_dir())
+    except OSError:
+        pass
+    for root in roots:
+        for key, path in detect_publicacao_folders(root).items():
+            hints.setdefault(key, path)
+    return hints
+
+
+def resolve_user_path(owner: str | None, subpath: str = "") -> Path:
+    """Resolve subpath relativo ao workspace do usuário (seguro)."""
+    root = user_root(owner).resolve()
+    rel = (subpath or "").strip().replace("\\", "/").lstrip("/")
+    if rel in ("", "."):
+        target = root
+    else:
+        parts = [p for p in rel.split("/") if p and p not in (".", "..")]
+        target = root.joinpath(*parts) if parts else root
+    resolved = target.resolve()
+    if resolved != root and not str(resolved).startswith(str(root) + os.sep):
+        raise ValueError("Caminho fora do workspace.")
+    return resolved
+
+
+def list_workspace_files(
+    owner: str | None,
+    subpath: str = "",
+) -> dict[str, Any]:
+    """Lista diretório dentro do workspace do usuário."""
+    root = user_root(owner).resolve()
+    target = resolve_user_path(owner, subpath)
+    if not target.is_dir():
+        raise ValueError("Pasta não encontrada.")
+    rel = target.relative_to(root).as_posix()
+    if rel == ".":
+        rel = ""
+    entries: list[dict[str, Any]] = []
+    for item in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+        try:
+            stat = item.stat()
+        except OSError:
+            continue
+        child_rel = item.relative_to(root).as_posix()
+        entries.append(
+            {
+                "name": item.name,
+                "path": child_rel,
+                "abs_path": str(item.resolve()),
+                "kind": "dir" if item.is_dir() else "file",
+                "size": stat.st_size if item.is_file() else None,
+                "modified": stat.st_mtime,
+            }
+        )
+    return {
+        "path": rel,
+        "abs_path": str(target.resolve()),
+        "parent": str(target.parent.relative_to(root).as_posix())
+        if target != root
+        else "",
+        "entries": entries,
+    }
+
+
+def mkdir_workspace(owner: str | None, subpath: str) -> dict[str, str]:
+    target = resolve_user_path(owner, subpath)
+    target.mkdir(parents=True, exist_ok=True)
+    root = user_root(owner).resolve()
+    rel = target.relative_to(root).as_posix()
+    return {"path": rel, "abs_path": str(target.resolve())}
+
+
+def delete_workspace_path(owner: str | None, subpath: str) -> None:
+    root = user_root(owner).resolve()
+    target = resolve_user_path(owner, subpath)
+    if target == root:
+        raise ValueError("Não é permitido apagar a raiz do workspace.")
+    rel = target.relative_to(root).as_posix()
+    if rel == "jobs" or rel.startswith("jobs/"):
+        raise ValueError("Não é permitido apagar logs de processos (pasta jobs).")
+    if not target.exists():
+        raise ValueError("Arquivo ou pasta não encontrado.")
+    if target.is_dir():
+        shutil.rmtree(target)
+    else:
+        target.unlink()
+
+
 def _safe_name(name: str) -> str:
     base = Path(name).name
     base = re.sub(r"[^\w.\- ()]", "_", base)
     return base[:180] or "arquivo"
+
+
+def _safe_zip_relative(filename: str) -> Path:
+    parts: list[str] = []
+    for part in Path(filename.replace("\\", "/")).parts:
+        if part in ("", ".", ".."):
+            continue
+        parts.append(_safe_name(part))
+    if not parts:
+        raise ValueError("Entrada inválida no ZIP (path traversal).")
+    return Path(*parts)
 
 
 def _zip_safe(target: Path, root: Path) -> None:
@@ -217,7 +390,7 @@ def save_upload(
                 if total > MAX_ZIP_UNCOMPRESSED:
                     shutil.rmtree(dest_dir, ignore_errors=True)
                     raise ValueError("ZIP descompactado excede o limite permitido.")
-                member = _safe_name(info.filename)
+                member = _safe_zip_relative(info.filename)
                 out_path = extract_dir / member
                 _zip_safe(out_path, extract_dir)
                 out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -227,5 +400,8 @@ def save_upload(
         result["extracted_files"] = count
         # pasta_base típica = conteúdo extraído
         result["suggested_pasta_base"] = str(extract_dir.resolve())
+        pub = detect_publicacao_folders(extract_dir)
+        if pub:
+            result["suggested_publicacao"] = pub
 
     return result

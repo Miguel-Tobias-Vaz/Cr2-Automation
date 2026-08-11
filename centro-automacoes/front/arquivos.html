@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meus arquivos — Opto Automações</title>
+    <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css?v=home65" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="top">
+      <a class="brand-mark" href="/">
+        <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
+        <span>Opto Automações</span>
+      </a>
+      <nav class="nav" id="site-nav"></nav>
+      <span class="api-pill" id="api-pill">Servidor …</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero page-hero page-hero--compact">
+        <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
+        <div class="hero-main">
+          <header class="hero-copy">
+            <h1>Meus arquivos</h1>
+            <p class="lede">
+              Navegue, envie e organize arquivos no seu espaço no servidor.
+              Cada usuário vê apenas a própria pasta (<code>uploads</code>, <code>output</code>, <code>jobs</code>).
+            </p>
+          </header>
+        </div>
+      </section>
+
+      <section class="painel">
+        <header class="section-head">
+          <h2>Explorador</h2>
+          <p id="pick-banner" class="field-hint" hidden></p>
+        </header>
+        <div id="files-browser"></div>
+        <p class="field-hint" style="margin-top:1rem">
+          Dica: compacte pastas de publicação em ZIP com subpastas
+          <code>RGF/</code>, <code>RREO/</code>, <code>Balancete/</code> e <code>Balanco/</code>
+          e envie na tela de Publicação CR2.
+        </p>
+      </section>
+    </main>
+
+    <script src="/assets/fluid-particles.js?v=home65"></script>
+    <script type="module" src="/assets/shared.js?v=home65"></script>
+    <script type="module">
+      import { whenReady } from "/assets/modules/core.js?v=home65";
+      import { mountFileBrowser } from "/assets/modules/files.js?v=home65";
+
+      whenReady(() => {
+        const C = window.OptoAutomacoes;
+        C.injectNav("arquivos");
+        C.pingApi();
+
+        const params = new URLSearchParams(window.location.search);
+        const pickField = params.get("pick") || "";
+        const ret = params.get("return") || "/";
+        if (pickField) {
+          const banner = document.getElementById("pick-banner");
+          if (banner) {
+            banner.hidden = false;
+            banner.innerHTML = `Escolhendo pasta para o campo <code>${pickField}</code>.
+              <a href="${ret}">Voltar sem escolher</a>`;
+          }
+        }
+
+        mountFileBrowser("files-browser", {
+          initialPath: "",
+          pickField,
+        });
+      });
+    </script>
+  </body>
+</html>

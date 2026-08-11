@@ -1,198 +1,23 @@
-﻿(() => {
-  const API = "";
-  const AUTH_TOKEN_KEY = "opto-auth-token";
-  const AUTH_REFRESH_KEY = "opto-auth-refresh";
-
-  function _storageGet(key) {
-    try {
-      const v = localStorage.getItem(key);
-      if (v) return v;
-    } catch (_) {}
-    try {
-      const v = sessionStorage.getItem(key);
-      if (v) {
-        try {
-          localStorage.setItem(key, v);
-          sessionStorage.removeItem(key);
-        } catch (_) {}
-        return v;
-      }
-    } catch (_) {}
-    return "";
-  }
-
-  function _storageSet(key, value) {
-    try {
-      if (value) localStorage.setItem(key, value);
-      else localStorage.removeItem(key);
-    } catch (_) {}
-    try {
-      sessionStorage.removeItem(key);
-    } catch (_) {}
-  }
-
-  function authHeaders(extra) {
-    const h = { ...(extra || {}) };
-    try {
-      const t = authToken();
-      if (t) h.Authorization = "Bearer " + t;
-    } catch (_) {}
-    return h;
-  }
-
-  function authToken() {
-    return _storageGet(AUTH_TOKEN_KEY);
-  }
-
-  function streamUrl(path) {
-    const t = authToken();
-    if (!t) return `${API}${path}`;
-    const sep = path.includes("?") ? "&" : "?";
-    return `${API}${path}${sep}access_token=${encodeURIComponent(t)}`;
-  }
-
-  let _authRefreshPromise = null;
-
-  async function refreshSupabaseSessionIfNeeded() {
-    if (_authRefreshPromise) return _authRefreshPromise;
-    _authRefreshPromise = (async () => {
-      try {
-        const cfg = await fetch(`${API}/api/auth/config`).then((r) => r.json());
-        if (cfg.mode !== "supabase") return authToken();
-        const url = window.SUPABASE_URL || cfg.supabase_url;
-        const key = window.SUPABASE_ANON_KEY || cfg.supabase_anon_key;
-        if (!url || !key) return authToken();
-        if (!window.supabase) {
-          await new Promise((resolve, reject) => {
-            const s = document.createElement("script");
-            s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
-            s.onload = resolve;
-            s.onerror = reject;
-            document.head.appendChild(s);
-          });
-        }
-        const client = window.supabase.createClient(url, key, {
-          auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: false,
-            storage: window.localStorage,
-          },
-        });
-        const { data, error } = await client.auth.getSession();
-        if (error || !data || !data.session) {
-          // Tenta refresh explícito se houver refresh_token salvo
-          const refresh = _storageGet(AUTH_REFRESH_KEY);
-          if (refresh) {
-            const { data: refreshed, error: rErr } = await client.auth.refreshSession({
-              refresh_token: refresh,
-            });
-            if (!rErr && refreshed && refreshed.session) {
-              setAuthToken(refreshed.session.access_token);
-              if (refreshed.session.refresh_token) {
-                _storageSet(AUTH_REFRESH_KEY, refreshed.session.refresh_token);
-              }
-              return refreshed.session.access_token;
-            }
-          }
-          return authToken();
-        }
-        const access = data.session.access_token;
-        if (access) setAuthToken(access);
-        if (data.session.refresh_token) {
-          _storageSet(AUTH_REFRESH_KEY, data.session.refresh_token);
-        }
-        return access || authToken();
-      } catch (_) {
-        return authToken();
-      } finally {
-        _authRefreshPromise = null;
-      }
-    })();
-    return _authRefreshPromise;
-  }
-
-  function authFetch(url, opts) {
-    const o = { ...(opts || {}) };
-    o.headers = authHeaders(o.headers);
-    return fetch(url, o).then(async (r) => {
-      if (r.status !== 401) return r;
-      // Tenta renovar JWT Supabase uma vez
-      const before = authToken();
-      await refreshSupabaseSessionIfNeeded();
-      const after = authToken();
-      if (!after || after === before) return r;
-      const retry = { ...(opts || {}) };
-      retry.headers = authHeaders(retry.headers);
-      return fetch(url, retry);
-    });
-  }
-
-  async function guardAuth() {
-    if (location.pathname.includes("login.html")) return;
-    try {
-      await refreshSupabaseSessionIfNeeded();
-      const r = await authFetch(`${API}/api/auth/me`);
-      if (!r.ok) return;
-      const d = await r.json();
-      if (d.auth_required && !d.user) {
-        const next = encodeURIComponent(location.pathname + location.search);
-        location.href = `/login.html?next=${next}`;
-      }
-    } catch (_) {}
-  }
-
-  function setAuthToken(token) {
-    _storageSet(AUTH_TOKEN_KEY, token || "");
-    if (!token) _storageSet(AUTH_REFRESH_KEY, "");
-  }
-
-  async function supabaseSignOutIfNeeded() {
-    try {
-      const cfg = await fetch(`${API}/api/auth/config`).then((r) => r.json());
-      if (cfg.mode !== "supabase") return;
-      const url = window.SUPABASE_URL || cfg.supabase_url;
-      const key = window.SUPABASE_ANON_KEY || cfg.supabase_anon_key;
-      if (!url || !key) return;
-      if (!window.supabase) {
-        await new Promise((resolve, reject) => {
-          const s = document.createElement("script");
-          s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
-          s.onload = resolve;
-          s.onerror = reject;
-          document.head.appendChild(s);
-        });
-      }
-      await window.supabase
-        .createClient(url, key, {
-          auth: { persistSession: true, storage: window.localStorage },
-        })
-        .auth.signOut();
-    } catch (_) {}
-  }
-
-  async function logout() {
-    try {
-      await authFetch(`${API}/api/auth/logout`, { method: "POST" });
-    } catch (_) {}
-    setAuthToken(null);
-    await supabaseSignOutIfNeeded();
-    location.href = "/login.html";
-  }
-
-  function ensureLogoutButton() {
-    if (el("btn-logout")) return;
-    const pill = el("api-pill");
-    if (!pill || !pill.parentNode) return;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.id = "btn-logout";
-    btn.className = "btn btn-ghost btn-sm nav-logout";
-    btn.textContent = "Sair";
-    btn.hidden = true;
-    btn.addEventListener("click", () => logout());
-    pill.insertAdjacentElement("afterend", btn);
-  }
+import { API, el, markReady } from "./modules/core.js";
+import {
+  authFetch,
+  authHeaders,
+  authToken,
+  streamUrl,
+  setAuthToken,
+  logout,
+  guardAuth,
+  ensureLogoutButton,
+} from "./modules/auth.js";
+import { uploadFile, bindFileUpload, setUploadNotifier } from "./modules/upload.js";
+import {
+  applyPendingFolderPick,
+  bindFolderPickButtons,
+  fetchOutputHints,
+  mountFileBrowser,
+  pickFolderUrl,
+} from "./modules/files.js";
+import { injectFooter } from "./modules/nav.js";
 
   /** Ferramentas por id (páginas de automação). */
   const TOOLS = {
@@ -354,10 +179,9 @@
   const NAV = [
     { href: "/", label: "Início", key: "hub" },
     ...HUBS.map((h) => ({ href: h.href, label: h.label, key: h.key })),
+    { href: "/arquivos.html", label: "Meus arquivos", key: "arquivos" },
     { href: "/admin.html", label: "Admin", key: "admin" },
   ];
-
-  const el = (id) => document.getElementById(id);
 
   function iconSvg(name) {
     return ICONS[name] || ICONS.file;
@@ -369,6 +193,7 @@
 
   function hubKeyFor(toolOrHub) {
     if (!toolOrHub || toolOrHub === "hub") return "hub";
+    if (toolOrHub === "arquivos") return "arquivos";
     if (findHub(toolOrHub)) return toolOrHub;
     const hub = HUBS.find((h) => h.tools.includes(toolOrHub));
     return hub ? hub.key : "hub";
@@ -412,42 +237,6 @@
       })
       .join("");
     bar.innerHTML = `<div class="hub-subnav-inner">${back}<div class="hub-subnav-links">${links}</div></div>`;
-  }
-
-  function injectFooter() {
-    const body = document.body;
-    if (!body || body.classList.contains("login-page") || body.classList.contains("admin-page")) {
-      return;
-    }
-    if (el("site-minimal-footer")) return;
-
-    const year = new Date().getFullYear();
-    const footer = document.createElement("footer");
-    footer.id = "site-minimal-footer";
-    footer.className = "minimal-footer minimal-footer--compact";
-    footer.innerHTML = `
-      <div class="minimal-footer__shell">
-        <div class="minimal-footer__grid minimal-footer__grid--compact">
-          <div class="minimal-footer__brand">
-            <a class="minimal-footer__logo" href="/" aria-label="Opto Automações">
-              <img src="/assets/brand-icon.png" alt="" width="36" height="36" />
-            </a>
-            <p class="minimal-footer__tagline">
-              Automações para administração pública — baixar, publicar e integrar sistemas.
-            </p>
-          </div>
-        </div>
-        <p class="minimal-footer__copy">
-          © ${year} — Direitos reservados a
-          <a href="https://github.com/Miguel-Tobias-Vaz" target="_blank" rel="noopener noreferrer">Miguel Vaz</a>
-          e
-          <a href="https://github.com/CLCarmo" target="_blank" rel="noopener noreferrer">Caio Lucas</a>.
-        </p>
-      </div>`;
-
-    const main = document.querySelector("main");
-    if (main) main.insertAdjacentElement("afterend", footer);
-    else body.appendChild(footer);
   }
 
   function injectNav(activeKey) {
@@ -1610,6 +1399,7 @@
       setTimeout(() => note.remove(), 380);
     }, 6500);
   }
+  setUploadNotifier(showNotice);
 
   const SERVICE_LABELS = {
     documentos: "Baixar Documentos",
@@ -1677,10 +1467,14 @@
   const _PATH_FIELD_IDS = new Set([
     "pasta_base",
     "pasta_saida",
+  ]);
+
+  const _SKIP_WORKSPACE_FILL = new Set([
     "pasta_rgf",
     "pasta_rreo",
     "pasta_balancete",
     "pasta_balanco",
+    "pasta_sessoes",
   ]);
 
   function _pathFieldWrap(node) {
@@ -1717,10 +1511,6 @@
       const ids = fieldIds || [
         "pasta_base",
         "pasta_saida",
-        "pasta_rgf",
-        "pasta_rreo",
-        "pasta_balancete",
-        "pasta_balanco",
       ];
 
       if (ws.local_mode) {
@@ -1736,7 +1526,7 @@
 
       ids.forEach((id) => {
         const node = el(id);
-        if (!node) return;
+        if (!node || _SKIP_WORKSPACE_FILL.has(id)) return;
         node.value = ws.output_dir;
         if (!node.placeholder) node.placeholder = ws.output_dir;
         if (_PATH_FIELD_IDS.has(id)) _setPathFieldVisible(node, false);
@@ -1752,85 +1542,6 @@
     } catch (_) {
       return null;
     }
-  }
-
-  async function uploadFile(file, { extract = false } = {}) {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("extract", extract ? "true" : "false");
-    const r = await authFetch(`${API}/api/uploads`, { method: "POST", body: fd });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.detail || "Falha no upload");
-    return data;
-  }
-
-  /**
-   * Zona de arrastar/clicar para enviar planilha ou ZIP.
-   * opts: { zoneId, inputId, targetFieldId, accept, extractZip, onDone, statusId }
-   */
-  function bindFileUpload(opts) {
-    const zone = el(opts.zoneId);
-    const input = el(opts.inputId);
-    if (!zone || !input) return;
-    const statusEl = opts.statusId ? el(opts.statusId) : null;
-    const pick = zone.querySelector("[data-upload-pick]");
-    const setStatus = (msg, ok) => {
-      if (!statusEl) return;
-      statusEl.hidden = !msg;
-      statusEl.textContent = msg || "";
-      statusEl.classList.toggle("upload-status--ok", !!ok);
-      statusEl.classList.toggle("upload-status--err", ok === false);
-    };
-
-    const handle = async (file) => {
-      if (!file) return;
-      setStatus("Enviando…", null);
-      zone.classList.add("is-uploading");
-      try {
-        const ext = (file.name.split(".").pop() || "").toLowerCase();
-        const doExtract = opts.extractZip && ext === "zip";
-        const meta = await uploadFile(file, { extract: doExtract });
-        const target = opts.targetFieldId ? el(opts.targetFieldId) : null;
-        if (target) {
-          if (doExtract && meta.suggested_pasta_base) {
-            target.value = meta.suggested_pasta_base;
-          } else if (meta.path) {
-            target.value = meta.path;
-          }
-        }
-        if (typeof opts.onDone === "function") opts.onDone(meta);
-        const msg = doExtract
-          ? `ZIP extraído (${meta.extracted_files || "?"} arquivos)`
-          : `Arquivo recebido: ${meta.filename}`;
-        setStatus(msg, true);
-        showNotice(msg, "ok");
-      } catch (e) {
-        setStatus(String(e.message || e), false);
-        showNotice(String(e.message || e), "error");
-      } finally {
-        zone.classList.remove("is-uploading");
-        input.value = "";
-      }
-    };
-
-    if (opts.accept) input.accept = opts.accept;
-    if (pick) pick.addEventListener("click", () => input.click());
-    zone.addEventListener("click", (ev) => {
-      if (ev.target.closest("[data-upload-pick]") || ev.target === input) return;
-      if (!ev.target.closest("button") && !ev.target.closest("a")) input.click();
-    });
-    input.addEventListener("change", () => handle(input.files && input.files[0]));
-    zone.addEventListener("dragover", (ev) => {
-      ev.preventDefault();
-      zone.classList.add("is-dragover");
-    });
-    zone.addEventListener("dragleave", () => zone.classList.remove("is-dragover"));
-    zone.addEventListener("drop", (ev) => {
-      ev.preventDefault();
-      zone.classList.remove("is-dragover");
-      const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-      handle(f);
-    });
   }
 
   async function downloadJobArtifact(jobId, opts) {
@@ -2623,6 +2334,11 @@
     uploadFile,
     bindFileUpload,
     downloadJobArtifact,
+    applyPendingFolderPick,
+    bindFolderPickButtons,
+    fetchOutputHints,
+    mountFileBrowser,
+    pickFolderUrl,
     HUBS,
     TOOLS,
   };
@@ -2632,6 +2348,8 @@
   ensureLogoutButton();
   applyNavAuth().catch(() => {});
   injectFooter();
+  applyPendingFolderPick();
+  bindFolderPickButtons();
   loadWorkspace()
     .catch(() => null)
     .then(() => pollDownloadsReady().catch(() => {}));
@@ -2645,4 +2363,4 @@
   } else if (window.OptoShaderBackground.init) {
     window.OptoShaderBackground.init();
   }
-})();
+  markReady();

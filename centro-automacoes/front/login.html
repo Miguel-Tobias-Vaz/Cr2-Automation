@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Login — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
-    <link rel="stylesheet" href="/assets/styles.css?v=home63" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home64" />
   </head>
   <body class="login-page">
     <div class="noise" aria-hidden="true"></div>
@@ -31,9 +31,10 @@
     </main>
     <script src="/assets/supabase-config.js?v=1" onerror="void 0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="/assets/shared.js?v=home63"></script>
+    <script type="module" src="/assets/shared.js?v=home64"></script>
     <script>
-      (function () {
+document.addEventListener("opto-ready", () => {
+(function () {
         const params = new URLSearchParams(location.search);
         const next = params.get("next") || "/";
         const form = document.getElementById("login-form");
@@ -194,6 +195,6 @@
           })
           .catch(() => {});
       })();
-    </script>
-  </body>
+});
+</script></body>
 </html>

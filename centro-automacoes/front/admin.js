@@ -755,8 +755,12 @@
     });
   }
 
-  bindUi();
-  refresh();
-  pollTimer = setInterval(refresh, 8000);
-  window.addEventListener("beforeunload", () => clearInterval(pollTimer));
+  function boot() {
+    bindUi();
+    refresh();
+    pollTimer = setInterval(refresh, 8000);
+    window.addEventListener("beforeunload", () => clearInterval(pollTimer));
+  }
+  if (window.OptoAutomacoes) boot();
+  else document.addEventListener("opto-ready", boot);
 })();

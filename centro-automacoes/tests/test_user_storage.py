@@ -12,9 +12,16 @@ from backend.job_output import build_download_zip
 from backend.jobs import Job, JobStatus
 from backend.user_storage import (
     apply_user_defaults,
+    delete_workspace_path,
+    detect_publicacao_folders,
+    list_workspace_files,
+    mkdir_workspace,
+    output_publicacao_hints,
+    resolve_user_path,
     save_upload,
     workspace_info,
 )
+from backend.user_storage import _match_publicacao_key
 
 
 @pytest.fixture
@@ -34,6 +41,18 @@ def test_apply_user_defaults_substitui_c_downloads(users_root):
     cfg = apply_user_defaults({"pasta_base": r"C:\Downloads"}, "joao")
     out = Path(cfg["pasta_base"])
     assert out.is_dir()
+    assert "joao" in str(out)
+
+
+def test_apply_user_defaults_pasta_sessoes(users_root):
+    cfg = apply_user_defaults(
+        {"pasta_sessoes": r"C:\Users\x\sessoes"},
+        "joao",
+        service_id="sessao",
+    )
+    out = Path(cfg["pasta_sessoes"])
+    assert out.is_dir()
+    assert out.name == "sessao"
     assert "joao" in str(out)
 
 
@@ -131,6 +150,86 @@ def test_save_upload_zip_extract(users_root):
     assert meta.get("extracted_dir")
     assert Path(meta["suggested_pasta_base"]).is_dir()
     assert meta["extracted_files"] == 2
+
+
+def test_save_upload_zip_publicacao_folders(users_root):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("RGF/2023/doc.pdf", b"%PDF")
+        zf.writestr("RREO/2023/doc.pdf", b"%PDF")
+        zf.writestr("Balancete/x.pdf", b"%PDF")
+    meta = save_upload("ana", "pub.zip", buf.getvalue(), extract=True)
+    pub = meta.get("suggested_publicacao") or {}
+    assert "pasta_rgf" in pub
+    assert "pasta_rreo" in pub
+    assert "pasta_balancete" in pub
+    assert Path(pub["pasta_rgf"]).is_dir()
+
+
+def test_detect_publicacao_folders(users_root, tmp_path):
+    base = tmp_path / "extracted"
+    (base / "Relatório de Gestão Fiscal (RGF)" / "2023").mkdir(parents=True)
+    (base / "Relatório RREO").mkdir(parents=True)
+    found = detect_publicacao_folders(base)
+    assert "pasta_rgf" in found
+    assert "pasta_rreo" in found
+
+
+def test_apply_user_defaults_publicacao_nao_preenche_tudo(users_root):
+    cfg = apply_user_defaults(
+        {"pasta_rgf": r"C:\Downloads", "pasta_rreo": ""},
+        "joao",
+        service_id="publicacao",
+    )
+    assert cfg["pasta_rgf"] == ""
+    assert cfg["pasta_rreo"] == ""
+
+
+def test_list_workspace_files(users_root):
+    info = workspace_info("ana")
+    uploads = Path(info["uploads_dir"])
+    (uploads / "teste.pdf").write_bytes(b"x")
+    data = list_workspace_files("ana", "uploads")
+    names = [e["name"] for e in data["entries"]]
+    assert "teste.pdf" in names
+
+
+def test_resolve_user_path_bloqueia_traversal(users_root):
+    root = resolve_user_path("ana", "")
+    escaped = resolve_user_path("ana", "../../../windows/system32")
+    assert str(escaped).startswith(str(root))
+    assert ".." not in escaped.parts
+
+
+def test_output_publicacao_hints(users_root):
+    out = workspace_info("ana")["output_dir"]
+    rgf = Path(out) / "documentos" / "Relatório RREO" / "2023"
+    rgf.mkdir(parents=True)
+    hints = output_publicacao_hints("ana")
+    assert hints.get("pasta_rreo")
+
+
+def test_mkdir_and_delete_workspace(users_root):
+    mkdir_workspace("ana", "uploads/nova")
+    data = list_workspace_files("ana", "uploads")
+    assert any(e["name"] == "nova" for e in data["entries"])
+    delete_workspace_path("ana", "uploads/nova")
+    data2 = list_workspace_files("ana", "uploads")
+    assert not any(e["name"] == "nova" for e in data2["entries"])
+
+
+def test_match_publicacao_balancete_nao_vira_balanco(users_root):
+    assert _match_publicacao_key("Balancete Financeiro") == "pasta_balancete"
+    assert _match_publicacao_key("Balanço e Relatórios Anuais") == "pasta_balanco"
+
+
+def test_delete_workspace_bloqueia_jobs(users_root):
+    info = workspace_info("ana")
+    jobs = Path(info["jobs_dir"])
+    marker = jobs / "keep.txt"
+    marker.write_text("x", encoding="utf-8")
+    with pytest.raises(ValueError, match="jobs"):
+        delete_workspace_path("ana", "jobs/keep.txt")
 
 
 def test_build_download_zip_pasta(users_root, tmp_path):

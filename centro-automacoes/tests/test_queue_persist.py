@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 
 import pytest
 
@@ -68,11 +69,41 @@ def test_running_becomes_pending_on_restore(mgr):
 
 
 def test_runtime_config_roundtrip(tmp_path, monkeypatch):
-    monkeypatch.setattr(queue_store, "DATA", tmp_path / "jobs")
+    from backend import job_paths
+
+    data = tmp_path / "jobs"
+    monkeypatch.setattr(queue_store, "DATA", data)
+    monkeypatch.setattr(job_paths, "LEGACY_JOBS_ROOT", data)
     jid = "abc123"
-    (tmp_path / "jobs" / jid).mkdir(parents=True)
+    (data / jid).mkdir(parents=True)
     cfg = {"usuario": "u", "senha": "secret"}
-    path = tmp_path / "jobs" / jid / "runtime.json"
+    path = data / jid / "runtime.json"
     path.write_text(json.dumps(cfg), encoding="utf-8")
     loaded = queue_store.load_runtime_config(jid)
     assert loaded == cfg
+
+
+def test_save_and_restore_completed(mgr, tmp_path, monkeypatch):
+    from backend.jobs import Job, JobStatus
+
+    data = tmp_path / "jobs"
+    monkeypatch.setattr(queue_store, "DATA", data)
+    monkeypatch.setattr(queue_store, "COMPLETED_FILE", data / "completed_recent.json")
+    monkeypatch.setattr(queue_store, "COMPLETED_TTL_S", 7200)
+
+    j = Job(id="done1", service_id="documentos", config={}, owner="maria")
+    j.status = JobStatus.COMPLETED
+    j.finished_at = time.time()
+    j.result["zip"] = str(tmp_path / "out.zip")
+    Path(j.result["zip"]).write_bytes(b"pk")
+    mgr._jobs[j.id] = j
+    queue_store.save_completed(mgr)
+
+    mgr2 = JobManager()
+    mgr2._persist_enabled = False
+    n = queue_store.restore_completed(mgr2)
+    assert n == 1
+    restored = mgr2.get("done1")
+    assert restored is not None
+    assert restored.status == JobStatus.COMPLETED
+    assert restored.result.get("zip")

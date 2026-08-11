@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home63" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home64" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -140,9 +140,10 @@
     </main>
 
     <script src="/assets/fluid-particles.js?v=home57"></script>
-    <script src="/assets/shared.js?v=home63"></script>
+    <script type="module" src="/assets/shared.js?v=home64"></script>
     <script>
-      CR2Centro.injectNav("contratos");
+document.addEventListener("opto-ready", () => {
+CR2Centro.injectNav("contratos");
       CR2Centro.pingApi();
 
       const fields = [
@@ -171,6 +172,6 @@
           sem_retry_erros: document.getElementById("sem_retry_erros").checked,
         };
       }, false);
-    </script>
-  </body>
+});
+</script></body>
 </html>

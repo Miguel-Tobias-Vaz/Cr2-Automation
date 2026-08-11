@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home63" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home64" />
     <style>
       .entidade-grid {
         display: grid;
@@ -234,9 +234,10 @@
     </main>
 
     <script src="/assets/fluid-particles.js?v=home57"></script>
-    <script src="/assets/shared.js?v=home63"></script>
+    <script type="module" src="/assets/shared.js?v=home64"></script>
     <script>
-      CR2Centro.injectNav("normas");
+document.addEventListener("opto-ready", () => {
+CR2Centro.injectNav("normas");
       CR2Centro.pingApi();
 
       const STORAGE_KEY = "cr2-centro-normas";
@@ -409,6 +410,6 @@
         modelo_ia: document.getElementById("modelo_ia").value.trim() || "llama3.2:3b",
         limite_posts: Number(document.getElementById("limite_posts").value || 0),
       }), false);
-    </script>
-  </body>
+});
+</script></body>
 </html>

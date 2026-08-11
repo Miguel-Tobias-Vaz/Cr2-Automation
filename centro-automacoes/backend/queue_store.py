@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 import time
 from pathlib import Path
@@ -14,7 +15,10 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "jobs"
 QUEUE_FILE = DATA / "queue_state.json"
+COMPLETED_FILE = DATA / "completed_recent.json"
 VERSION = 1
+COMPLETED_TTL_S = max(3600, int(os.getenv("OPTO_COMPLETED_TTL_S", "7200")))
+COMPLETED_MAX_ITEMS = max(10, int(os.getenv("OPTO_COMPLETED_MAX", "40")))
 
 
 def _ensure_data() -> None:
@@ -54,6 +58,97 @@ def save(manager: JobManager) -> None:
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
     tmp.replace(QUEUE_FILE)
+
+
+def _completed_entry(job: Job) -> dict[str, Any]:
+    return {
+        "id": job.id,
+        "service_id": job.service_id,
+        "owner": job.owner,
+        "status": job.status.value,
+        "finished_at": job.finished_at,
+        "created_at": job.created_at,
+        "zip": job.result.get("zip") if job.result else None,
+        "has_download": bool(job.result.get("zip")) if job.result else False,
+    }
+
+
+def save_completed(manager: JobManager) -> None:
+    """Metadados de jobs concluídos recentes (banner download após restart)."""
+    from backend.jobs import JobStatus
+
+    _ensure_data()
+    now = time.time()
+    with manager._lock:
+        recent = [
+            _completed_entry(j)
+            for j in manager._jobs.values()
+            if j.status == JobStatus.COMPLETED
+            and j.finished_at
+            and (now - float(j.finished_at)) <= COMPLETED_TTL_S
+        ]
+    recent.sort(key=lambda x: float(x.get("finished_at") or 0), reverse=True)
+    payload = {
+        "version": VERSION,
+        "saved_at": now,
+        "ttl_s": COMPLETED_TTL_S,
+        "jobs": recent[:COMPLETED_MAX_ITEMS],
+    }
+    tmp = COMPLETED_FILE.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, ensure_ascii=False, indent=2)
+    tmp.replace(COMPLETED_FILE)
+
+
+def restore_completed(manager: JobManager) -> int:
+    """Reidrata jobs COMPLETED recentes na memória."""
+    from backend.jobs import Job, JobStatus
+
+    if not COMPLETED_FILE.is_file():
+        return 0
+    try:
+        with open(COMPLETED_FILE, encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return 0
+
+    entries = payload.get("jobs") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        return 0
+
+    now = time.time()
+    restored = 0
+    with manager._lock:
+        for raw in entries:
+            if not isinstance(raw, dict):
+                continue
+            job_id = str(raw.get("id") or "").strip()
+            service_id = str(raw.get("service_id") or "").strip()
+            if not job_id or not service_id:
+                continue
+            if job_id in manager._jobs:
+                continue
+            finished = float(raw.get("finished_at") or 0)
+            if finished and (now - finished) > COMPLETED_TTL_S:
+                continue
+            zip_path = raw.get("zip")
+            if zip_path and not Path(str(zip_path)).is_file():
+                continue
+            job = Job(
+                id=job_id,
+                service_id=service_id,
+                config={},
+                status=JobStatus.COMPLETED,
+                created_at=float(raw.get("created_at") or finished or now),
+                finished_at=finished or now,
+                owner=raw.get("owner"),
+            )
+            if zip_path:
+                job.result["zip"] = str(zip_path)
+                job.result["has_download"] = True
+            manager._jobs[job_id] = job
+            restored += 1
+    return restored
 
 
 def save_runtime_config(job: Job) -> None:

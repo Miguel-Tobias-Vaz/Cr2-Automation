@@ -1,12 +1,37 @@
 from __future__ import annotations
 
-import builtins
 import sys
 from pathlib import Path
 
 from backend.runners.base import SCRIPTS, apply_globals, load_module, run_main_with_logs
+from backend.user_storage import is_local_mode, path_belongs_to_user
 
 SCRIPT = SCRIPTS["publicacao"]
+
+_URL_PASTA = (
+    ("url_portal_rgf", "pasta_rgf", "RGF"),
+    ("url_portal_rreo", "pasta_rreo", "RREO"),
+    ("url_portal_balancete", "pasta_balancete", "Balancete"),
+    ("url_portal_balanco", "pasta_balanco", "Balanço"),
+)
+
+
+def _validate_pastas(cfg: dict, owner: str | None) -> None:
+    if is_local_mode():
+        return
+    for url_key, pasta_key, label in _URL_PASTA:
+        url = (cfg.get(url_key) or "").strip()
+        pasta = (cfg.get(pasta_key) or "").strip()
+        if not url:
+            continue
+        if not pasta:
+            raise ValueError(
+                "URL {0} informada, mas falta a pasta. Envie um ZIP ou escolha em Meus arquivos.".format(
+                    label
+                )
+            )
+        if owner and not path_belongs_to_user(pasta, owner):
+            raise ValueError("Pasta {0} fora do seu workspace no servidor.".format(label))
 
 
 def run(job) -> None:
@@ -15,6 +40,8 @@ def run(job) -> None:
     senha = (cfg.get("senha") or "").strip()
     if not usuario or not senha:
         raise ValueError("Usuário e senha do portal CR2 são obrigatórios.")
+
+    _validate_pastas(cfg, job.owner)
 
     mod = load_module("publicador_cr2", SCRIPT)
     patch = {

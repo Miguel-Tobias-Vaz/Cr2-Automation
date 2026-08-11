@@ -24,10 +24,20 @@ from backend.deps import get_optional_user, require_admin, require_user  # noqa:
 from backend.jobs import JobManager, JobStatus, QueueFullError  # noqa: E402
 from backend.job_output import ZIP_LOGIC_VERSION, build_download_zip  # noqa: E402
 from backend import cleanup  # noqa: E402
+from backend import audit_log  # noqa: E402
 from backend.milagre_routes import router as milagre_router  # noqa: E402
 from backend.runners import dispatch  # noqa: E402
 from backend.state import jobs  # noqa: E402
-from backend.user_storage import apply_user_defaults, is_local_mode, save_upload, workspace_info  # noqa: E402
+from backend.user_storage import (
+    apply_user_defaults,
+    delete_workspace_path,
+    is_local_mode,
+    list_workspace_files,
+    mkdir_workspace,
+    output_publicacao_hints,
+    save_upload,
+    workspace_info,
+)
 
 FRONT = ROOT / "front"
 
@@ -358,6 +368,7 @@ def auth_login(body: LoginBody):
     sess = auth.login(body.username.strip(), body.password)
     if not sess:
         raise HTTPException(401, "Usuário ou senha inválidos.")
+    audit_log.log("auth.login", user=sess.username)
     return {
         "ok": True,
         "token": sess.token,
@@ -505,6 +516,57 @@ def get_workspace(user=Depends(require_user)):
     return {"ok": True, "local_mode": False, **workspace_info(owner)}
 
 
+@app.get("/api/workspace/files")
+def get_workspace_files(path: str = "", user=Depends(require_user)):
+    """Lista arquivos e pastas do workspace do usuário."""
+    if is_local_mode():
+        raise HTTPException(400, "Explorador de arquivos disponível apenas na VPS.")
+    owner = user.username if auth.is_enabled() else None
+    try:
+        payload = list_workspace_files(owner, path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, **payload}
+
+
+@app.get("/api/workspace/output-hints")
+def get_output_hints(user=Depends(require_user)):
+    """Pastas RGF/RREO/etc. detectadas em output/ (extrações anteriores)."""
+    if is_local_mode():
+        return {"ok": True, "local_mode": True, "hints": {}}
+    owner = user.username if auth.is_enabled() else None
+    hints = output_publicacao_hints(owner)
+    return {"ok": True, "hints": hints}
+
+
+class WorkspaceMkdirBody(BaseModel):
+    path: str
+
+
+@app.post("/api/workspace/mkdir")
+def post_workspace_mkdir(body: WorkspaceMkdirBody, user=Depends(require_user)):
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    owner = user.username if auth.is_enabled() else None
+    try:
+        meta = mkdir_workspace(owner, body.path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, **meta}
+
+
+@app.delete("/api/workspace/files")
+def delete_workspace_file(path: str, user=Depends(require_user)):
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    owner = user.username if auth.is_enabled() else None
+    try:
+        delete_workspace_path(owner, path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True}
+
+
 @app.post("/api/uploads")
 async def upload_file(
     user=Depends(require_user),
@@ -574,6 +636,12 @@ def create_job(body: JobCreate, user=Depends(require_user)):
     except QueueFullError as exc:
         raise HTTPException(503, str(exc)) from exc
     meta = jobs.queue_meta(job)
+    audit_log.log(
+        "job.create",
+        user=user.username,
+        job_id=job.id,
+        service_id=body.service_id,
+    )
     return {
         "job_id": job.id,
         "status": job.status.value,
@@ -589,6 +657,7 @@ def cancel_job(job_id: str, user=Depends(require_user)):
         raise HTTPException(404, "Processo não encontrado")
     _assert_can_cancel(job, user)
     job = jobs.cancel(job_id)
+    audit_log.log("job.cancel", user=user.username, job_id=job_id)
     return {
         "ok": True,
         "job_id": job.id,
@@ -724,6 +793,11 @@ def page_mapa():
     return _page("mapa.html")
 
 
+@app.get("/arquivos.html")
+def page_arquivos():
+    return _page("arquivos.html")
+
+
 @app.get("/dic-est-ter.html")
 def page_dic_est_ter():
     return _page("dic-est-ter.html")
@@ -801,7 +875,55 @@ def admin_cleanup_run(body: CleanupBody, _admin=Depends(require_admin)):
     result["cleanup_preview"] = cleanup.preview(
         jobs, job_days=body.job_days, upload_days=body.upload_days
     )
+    audit_log.log(
+        "admin.cleanup",
+        user=_admin.username,
+        job_dirs=body.job_dirs,
+        upload_temp=body.upload_temp,
+    )
     return result
+
+
+def _process_memory_mb() -> float | None:
+    try:
+        with open("/proc/self/status", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("VmRSS:"):
+                    return round(int(line.split()[1]) / 1024, 1)
+    except OSError:
+        pass
+    return None
+
+
+@app.get("/api/admin/health-detail")
+def admin_health_detail(_admin=Depends(require_admin)):
+    """RAM, fila, disco e últimas ações (admin)."""
+    disk = jobs.disk_usage_jobs()
+    last_failed = None
+    with jobs._lock:
+        for j in jobs._jobs.values():
+            if j.status == JobStatus.FAILED:
+                if last_failed is None or (j.finished_at or 0) > (
+                    last_failed.get("finished_at") or 0
+                ):
+                    last_failed = {
+                        "id": j.id,
+                        "service_id": j.service_id,
+                        "error": j.error,
+                        "finished_at": j.finished_at,
+                        "owner": j.owner,
+                    }
+    return {
+        "ok": True,
+        "memory_mb": _process_memory_mb(),
+        "running": jobs.running_count(),
+        "pending": jobs.pending_count(),
+        "max_concurrent": jobs.MAX_ATIVOS,
+        "max_queue": jobs.MAX_QUEUE,
+        "disk": disk,
+        "last_failed_job": last_failed,
+        "audit_tail": audit_log.tail(30),
+    }
 
 
 @app.get("/login.html")

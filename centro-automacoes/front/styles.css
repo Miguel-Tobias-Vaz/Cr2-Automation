@@ -3802,6 +3802,165 @@ body.login-page {
   display: none !important;
 }
 
+.field-pick-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.field-pick-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field--with-pick .field-pick-row .btn {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.acao-row--inline {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* —— Explorador de arquivos —— */
+.files-browser {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: rgba(8, 8, 14, 0.55);
+  overflow: hidden;
+}
+
+.files-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.files-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.files-crumb {
+  background: none;
+  border: none;
+  color: var(--mint, #2eea7a);
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.files-crumb:hover {
+  background: rgba(46, 234, 122, 0.12);
+}
+
+.files-crumb.is-current {
+  color: var(--mist, #a8b0c0);
+  cursor: default;
+}
+
+.files-crumb-sep {
+  color: rgba(255, 255, 255, 0.25);
+  user-select: none;
+}
+
+.files-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.files-upload-btn {
+  cursor: pointer;
+  margin: 0;
+}
+
+.files-status {
+  padding: 0.5rem 1rem 0;
+  font-size: 0.85rem;
+}
+
+.files-list-wrap {
+  overflow-x: auto;
+}
+
+.files-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.files-table th,
+.files-table td {
+  padding: 0.55rem 1rem;
+  text-align: left;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.files-table th {
+  color: var(--mist, #a8b0c0);
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.files-link {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+}
+
+.files-link:hover {
+  color: var(--mint, #2eea7a);
+}
+
+.files-row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.files-del {
+  opacity: 0.55;
+  margin-left: 0.25rem;
+}
+
+.files-del:hover {
+  opacity: 1;
+}
+
+.files-empty {
+  color: var(--mist, #a8b0c0);
+  font-style: italic;
+}
+
+.files-pick-hint {
+  padding: 0.75rem 1rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--mist, #a8b0c0);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.page-hero--compact {
+  min-height: auto;
+  padding-bottom: 1rem;
+}
+
 /* —— Minimal footer (site-wide) —— */
 .minimal-footer {
   position: relative;

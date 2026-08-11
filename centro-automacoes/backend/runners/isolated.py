@@ -17,6 +17,10 @@ from backend.runners.base import PROJECT_ROOT, _limpar_linha_log
 # este arquivo está em backend/runners/, então parent.parent seria só backend/.
 ROOT = Path(__file__).resolve().parents[2]
 CANCEL_WAIT_S = 12.0
+WORKER_STALL_S = max(
+    60,
+    int(os.getenv("OPTO_WORKER_HEARTBEAT_S", "180")),
+)
 
 
 def uses_subprocess(service_id: str) -> bool:
@@ -162,6 +166,7 @@ def run_isolated(job) -> None:
 
     visto: set[str] = set()
     cancel_since: float | None = None
+    last_activity = time.time()
     lines: queue_mod.Queue[str | None] = queue_mod.Queue()
 
     def _reader() -> None:
@@ -192,7 +197,18 @@ def run_isolated(job) -> None:
             if line is None:
                 break
             if line:
+                last_activity = time.time()
                 _handle_worker_line(job, line, visto)
+            elif proc.poll() is None and time.time() - last_activity > WORKER_STALL_S:
+                job.emit(
+                    "error",
+                    "Subprocesso sem resposta há {0}s — encerrando.".format(
+                        int(WORKER_STALL_S)
+                    ),
+                )
+                job.error = "Worker travado (sem heartbeat)"
+                _terminate_process(proc, job)
+                raise RuntimeError(job.error)
 
             if cancel_since is not None and proc.poll() is None:
                 if time.time() - cancel_since > CANCEL_WAIT_S:

@@ -40,11 +40,26 @@ rsync -a --delete \
   --exclude '**/runtime.json' \
   "$SRC/" "$APP_DIR/"
 
+ENV_FILE="$APP_DIR/centro-automacoes/deploy/opto.env"
+if [[ -f "$ENV_FILE" ]]; then
+  echo "==> validando opto.env"
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  if [[ "${OPTO_REQUIRE_AUTH:-}" =~ ^(1|true|yes|on)$ ]]; then
+    if [[ -z "${OPTO_SUPABASE_URL:-}" && -z "${OPTO_USERS:-}" ]]; then
+      echo "AVISO: OPTO_REQUIRE_AUTH=1 mas Supabase/OPTO_USERS não configurados."
+    fi
+  fi
+else
+  echo "AVISO: $ENV_FILE não encontrado — copie de opto.env.example"
+fi
+
 # Garante pastas de dados (cria se faltarem; nunca apaga conteúdo)
 mkdir -p \
   "$APP_DIR/centro-automacoes/data/users" \
   "$APP_DIR/centro-automacoes/data/jobs" \
-  "$APP_DIR/centro-automacoes/data/auth"
+  "$APP_DIR/centro-automacoes/data/auth" \
+  "$APP_DIR/centro-automacoes/data/audit"
 
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 

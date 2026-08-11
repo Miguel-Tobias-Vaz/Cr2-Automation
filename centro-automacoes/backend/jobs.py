@@ -183,7 +183,9 @@ class JobManager:
         self.cancel(job.id)
 
     def restore_from_disk(self) -> int:
-        return queue_store.restore(self)
+        n = queue_store.restore(self)
+        n += queue_store.restore_completed(self)
+        return n
 
     def resume_queue(self, runner: Callable[[Job], None]) -> None:
         self._runner = runner
@@ -194,6 +196,7 @@ class JobManager:
             return
         try:
             queue_store.save(self)
+            queue_store.save_completed(self)
         except OSError:
             pass
 
