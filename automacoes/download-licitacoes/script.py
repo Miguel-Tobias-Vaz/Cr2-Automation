@@ -118,6 +118,51 @@ HEADERS = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                           "Chrome/124.0 Safari/537.36")}
 PAUSA, TENTATIVAS, TIMEOUT = 0.5, 3, 90
 
+
+def _erro_rede_temporario(exc: BaseException) -> bool:
+    """DNS/conexão instável no VPS — vale retry."""
+    texto = str(exc).lower()
+    nomes = (
+        "nameresolutionerror",
+        "temporary failure in name resolution",
+        "failed to resolve",
+        "getaddrinfo failed",
+        "nodename nor servname",
+        "name or service not known",
+        "connection reset",
+        "connection aborted",
+        "connection refused",
+        "timed out",
+        "timeout",
+        "temporarily unavailable",
+        "network is unreachable",
+    )
+    return any(n in texto for n in nomes)
+
+
+def http_get(sessao, url, *, timeout=None, tentativas=None, **kwargs):
+    """GET com retry em falha temporária de DNS/rede (comum em VPS)."""
+    tentativas = int(tentativas or TENTATIVAS)
+    timeout = timeout if timeout is not None else TIMEOUT
+    ultimo = None
+    for t in range(1, tentativas + 1):
+        _abortar_se_cancelado()
+        try:
+            return sessao.get(url, timeout=timeout, **kwargs)
+        except requests.RequestException as e:
+            ultimo = e
+            if t >= tentativas or not _erro_rede_temporario(e):
+                raise
+            espera = min(2.5 * t, 12)
+            print(
+                f"  ! Rede/DNS instável ({t}/{tentativas}) em {urlparse(url).netloc}: "
+                f"nova tentativa em {espera:.0f}s…"
+            )
+            time.sleep(espera)
+    if ultimo:
+        raise ultimo
+    raise RuntimeError("Falha HTTP sem detalhes")
+
 MODALIDADES_RE = re.compile(
     r"(preg[aã]o|inexigibilidade|dispensa|convite|tomada\s+de\s+pre[çc]os?|"
     r"concorr[eê]ncia|chamamento|credenciamento|leil[aã]o|concurso|"
@@ -801,8 +846,13 @@ def _links_anexo(no, url_base):
 
 
 def descobrir_categoria_id(sessao, base, slug):
-    r = sessao.get(f"{base}/wp-json/wp/v2/categories",
-                   params={"slug": slug}, timeout=TIMEOUT)
+    r = http_get(
+        sessao,
+        f"{base}/wp-json/wp/v2/categories",
+        params={"slug": slug},
+        timeout=TIMEOUT,
+        tentativas=5,
+    )
     r.raise_for_status()
     dados = r.json()
     return dados[0]["id"] if isinstance(dados, list) and dados else None
@@ -814,10 +864,20 @@ def coletar_posts_api(sessao, base, cat_id, anos_filtro=None):
     posts, pagina = [], 1
     parou_ano = False
     while pagina <= MAX_PAGINAS and not parou_ano:
-        r = sessao.get(f"{base}/wp-json/wp/v2/posts", timeout=TIMEOUT, params={
-            "categories": cat_id, "per_page": 100, "page": pagina,
-            "_fields": "title,link,content,date",
-            "orderby": "date", "order": "desc"})
+        r = http_get(
+            sessao,
+            f"{base}/wp-json/wp/v2/posts",
+            timeout=TIMEOUT,
+            tentativas=5,
+            params={
+                "categories": cat_id,
+                "per_page": 100,
+                "page": pagina,
+                "_fields": "title,link,content,date",
+                "orderby": "date",
+                "order": "desc",
+            },
+        )
         if r.status_code == 400:      # passou da última página
             break
         r.raise_for_status()
@@ -969,14 +1029,22 @@ def coletar_posts_html(sessao, url_listagem, anos_filtro=None):
     while n <= MAX_PAGINAS:
         url = raiz if n == 1 else f"{raiz}page/{n}/"
         try:
-            r = sessao.get(url, timeout=TIMEOUT)
+            r = http_get(sessao, url, timeout=TIMEOUT, tentativas=5)
             if r.status_code == 404:
                 break
             r.raise_for_status()
             r.encoding = r.apparent_encoding or "utf-8"
             soup = BeautifulSoup(r.text, "html.parser")
         except Exception as e:
-            print(f"  ! Erro ao listar {url}: {e}")
+            host = urlparse(url).netloc
+            if _erro_rede_temporario(e):
+                print(
+                    f"  ! Erro ao listar {url}: DNS/rede do servidor não resolveu "
+                    f"'{host}'. Confira DNS do VPS (ex.: 1.1.1.1 / 8.8.8.8) e tente de novo.\n"
+                    f"    Detalhe: {e}"
+                )
+            else:
+                print(f"  ! Erro ao listar {url}: {e}")
             break
         novos = filtra_posts_da_pagina(soup, url, dominio)
         inedito = {k: v for k, v in novos.items() if k not in posts}
