@@ -26,6 +26,12 @@ _FILE_KEYS = (
 
 _DIR_KEYS = ("pasta_contratos",)
 
+_SKIP_ZIP_NAMES = frozenset({"runtime.json", "config.json", "cancel.flag"})
+
+
+def _skip_zip_file(path: Path) -> bool:
+    return path.name in _SKIP_ZIP_NAMES
+
 
 def _user_output_root(job: Job) -> Path | None:
     ws = (job.config or {}).get("_workspace") or {}
@@ -74,7 +80,7 @@ def _zip_file_list(dest: Path, base: Path, files: list[Path]) -> int:
     n = 0
     with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in sorted(set(files)):
-            if not f.is_file():
+            if not f.is_file() or _skip_zip_file(f):
                 continue
             try:
                 arc = _arcname_for(base, f.resolve())
@@ -92,7 +98,7 @@ def _zip_tree(dest: Path, folder: Path, arc_prefix: str) -> int:
     n = 0
     with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in sorted(folder.rglob("*")):
-            if not f.is_file():
+            if not f.is_file() or _skip_zip_file(f):
                 continue
             rel = f.relative_to(folder)
             zf.write(f, arc_prefix + str(rel).replace("\\", "/"))

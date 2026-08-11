@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import stat
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -62,6 +63,10 @@ def save_runtime_config(job: Job) -> None:
     path = job.dir / "runtime.json"
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(job.config or {}, fh, ensure_ascii=False, indent=2)
+    try:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    except OSError:
+        pass
 
 
 def load_runtime_config(job_id: str, owner: str | None = None) -> dict[str, Any] | None:

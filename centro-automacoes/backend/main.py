@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -30,8 +31,23 @@ from backend.user_storage import apply_user_defaults, is_local_mode, save_upload
 
 FRONT = ROOT / "front"
 
+
+def _cors_origins() -> list[str]:
+    raw = os.getenv("OPTO_CORS_ORIGINS", "").strip()
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    if is_local_mode():
+        return ["*"]
+    return []
+
+
 app = FastAPI(title="Opto Automações", version="1.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(milagre_router)
 
 if FRONT.is_dir():
@@ -179,9 +195,71 @@ def _job_summary(job) -> dict:
     }
 
 
-def _assert_can_cancel(job, user) -> None:
-    if not auth.can_cancel_job(user, job.owner):
-        raise HTTPException(403, "Sem permissão para cancelar este processo.")
+def _user_is_admin(user) -> bool:
+    return user.role == "admin" or auth.is_panel_admin(user)
+
+
+def _health_payload(user) -> dict:
+    """Saúde + fila — anônimo só vê mínimo quando auth está ativa."""
+    if auth.is_enabled() and not user:
+        return {
+            "ok": True,
+            "auth_required": True,
+            "local_mode": is_local_mode(),
+            "user": None,
+        }
+
+    is_admin = bool(user and _user_is_admin(user))
+    username = user.username if user else "local"
+    if auth.is_enabled() and user:
+        snap = jobs.queue_snapshot_for_user(username, is_admin=is_admin)
+    else:
+        snap = jobs.queue_snapshot()
+
+    ativo = jobs.job_ativo()
+    if auth.is_enabled() and user and not is_admin and ativo:
+        if ativo.owner not in (None, user.username):
+            ativo = None
+
+    payload: dict = {
+        "ok": True,
+        "auth_required": auth.is_enabled(),
+        "local_mode": is_local_mode(),
+        "user": user.to_public() if user else None,
+        "job_timeout_s": JOB_TIMEOUT_S,
+        "ativos": snap["running"] + snap["pending"],
+        "running": snap["running"],
+        "pending": snap["pending"],
+        "max_concurrent": snap["max_concurrent"],
+        "max_queue": snap["max_queue"],
+        "queue": snap,
+        "ativo": None,
+        "running_jobs": [],
+    }
+
+    if auth.is_enabled() and user:
+        visible_running = jobs.running_jobs()
+        if not is_admin:
+            visible_running = [j for j in visible_running if j.owner in (None, user.username)]
+        payload["running_jobs"] = [_job_summary(j) for j in visible_running]
+    elif not auth.is_enabled():
+        payload["running_jobs"] = [_job_summary(j) for j in jobs.running_jobs()]
+
+    if ativo is not None:
+        payload["ativo"] = _job_summary(ativo)
+
+    if user:
+        my_jobs: list[dict] = []
+        for mine in jobs.user_jobs_for_owner(user.username):
+            summary = _job_summary(mine)
+            summary["status"] = mine.status.value
+            if mine.status.value == "pending":
+                summary["queue_position"] = jobs.queue_position(mine.id)
+            my_jobs.append(summary)
+        payload["my_jobs"] = my_jobs
+        payload["my_job"] = my_jobs[0] if my_jobs else None
+
+    return payload
 
 
 @app.get("/api/auth/config")
@@ -239,43 +317,15 @@ def auth_logout(authorization: str | None = None):
     return {"ok": True}
 
 
+def _assert_can_cancel(job, user) -> None:
+    if not auth.can_cancel_job(user, job.owner):
+        raise HTTPException(403, "Sem permissão para cancelar este processo.")
+
+
 @app.get("/api/health")
 def health(user=Depends(get_optional_user)):
     """Saúde do servidor + fila (pill Online)."""
-    snap = jobs.queue_snapshot()
-    ativo = jobs.job_ativo()
-    payload = {
-        "ok": True,
-        "auth_required": auth.is_enabled(),
-        "local_mode": is_local_mode(),
-        "user": (
-            user.to_public() if user else None
-        ),
-        "job_timeout_s": JOB_TIMEOUT_S,
-        "ativos": jobs.ativos(),
-        "running": snap["running"],
-        "pending": snap["pending"],
-        "max_concurrent": snap["max_concurrent"],
-        "max_queue": snap["max_queue"],
-        "queue": snap,
-        "ativo": None,
-        "running_jobs": [
-            _job_summary(j) for j in jobs.running_jobs()
-        ],
-    }
-    if ativo is not None:
-        payload["ativo"] = _job_summary(ativo)
-    if user:
-        my_jobs: list[dict] = []
-        for mine in jobs.user_jobs_for_owner(user.username):
-            summary = _job_summary(mine)
-            summary["status"] = mine.status.value
-            if mine.status.value == "pending":
-                summary["queue_position"] = jobs.queue_position(mine.id)
-            my_jobs.append(summary)
-        payload["my_jobs"] = my_jobs
-        payload["my_job"] = my_jobs[0] if my_jobs else None
-    return payload
+    return _health_payload(user)
 
 
 @app.get("/api/services")
@@ -284,16 +334,16 @@ def list_services():
 
 
 @app.get("/api/jobs")
-def list_jobs():
-    return jobs.list_jobs()
+def list_jobs(user=Depends(require_user)):
+    is_admin = _user_is_admin(user)
+    return jobs.list_jobs_for_user(user.username, is_admin=is_admin)
 
 
 @app.get("/api/jobs/downloads-ready")
 def jobs_downloads_ready(user=Depends(require_user)):
-    """ZIPs prontos para download (mesmo se o usuário saiu da página do job)."""
-    admin = auth.is_panel_admin(user) if auth.is_enabled() else True
+    """ZIPs prontos para download — apenas jobs do usuário logado."""
     owner = user.username if auth.is_enabled() else None
-    items = jobs.list_downloads_ready(owner, admin=admin)
+    items = jobs.list_downloads_ready(owner)
     labels = SERVICE_LABELS
     return {
         "downloads": [
@@ -307,8 +357,9 @@ def jobs_downloads_ready(user=Depends(require_user)):
 
 
 @app.get("/api/queue")
-def get_queue():
-    return jobs.queue_snapshot()
+def get_queue(user=Depends(require_user)):
+    is_admin = _user_is_admin(user)
+    return jobs.queue_snapshot_for_user(user.username, is_admin=is_admin)
 
 
 @app.post("/api/jobs/cancel-active")
@@ -463,10 +514,11 @@ def cancel_job(job_id: str, user=Depends(require_user)):
 
 
 @app.get("/api/jobs/{job_id}/logs/stream")
-async def stream_logs(job_id: str):
+async def stream_logs(job_id: str, user=Depends(require_user)):
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Processo não encontrado")
+    _assert_can_access_job(job, user)
 
 
     async def gen():

@@ -23,6 +23,13 @@ rsync -a --delete \
 
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
+DATA_DIR="$APP_DIR/centro-automacoes/data"
+if [[ -d "$DATA_DIR" ]]; then
+  chmod 750 "$DATA_DIR" 2>/dev/null || true
+  chmod -R u+rwX,go-rwx "$DATA_DIR/users" 2>/dev/null || true
+  chmod -R u+rwX,go-rwx "$DATA_DIR/auth" 2>/dev/null || true
+fi
+
 VPY="$APP_DIR/centro-automacoes/venv/bin/python"
 if [[ ! -x "$VPY" ]]; then
   echo "==> venv ausente — recriando..."

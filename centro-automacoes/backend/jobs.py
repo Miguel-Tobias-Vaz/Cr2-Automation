@@ -373,19 +373,74 @@ class JobManager:
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
 
+    def _job_visible_to_user(
+        self, job: Job, username: str, *, is_admin: bool
+    ) -> bool:
+        if is_admin:
+            return True
+        return job.owner in (None, username)
+
     def list_jobs(self) -> list[dict[str, Any]]:
         with self._lock:
             items = sorted(self._jobs.values(), key=lambda j: j.created_at, reverse=True)
         return [j.to_dict(self) for j in items[:40]]
 
+    def list_jobs_for_user(
+        self, username: str, *, is_admin: bool, limit: int = 40
+    ) -> list[dict[str, Any]]:
+        with self._lock:
+            items = sorted(self._jobs.values(), key=lambda j: j.created_at, reverse=True)
+        visible = [
+            j for j in items if self._job_visible_to_user(j, username, is_admin=is_admin)
+        ]
+        return [j.to_dict(self) for j in visible[:limit]]
+
+    def queue_snapshot_for_user(
+        self, username: str, *, is_admin: bool
+    ) -> dict[str, Any]:
+        if is_admin:
+            return self.queue_snapshot()
+        with self._lock:
+            running_jobs = sorted(
+                (
+                    j
+                    for j in self._jobs.values()
+                    if j.status == JobStatus.RUNNING
+                    and self._job_visible_to_user(j, username, is_admin=False)
+                ),
+                key=lambda x: x.started_at or x.created_at,
+            )
+            pending_jobs = [
+                j
+                for j in self._pending_jobs_locked()
+                if self._job_visible_to_user(j, username, is_admin=False)
+            ]
+        running = [j.to_dict(None) for j in running_jobs]
+        pending = [j.to_dict(None) for j in pending_jobs]
+        for i, item in enumerate(pending, start=1):
+            item["queue"] = {
+                "position": i,
+                "ahead": i - 1,
+                "running_slots": len(running),
+                "max_slots": self.MAX_ATIVOS,
+                "pending_total": len(pending),
+            }
+        return {
+            "running": len(running),
+            "pending": len(pending),
+            "max_concurrent": self.MAX_ATIVOS,
+            "max_queue": self.MAX_QUEUE,
+            "running_jobs": running,
+            "pending_jobs": pending,
+        }
+
     def list_downloads_ready(
         self,
         owner: str | None = None,
         *,
-        admin: bool = False,
         limit: int = 12,
     ) -> list[dict[str, Any]]:
-        """Jobs concluídos com ZIP disponível (para botão de download)."""
+        """Jobs concluídos com ZIP — só do usuário solicitante."""
         with self._lock:
             items = list(self._jobs.values())
         ready: list[dict[str, Any]] = []
@@ -394,12 +449,16 @@ class JobManager:
                 continue
             if not j.result.get("zip"):
                 continue
-            if owner and not admin and j.owner not in (None, owner):
+            if owner:
+                if j.owner != owner:
+                    continue
+            elif j.owner:
                 continue
             ready.append(
                 {
                     "id": j.id,
                     "service_id": j.service_id,
+                    "owner": j.owner,
                     "finished_at": j.finished_at,
                     "has_download": True,
                 }

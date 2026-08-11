@@ -9,6 +9,10 @@
 instalacao-log.txt
 Opto-Automacoes.zip
 centro-automacoes/data/jobs/
+centro-automacoes/data/users/
+centro-automacoes/data/auth/
+**/runtime.json
+centro-automacoes/deploy/opto.env
 
 # Segredos / ambiente
 .env

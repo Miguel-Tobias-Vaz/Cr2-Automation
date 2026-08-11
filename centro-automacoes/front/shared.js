@@ -11,6 +11,21 @@
     return h;
   }
 
+  function authToken() {
+    try {
+      return sessionStorage.getItem(AUTH_TOKEN_KEY) || "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function streamUrl(path) {
+    const t = authToken();
+    if (!t) return `${API}${path}`;
+    const sep = path.includes("?") ? "&" : "?";
+    return `${API}${path}${sep}access_token=${encodeURIComponent(t)}`;
+  }
+
   function authFetch(url, opts) {
     const o = { ...(opts || {}) };
     o.headers = authHeaders(o.headers);
@@ -484,6 +499,12 @@
       const r = await authFetch(`${API}/api/health`);
       if (!r.ok) throw new Error();
       const data = await r.json();
+      authRequired = !!data.auth_required;
+      if (data.user && data.user.username) {
+        currentUsername = data.user.username;
+      } else if (!data.auth_required) {
+        currentUsername = null;
+      }
       atualizarPillStatus(pill, data);
       pollDownloadsReady().catch(() => {});
       if (!window.__optoPillTimer) {
@@ -1521,6 +1542,8 @@
   let noticeShownFor = null;
   let boundServiceId = null;
   let workspaceCache = null;
+  let currentUsername = null;
+  let authRequired = false;
   let resumedOnce = false;
 
   const _PATH_FIELD_IDS = new Set([
@@ -1815,9 +1838,17 @@
     return bar;
   }
 
+  function downloadsForCurrentUser(items) {
+    const list = items || [];
+    if (!authRequired || !currentUsername) return list;
+    return list.filter((j) => j.owner === currentUsername);
+  }
+
   function renderDownloadBanner(items) {
     if (workspaceCache && workspaceCache.local_mode) return;
-    const visible = (items || []).filter((j) => !isDownloadDismissed(j.id));
+    const visible = downloadsForCurrentUser(items).filter(
+      (j) => !isDownloadDismissed(j.id)
+    );
     const bar = ensureDownloadBanner();
     if (!bar) return;
     if (!visible.length) {
@@ -1857,7 +1888,7 @@
       const r = await authFetch(`${API}/api/jobs/downloads-ready`);
       if (!r.ok) return;
       const data = await r.json();
-      const downloads = data.downloads || [];
+      const downloads = downloadsForCurrentUser(data.downloads || []);
       renderDownloadBanner(downloads);
       const mem = readRememberedJob(boundServiceId);
       const jid = currentJobId || (mem && mem.jobId);
@@ -1971,7 +2002,7 @@
     closeStream();
     streamJobId = jobId;
     const streamFor = jobId;
-    es = new EventSource(`${API}/api/jobs/${jobId}/logs/stream`);
+    es = new EventSource(streamUrl(`/api/jobs/${jobId}/logs/stream`));
     es.onmessage = (ev) => {
       if (streamJobId !== streamFor || currentJobId !== streamFor) return;
       try {
@@ -2406,6 +2437,8 @@
     enableSpotlightCards,
     authFetch,
     authHeaders,
+    authToken,
+    streamUrl,
     setAuthToken,
     logout,
     guardAuth,

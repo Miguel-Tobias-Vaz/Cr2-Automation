@@ -20,12 +20,25 @@ if str(DIC_EST_TER) not in sys.path:
 import servidor_front as mf  # noqa: E402
 
 from backend import auth  # noqa: E402
-from backend.deps import get_optional_user, require_user  # noqa: E402
+from backend.deps import require_user  # noqa: E402
 from backend.jobs import JobStatus, QueueFullError  # noqa: E402
 from backend.runners import dispatch  # noqa: E402
 from backend.state import jobs  # noqa: E402
 
 router = APIRouter(tags=["dic_est_ter"])
+
+
+def _user_is_admin(user) -> bool:
+    return user.role == "admin" or auth.is_panel_admin(user)
+
+
+def _assert_can_access_dic_job(job, user) -> None:
+    if not auth.is_enabled():
+        return
+    if _user_is_admin(user):
+        return
+    if job.owner not in (None, user.username):
+        raise HTTPException(403, "Sem permissão para acessar este processo.")
 
 
 def _active_dic_job():
@@ -40,6 +53,31 @@ def _active_dic_job():
     if not alive:
         return None
     return max(alive, key=lambda j: j.created_at)
+
+
+def _active_dic_job_for_user(user):
+    gjob = _active_dic_job()
+    if gjob is None:
+        return None
+    if not auth.is_enabled() or _user_is_admin(user):
+        return gjob
+    if gjob.owner in (None, user.username):
+        return gjob
+    return None
+
+
+def _idle_status() -> dict:
+    return {
+        "running": False,
+        "pending": False,
+        "global_job_id": None,
+        "job_id": None,
+        "logs": [],
+        "resumo": None,
+        "progresso": {},
+        "log_path": None,
+        "cancel_requested": False,
+    }
 
 
 def _status_from_global(job) -> dict:
@@ -71,10 +109,15 @@ def _status_from_global(job) -> dict:
 
 
 @router.get("/api/status")
-def milagre_status():
-    gjob = _active_dic_job()
+def milagre_status(user=Depends(require_user)):
+    gjob = _active_dic_job_for_user(user)
     if gjob is not None:
         return _status_from_global(gjob)
+
+    if auth.is_enabled() and not _user_is_admin(user):
+        idle = _idle_status()
+        idle["status"] = "idle"
+        return idle
 
     with mf._job_lock:
         snap = {
@@ -91,7 +134,7 @@ def milagre_status():
 
 
 @router.get("/api/defaults")
-def milagre_defaults():
+def milagre_defaults(user=Depends(require_user)):
     pub = mf.pub
     return {
         "usuario": (pub.PORTAL_USUARIO or "").strip(),
@@ -106,7 +149,7 @@ def milagre_defaults():
 
 
 @router.post("/api/validar")
-def milagre_validar(body: dict):
+def milagre_validar(body: dict, user=Depends(require_user)):
     try:
         return mf.validar_pedido(body)
     except Exception as exc:
@@ -149,7 +192,13 @@ def milagre_publicar(body: dict, user=Depends(require_user)):
 @router.post("/api/parar")
 @router.get("/api/parar")
 def milagre_cancelar(user=Depends(require_user)):
-    gjob = _active_dic_job()
+    gjob = _active_dic_job_for_user(user)
+    if gjob is None and auth.is_enabled() and not _user_is_admin(user):
+        gjob_other = _active_dic_job()
+        if gjob_other is not None:
+            raise HTTPException(403, "Sem permissão para cancelar este processo.")
+    if gjob is None:
+        gjob = _active_dic_job()
     if gjob is not None:
         if not auth.can_cancel_job(user, gjob.owner):
             raise HTTPException(403, "Sem permissão para cancelar este processo.")
@@ -179,12 +228,21 @@ def milagre_cancelar(user=Depends(require_user)):
 
 
 @router.get("/api/download/nao-publicadas")
-def milagre_download_nao_publicadas():
-    gjob = _active_dic_job()
+def milagre_download_nao_publicadas(user=Depends(require_user)):
+    gjob = _active_dic_job_for_user(user)
+    if gjob is None:
+        gjob = _active_dic_job()
+    if gjob:
+        _assert_can_access_dic_job(gjob, user)
+    elif auth.is_enabled() and not _user_is_admin(user):
+        raise HTTPException(404, "Nenhuma planilha de correcao disponivel.")
+
     caminho = None
     if gjob and gjob.result:
         caminho = gjob.result.get("arquivo_nao_publicadas")
     if not caminho:
+        if auth.is_enabled() and not _user_is_admin(user):
+            raise HTTPException(404, "Nenhuma planilha de correcao disponivel.")
         with mf._job_lock:
             caminho = mf._job.get("arquivo_nao_publicadas")
             if not caminho and mf._job.get("resumo"):
@@ -202,8 +260,13 @@ def milagre_download_nao_publicadas():
 
 
 @router.get("/api/logs")
-async def milagre_logs_stream():
-    gjob = _active_dic_job()
+async def milagre_logs_stream(user=Depends(require_user)):
+    gjob = _active_dic_job_for_user(user)
+    if gjob is None and auth.is_enabled() and not _user_is_admin(user):
+        active = _active_dic_job()
+        if active is not None:
+            raise HTTPException(403, "Sem permissão para acessar este processo.")
+        gjob = None
 
     async def gen_global():
         q = gjob.subscribe()
@@ -239,6 +302,9 @@ async def milagre_logs_stream():
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
+
+    if auth.is_enabled() and not _user_is_admin(user):
+        raise HTTPException(403, "Sem permissão para acessar este processo.")
 
     q: queue.Queue = queue.Queue()
     with mf._job_lock:

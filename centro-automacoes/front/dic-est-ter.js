@@ -625,6 +625,13 @@
     return itens;
   }
 
+  function streamUrl(path) {
+    if (window.OptoAutomacoes && OptoAutomacoes.streamUrl) {
+      return OptoAutomacoes.streamUrl(path);
+    }
+    return API + path;
+  }
+
   async function api(path, opts) {
     const headers = { "Content-Type": "application/json" };
     if (window.OptoAutomacoes && OptoAutomacoes.authHeaders) {
@@ -667,7 +674,7 @@
   function ensureEventSource() {
     if (es) return;
     try {
-      es = new EventSource(API + "/api/logs");
+      es = new EventSource(streamUrl("/api/logs"));
       es.onmessage = (ev) => {
         try {
           const entry = JSON.parse(ev.data);

@@ -638,7 +638,11 @@
 
     $("btn-cancel-active")?.addEventListener("click", async () => {
       if (!confirm("Cancelar o processo ativo?")) return;
-      await fetch(API + "/api/jobs/cancel-active", { method: "POST" });
+      const fetchFn =
+        window.OptoAutomacoes && OptoAutomacoes.authFetch
+          ? OptoAutomacoes.authFetch
+          : fetch;
+      await fetchFn(API + "/api/jobs/cancel-active", { method: "POST" });
       await refresh();
     });
   }
