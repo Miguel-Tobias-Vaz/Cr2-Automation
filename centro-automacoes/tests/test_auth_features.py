@@ -255,21 +255,30 @@ def test_list_downloads_ready_somente_dono():
 
     j_a = Job(id="a1", service_id="categorias", config={}, owner="maria@test.com")
     j_a.status = JobStatus.COMPLETED
+    j_a.finished_at = time.time()
     j_a.result["zip"] = "/tmp/a.zip"
 
     j_b = Job(id="b1", service_id="normas", config={}, owner="joao@test.com")
     j_b.status = JobStatus.COMPLETED
+    j_b.finished_at = time.time()
     j_b.result["zip"] = "/tmp/b.zip"
 
     j_admin2 = Job(id="d1", service_id="normas", config={}, owner="admin2")
     j_admin2.status = JobStatus.COMPLETED
+    j_admin2.finished_at = time.time()
     j_admin2.result["zip"] = "/tmp/d.zip"
 
     j_orfa = Job(id="c1", service_id="documentos", config={}, owner=None)
     j_orfa.status = JobStatus.COMPLETED
+    j_orfa.finished_at = time.time()
     j_orfa.result["zip"] = "/tmp/c.zip"
 
-    mgr._jobs = {j.id: j for j in (j_a, j_b, j_admin2, j_orfa)}
+    j_old = Job(id="old1", service_id="normas", config={}, owner="admin2")
+    j_old.status = JobStatus.COMPLETED
+    j_old.finished_at = time.time() - 10 * 60 * 60
+    j_old.result["zip"] = "/tmp/old.zip"
+
+    mgr._jobs = {j.id: j for j in (j_a, j_b, j_admin2, j_orfa, j_old)}
 
     maria = mgr.list_downloads_ready("maria@test.com")
     assert [x["id"] for x in maria] == ["a1"]
@@ -288,6 +297,9 @@ def test_list_downloads_ready_somente_dono():
 
     # Jobs órfãos não vazam para usuários autenticados
     assert mgr.list_downloads_ready("admin") == []
+
+    # Jobs antigos não poluem o banner
+    assert "old1" not in [x["id"] for x in mgr.list_downloads_ready("admin2")]
 
 
 def test_job_visibility_nao_mistura_usuarios():

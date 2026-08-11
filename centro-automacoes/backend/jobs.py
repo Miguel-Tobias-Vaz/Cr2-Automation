@@ -450,9 +450,11 @@ class JobManager:
         self,
         owner: str | None = None,
         *,
-        limit: int = 12,
+        limit: int = 2,
+        max_age_s: float = 2 * 60 * 60,
     ) -> list[dict[str, Any]]:
-        """Jobs concluídos com ZIP — só do usuário solicitante."""
+        """Jobs concluídos com ZIP — só do usuário, recentes (evita poluir o painel)."""
+        now = time.time()
         with self._lock:
             items = list(self._jobs.values())
         ready: list[dict[str, Any]] = []
@@ -466,6 +468,9 @@ class JobManager:
                     continue
             elif j.owner:
                 # Sem auth: só jobs órfãos (modo local compartilhado).
+                continue
+            finished = float(j.finished_at or 0)
+            if max_age_s and finished and (now - finished) > max_age_s:
                 continue
             ready.append(
                 {

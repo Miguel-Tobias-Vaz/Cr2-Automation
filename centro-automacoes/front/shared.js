@@ -1766,14 +1766,65 @@
   }
 
   function markDownloadDismissed(jobId) {
+    if (!jobId) return;
     try {
       sessionStorage.setItem("opto-dl-done-" + jobId, "1");
+    } catch (_) {}
+    try {
+      const key = "opto-dl-dismissed:" + (currentUsername || "anon");
+      const raw = localStorage.getItem(key);
+      const map = raw ? JSON.parse(raw) : {};
+      if (!map || typeof map !== "object") return;
+      map[jobId] = Date.now();
+      // limpa dismissões com mais de 14 dias
+      const cut = Date.now() - 14 * 24 * 60 * 60 * 1000;
+      Object.keys(map).forEach((id) => {
+        if (!map[id] || map[id] < cut) delete map[id];
+      });
+      localStorage.setItem(key, JSON.stringify(map));
     } catch (_) {}
   }
 
   function isDownloadDismissed(jobId) {
+    if (!jobId) return true;
     try {
-      return sessionStorage.getItem("opto-dl-done-" + jobId) === "1";
+      if (sessionStorage.getItem("opto-dl-done-" + jobId) === "1") return true;
+    } catch (_) {}
+    try {
+      const key = "opto-dl-dismissed:" + (currentUsername || "anon");
+      const raw = localStorage.getItem(key);
+      const map = raw ? JSON.parse(raw) : {};
+      return !!(map && map[jobId]);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function myTrackedJobsKey() {
+    return "opto-my-jobs:" + (currentUsername || "anon");
+  }
+
+  function trackMyJob(jobId) {
+    if (!jobId) return;
+    try {
+      const raw = localStorage.getItem(myTrackedJobsKey());
+      const map = raw ? JSON.parse(raw) : {};
+      if (!map || typeof map !== "object") return;
+      map[jobId] = Date.now();
+      const cut = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      Object.keys(map).forEach((id) => {
+        if (!map[id] || map[id] < cut) delete map[id];
+      });
+      localStorage.setItem(myTrackedJobsKey(), JSON.stringify(map));
+    } catch (_) {}
+  }
+
+  function isTrackedMyJob(jobId) {
+    if (!jobId) return false;
+    try {
+      const raw = localStorage.getItem(myTrackedJobsKey());
+      const map = raw ? JSON.parse(raw) : {};
+      return !!(map && map[jobId]);
     } catch (_) {
       return false;
     }
@@ -1888,12 +1939,20 @@
 
   function downloadsForCurrentUser(items) {
     const list = items || [];
-    // Sempre isola por usuário quando sabemos quem está logado.
-    if (currentUsername) {
-      return list.filter((j) => ownersMatch(j.owner, currentUsername));
-    }
-    if (authRequired) return [];
-    return list.filter((j) => !j.owner);
+    const mine = list.filter((j) => {
+      if (!j || !j.id) return false;
+      if (currentUsername) {
+        if (!ownersMatch(j.owner, currentUsername)) return false;
+      } else if (authRequired) {
+        return false;
+      } else if (j.owner) {
+        return false;
+      }
+      // Só ZIPs que ESTE navegador iniciou — evita ver extração de colega/conta compartilhada
+      return isTrackedMyJob(j.id);
+    });
+    // No máximo 1 aviso na tela
+    return mine.slice(0, 1);
   }
 
   function renderDownloadBanner(items) {
@@ -1910,27 +1969,22 @@
     }
     bar.hidden = false;
     document.body.classList.add("has-dl-banner");
-    const rows = visible
-      .map((j) => {
-        const svc = servicePrettyName(j.service_id);
-        const who = ownerShortName(j.owner || currentUsername);
-        const full = escapeHtml(
-          j.nome || downloadLabel(j.service_id, j.owner || currentUsername)
-        );
-        return `<div class="opto-dl-banner-row">
-          <div class="opto-dl-banner-copy">
-            <strong>ZIP pronto</strong>
-            <span title="${full}">${escapeHtml(svc)} · ${escapeHtml(who)}</span>
-          </div>
-          <button type="button" class="btn btn-download btn-download-ready btn-sm" data-dl-job="${j.id}" aria-label="${full}">
-            <span class="btn-download-icon" aria-hidden="true">↓</span>
-            <span class="btn-download-text">Baixar</span>
-          </button>
-          <button type="button" class="opto-dl-dismiss" data-dl-dismiss="${j.id}" title="Ocultar" aria-label="Ocultar">×</button>
-        </div>`;
-      })
-      .join("");
-    bar.innerHTML = rows;
+    const j = visible[0];
+    const svc = servicePrettyName(j.service_id);
+    const full = escapeHtml(
+      j.nome || downloadLabel(j.service_id, j.owner || currentUsername)
+    );
+    bar.innerHTML = `<div class="opto-dl-banner-row">
+      <div class="opto-dl-banner-copy">
+        <strong>ZIP pronto</strong>
+        <span title="${full}">${escapeHtml(svc)}</span>
+      </div>
+      <button type="button" class="btn btn-download btn-download-ready btn-sm" data-dl-job="${j.id}" aria-label="${full}">
+        <span class="btn-download-icon" aria-hidden="true">↓</span>
+        <span class="btn-download-text">Baixar</span>
+      </button>
+      <button type="button" class="opto-dl-dismiss" data-dl-dismiss="${j.id}" title="Ocultar" aria-label="Ocultar">×</button>
+    </div>`;
     bar.querySelectorAll("[data-dl-job]").forEach((btn) => {
       btn.addEventListener("click", () => {
         downloadJobArtifact(btn.getAttribute("data-dl-job"));
@@ -1989,6 +2043,7 @@
   function rememberJob(jobId, serviceId) {
     const sid = serviceId || boundServiceId;
     if (!sid) return;
+    trackMyJob(jobId);
     try {
       const map = readJobMap();
       map[sid] = { jobId, serviceId: sid, t: Date.now() };
