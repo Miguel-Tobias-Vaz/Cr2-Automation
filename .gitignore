@@ -5,16 +5,27 @@
 .pytest_cache/
 .cursor/
 
-# Logs e jobs locais
+# Logs e artefatos locais
 instalacao-log.txt
+iniciar-log.txt
+diagnostico-log.txt
+*.log
 Opto-Automacoes.zip
-centro-automacoes/data/jobs/
-centro-automacoes/data/users/
-centro-automacoes/data/auth/
 **/runtime.json
-centro-automacoes/deploy/opto.env
+**/cache_ia/
+**/cache/
+**/.cache/
+
+# Dados de runtime — NUNCA versionar (produção vive só no servidor)
+centro-automacoes/data/users/
+centro-automacoes/data/jobs/
+centro-automacoes/data/auth/users.json
+centro-automacoes/data/auth/*.json
+!centro-automacoes/data/auth/users.example.json
 
 # Segredos / ambiente
 .env
+opto.env
+**/deploy/opto.env
 *.auth-state.json
 centro-automacoes/front/supabase-config.js

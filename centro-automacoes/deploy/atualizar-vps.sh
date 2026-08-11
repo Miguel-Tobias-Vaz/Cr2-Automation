@@ -1,25 +1,50 @@
 #!/bin/bash
-# Atualiza código na VPS após git pull (NÃO apaga venv nem data/)
+# Atualiza código na VPS após git pull.
+# REGRA INEGOCIÁVEL: nunca copia data/, venv, opto.env, caches nem logs.
 set -euo pipefail
 
 SRC="${1:-/root/Cr2-Automation}"
 APP_DIR=/opt/opto-automacoes
 APP_USER=opto
 
+if [[ ! -f "$SRC/centro-automacoes/backend/main.py" ]]; then
+  echo "ERRO: fonte não encontrada em $SRC"
+  exit 1
+fi
+
 echo "==> git pull"
 cd "$SRC"
-git pull
+git pull --ff-only
 
-echo "==> rsync (preserva venv e data)"
+echo "==> rsync (NÃO toca data/, venv, opto.env, caches, logs)"
 rsync -a --delete \
-  --exclude venv \
-  --exclude centro-automacoes/venv \
-  --exclude centro-automacoes/deploy/opto.env \
-  --exclude __pycache__ \
-  --exclude .git \
-  --exclude centro-automacoes/data \
+  --exclude '.git/' \
+  --exclude 'venv/' \
+  --exclude '**/venv/' \
+  --exclude 'centro-automacoes/venv/' \
+  --exclude 'centro-automacoes/data/' \
+  --exclude 'centro-automacoes/deploy/opto.env' \
+  --exclude 'opto.env' \
+  --exclude '.env' \
+  --exclude '__pycache__/' \
   --exclude '*.pyc' \
+  --exclude '.pytest_cache/' \
+  --exclude '**/cache_ia/' \
+  --exclude '**/cache/' \
+  --exclude '**/.cache/' \
+  --exclude '*.log' \
+  --exclude 'instalacao-log.txt' \
+  --exclude 'iniciar-log.txt' \
+  --exclude 'diagnostico-log.txt' \
+  --exclude 'runtime.json' \
+  --exclude '**/runtime.json' \
   "$SRC/" "$APP_DIR/"
+
+# Garante pastas de dados (cria se faltarem; nunca apaga conteúdo)
+mkdir -p \
+  "$APP_DIR/centro-automacoes/data/users" \
+  "$APP_DIR/centro-automacoes/data/jobs" \
+  "$APP_DIR/centro-automacoes/data/auth"
 
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
@@ -54,3 +79,6 @@ systemctl restart opto
 sleep 2
 systemctl status opto --no-pager || true
 curl -sf http://127.0.0.1:8765/api/health && echo "" || journalctl -u opto -n 25 --no-pager
+
+echo ""
+echo "OK. data/ em produção NÃO foi alterada."

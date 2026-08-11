@@ -24,15 +24,26 @@ if ! id "$APP_USER" &>/dev/null; then
   useradd -m -s /bin/bash "$APP_USER"
 fi
 
-echo "==> Copiando projeto para $APP_DIR"
+echo "==> Copiando projeto para $APP_DIR (sem data/, venv, opto.env, caches, logs)"
 mkdir -p "$APP_DIR"
-rsync -a --delete \
-  --exclude 'venv' \
-  --exclude '__pycache__' \
-  --exclude '.git' \
-  --exclude 'centro-automacoes/data/jobs/*' \
-  --exclude 'centro-automacoes/venv' \
-  "$REPO_DIR/" "$APP_DIR/"
+EXCLUDE_FILE="$REPO_DIR/deploy/rsync-exclude.txt"
+if [[ -f "$EXCLUDE_FILE" ]]; then
+  # REPO_DIR é centro-automacoes; sobe um nível para a raiz do monorepo
+  ROOT_DIR="$(cd "$REPO_DIR/.." && pwd)"
+  rsync -a --delete --exclude-from="$EXCLUDE_FILE" "$ROOT_DIR/" "$APP_DIR/"
+else
+  rsync -a --delete \
+    --exclude 'venv/' \
+    --exclude '**/venv/' \
+    --exclude '__pycache__/' \
+    --exclude '.git/' \
+    --exclude 'centro-automacoes/data/' \
+    --exclude 'centro-automacoes/venv/' \
+    --exclude 'centro-automacoes/deploy/opto.env' \
+    --exclude '*.pyc' \
+    --exclude '*.log' \
+    "$REPO_DIR/../" "$APP_DIR/"
+fi
 
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 

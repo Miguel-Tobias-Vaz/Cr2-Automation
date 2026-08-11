@@ -1,0 +1,22 @@
+# Exclusões obrigatórias ao sincronizar código → /opt/opto-automacoes
+# Usado por rsync --exclude-from=...
+.git/
+venv/
+**/venv/
+centro-automacoes/venv/
+centro-automacoes/data/
+centro-automacoes/deploy/opto.env
+opto.env
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+**/cache_ia/
+**/cache/
+**/.cache/
+*.log
+instalacao-log.txt
+iniciar-log.txt
+diagnostico-log.txt
+runtime.json
+**/runtime.json

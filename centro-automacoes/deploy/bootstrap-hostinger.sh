@@ -29,10 +29,23 @@ apt-get install -y -qq python3 python3-venv tesseract-ocr tesseract-ocr-por popp
 id "$APP_USER" &>/dev/null || useradd -m -s /bin/bash "$APP_USER"
 
 mkdir -p "$APP_DIR"
-rsync -a --delete \
-  --exclude venv --exclude __pycache__ --exclude .git \
-  --exclude centro-automacoes/venv \
-  "$SRC/" "$APP_DIR/"
+EXCLUDE_FILE="$SRC/centro-automacoes/deploy/rsync-exclude.txt"
+echo "==> rsync (nunca copia data/, venv, opto.env, caches, logs)"
+if [[ -f "$EXCLUDE_FILE" ]]; then
+  rsync -a --delete --exclude-from="$EXCLUDE_FILE" "$SRC/" "$APP_DIR/"
+else
+  rsync -a --delete \
+    --exclude '.git/' \
+    --exclude 'venv/' \
+    --exclude '**/venv/' \
+    --exclude 'centro-automacoes/venv/' \
+    --exclude 'centro-automacoes/data/' \
+    --exclude 'centro-automacoes/deploy/opto.env' \
+    --exclude '__pycache__/' \
+    --exclude '*.pyc' \
+    --exclude '*.log' \
+    "$SRC/" "$APP_DIR/"
+fi
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 sudo -u "$APP_USER" bash <<'EOSU'
