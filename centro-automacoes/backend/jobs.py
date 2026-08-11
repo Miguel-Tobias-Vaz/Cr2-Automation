@@ -312,11 +312,16 @@ class JobManager:
                 [
                     j
                     for j in self._jobs.values()
-                    if j.status == JobStatus.RUNNING and j.owner == owner
+                    if j.status == JobStatus.RUNNING
+                    and self._owners_match(j.owner, owner)
                 ],
                 key=lambda j: j.started_at or j.created_at,
             )
-            pending = [j for j in self._pending_jobs_locked() if j.owner == owner]
+            pending = [
+                j
+                for j in self._pending_jobs_locked()
+                if self._owners_match(j.owner, owner)
+            ]
         return running + pending
 
     def user_job_for_owner(
@@ -373,12 +378,19 @@ class JobManager:
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
 
+    @staticmethod
+    def _owners_match(owner: str | None, username: str | None) -> bool:
+        if not owner or not username:
+            return False
+        return owner.strip().lower() == username.strip().lower()
+
     def _job_visible_to_user(
         self, job: Job, username: str, *, is_admin: bool
     ) -> bool:
         if is_admin:
             return True
-        return job.owner in (None, username)
+        # Com autenticação, jobs sem dono não são públicos entre usuários.
+        return self._owners_match(job.owner, username)
 
     def list_jobs(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -450,9 +462,10 @@ class JobManager:
             if not j.result.get("zip"):
                 continue
             if owner:
-                if j.owner != owner:
+                if not self._owners_match(j.owner, owner):
                     continue
             elif j.owner:
+                # Sem auth: só jobs órfãos (modo local compartilhado).
                 continue
             ready.append(
                 {

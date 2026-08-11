@@ -32,13 +32,24 @@ def _user_is_admin(user) -> bool:
     return user.role == "admin" or auth.is_panel_admin(user)
 
 
+def _sees_all_jobs(user) -> bool:
+    return auth.is_panel_admin(user)
+
+
+def _owners_match(owner: str | None, username: str | None) -> bool:
+    if not owner or not username:
+        return False
+    return owner.strip().lower() == username.strip().lower()
+
+
 def _assert_can_access_dic_job(job, user) -> None:
     if not auth.is_enabled():
         return
-    if _user_is_admin(user):
+    if _sees_all_jobs(user):
         return
-    if job.owner not in (None, user.username):
-        raise HTTPException(403, "Sem permissão para acessar este processo.")
+    if _owners_match(job.owner, user.username):
+        return
+    raise HTTPException(403, "Sem permissão para acessar este processo.")
 
 
 def _active_dic_job():
@@ -59,9 +70,9 @@ def _active_dic_job_for_user(user):
     gjob = _active_dic_job()
     if gjob is None:
         return None
-    if not auth.is_enabled() or _user_is_admin(user):
+    if not auth.is_enabled():
         return gjob
-    if gjob.owner in (None, user.username):
+    if _sees_all_jobs(user) or _owners_match(gjob.owner, user.username):
         return gjob
     return None
 

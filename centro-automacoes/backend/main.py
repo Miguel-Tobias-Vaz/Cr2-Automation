@@ -177,13 +177,55 @@ SERVICE_LABELS = {
 }
 
 
+def _owner_short_name(owner: str | None) -> str:
+    """Nome curto do usuário para rótulos de download (ex.: admin2)."""
+    raw = (owner or "local").strip()
+    if "@" in raw:
+        raw = raw.split("@", 1)[0].strip()
+    return raw or "local"
+
+
+def _owners_match(owner: str | None, username: str | None) -> bool:
+    if not owner or not username:
+        return False
+    return owner.strip().lower() == username.strip().lower()
+
+
+def _service_download_base(service_id: str) -> str:
+    label = SERVICE_LABELS.get(service_id, service_id)
+    if label.lower().startswith("baixar "):
+        return label
+    return "Baixar {0}".format(label)
+
+
+def download_display_name(service_id: str, owner: str | None = None) -> str:
+    """Ex.: 'Baixar Extração Pro - admin2'."""
+    return "{0} - {1}".format(
+        _service_download_base(service_id),
+        _owner_short_name(owner),
+    )
+
+
+def download_filename(service_id: str, owner: str | None, job_id: str) -> str:
+    """Nome do arquivo ZIP baixado, com o usuário no nome."""
+    import re
+
+    base = download_display_name(service_id, owner)
+    safe = re.sub(r'[<>:"/\\|?*]', "", base).strip() or "download"
+    # Evita nomes absurdamente longos; job_id curto só como fallback de unicidade
+    if len(safe) > 120:
+        safe = "{0}-{1}".format(safe[:100].rstrip(), (job_id or "")[:8])
+    return "{0}.zip".format(safe)
+
+
 def _job_summary(job) -> dict:
     d = job.to_dict(jobs)
     prog = d.get("progress") or {}
+    owner = d.get("owner")
     return {
         "id": d["id"],
         "service_id": d["service_id"],
-        "nome": SERVICE_LABELS.get(d["service_id"], d["service_id"]),
+        "nome": download_display_name(d["service_id"], owner),
         "status": d["status"],
         "cancel_requested": d.get("cancel_requested"),
         "done": prog.get("done") or 0,
@@ -191,12 +233,17 @@ def _job_summary(job) -> dict:
         "percent": prog.get("percent"),
         "label": prog.get("label") or "",
         "queue": d.get("queue"),
-        "owner": d.get("owner"),
+        "owner": owner,
     }
 
 
 def _user_is_admin(user) -> bool:
     return user.role == "admin" or auth.is_panel_admin(user)
+
+
+def _sees_all_jobs(user) -> bool:
+    """Só o admin principal do painel vê processos de outros usuários."""
+    return auth.is_panel_admin(user)
 
 
 def _health_payload(user) -> dict:
@@ -209,17 +256,22 @@ def _health_payload(user) -> dict:
             "user": None,
         }
 
-    is_admin = bool(user and _user_is_admin(user))
+    sees_all = bool(user and _sees_all_jobs(user))
     username = user.username if user else "local"
     if auth.is_enabled() and user:
-        snap = jobs.queue_snapshot_for_user(username, is_admin=is_admin)
+        snap = jobs.queue_snapshot_for_user(username, is_admin=sees_all)
     else:
         snap = jobs.queue_snapshot()
 
+    # Nunca expor o "ativo" de outro usuário no painel pessoal (nem para role admin).
     ativo = jobs.job_ativo()
-    if auth.is_enabled() and user and not is_admin and ativo:
-        if ativo.owner not in (None, user.username):
-            ativo = None
+    if auth.is_enabled() and user and ativo:
+        if not _owners_match(ativo.owner, user.username):
+            own = jobs.user_job_for_owner(user.username)
+            ativo = own if own and own.status in (
+                JobStatus.RUNNING,
+                JobStatus.PENDING,
+            ) else None
 
     payload: dict = {
         "ok": True,
@@ -239,8 +291,10 @@ def _health_payload(user) -> dict:
 
     if auth.is_enabled() and user:
         visible_running = jobs.running_jobs()
-        if not is_admin:
-            visible_running = [j for j in visible_running if j.owner in (None, user.username)]
+        if not sees_all:
+            visible_running = [
+                j for j in visible_running if _owners_match(j.owner, user.username)
+            ]
         payload["running_jobs"] = [_job_summary(j) for j in visible_running]
     elif not auth.is_enabled():
         payload["running_jobs"] = [_job_summary(j) for j in jobs.running_jobs()]
@@ -335,8 +389,9 @@ def list_services():
 
 @app.get("/api/jobs")
 def list_jobs(user=Depends(require_user)):
-    is_admin = _user_is_admin(user)
-    return jobs.list_jobs_for_user(user.username, is_admin=is_admin)
+    return jobs.list_jobs_for_user(
+        user.username, is_admin=_sees_all_jobs(user)
+    )
 
 
 @app.get("/api/jobs/downloads-ready")
@@ -344,12 +399,14 @@ def jobs_downloads_ready(user=Depends(require_user)):
     """ZIPs prontos para download — apenas jobs do usuário logado."""
     owner = user.username if auth.is_enabled() else None
     items = jobs.list_downloads_ready(owner)
-    labels = SERVICE_LABELS
     return {
         "downloads": [
             {
                 **row,
-                "nome": labels.get(row["service_id"], row["service_id"]),
+                "nome": download_display_name(row["service_id"], row.get("owner") or owner),
+                "arquivo": download_filename(
+                    row["service_id"], row.get("owner") or owner, row["id"]
+                ),
             }
             for row in items
         ]
@@ -358,21 +415,22 @@ def jobs_downloads_ready(user=Depends(require_user)):
 
 @app.get("/api/queue")
 def get_queue(user=Depends(require_user)):
-    is_admin = _user_is_admin(user)
-    return jobs.queue_snapshot_for_user(user.username, is_admin=is_admin)
+    return jobs.queue_snapshot_for_user(
+        user.username, is_admin=_sees_all_jobs(user)
+    )
 
 
 @app.post("/api/jobs/cancel-active")
 def cancel_active_job(user=Depends(require_user)):
-    """Cancela processo em andamento (do usuário ou qualquer se admin)."""
+    """Cancela processo em andamento (do usuário; admin principal pode cancelar qualquer)."""
     with jobs._lock:
         alive = [
             j
             for j in jobs._jobs.values()
             if j.status in (JobStatus.PENDING, JobStatus.RUNNING)
         ]
-    if auth.is_enabled() and user.role != "admin" and not auth.is_panel_admin(user):
-        alive = [j for j in alive if j.owner in (None, user.username)]
+    if auth.is_enabled() and not _sees_all_jobs(user):
+        alive = [j for j in alive if _owners_match(j.owner, user.username)]
     alive.sort(key=lambda j: j.started_at or j.created_at, reverse=True)
     job = alive[0] if alive else None
     if not job:
@@ -423,10 +481,11 @@ def _startup_resume_queue():
 def _assert_can_access_job(job, user) -> None:
     if not auth.is_enabled():
         return
-    if user.role == "admin" or auth.is_panel_admin(user):
+    if _sees_all_jobs(user):
         return
-    if job.owner not in (None, user.username):
-        raise HTTPException(403, "Sem permissão para acessar este processo.")
+    if _owners_match(job.owner, user.username):
+        return
+    raise HTTPException(403, "Sem permissão para acessar este processo.")
 
 
 @app.get("/api/workspace")
@@ -558,8 +617,7 @@ def download_job(job_id: str, user=Depends(require_user)):
         build_download_zip(job)
         zip_path = job.result.get("zip")
     if zip_path and Path(zip_path).is_file():
-        svc = SERVICE_LABELS.get(job.service_id, job.service_id)
-        fname = "opto-{0}-{1}.zip".format(svc.replace(" ", "-").lower(), job_id)
+        fname = download_filename(job.service_id, job.owner, job_id)
         return FileResponse(
             zip_path,
             filename=fname,

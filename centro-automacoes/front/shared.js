@@ -115,7 +115,7 @@
     },
     normas: {
       id: "normas",
-      nome: "Extração Pro",
+      nome: "Baixar Extração Pro",
       descricao: "Leis, atos, matérias e documentos — Prefeitura ou Câmara, com nomeação automática e IA local opcional.",
       pagina: "/normas.html",
       icon: "book",
@@ -528,8 +528,7 @@
   function jobDisplayName(job) {
     if (!job) return "Processo";
     if (job.nome) return job.nome;
-    const tool = TOOLS[job.service_id];
-    return (tool && tool.nome) || job.service_id || "Processo";
+    return downloadLabel(job.service_id, job.owner || currentUsername);
   }
 
   function formatJobProgressText(job) {
@@ -1516,16 +1515,15 @@
   const SERVICE_LABELS = {
     documentos: "Baixar Documentos",
     categorias: "Baixar por Categoria",
-    normas: "Extração Pro",
-    licitacoes: "Licitações",
-    repasses: "Repasses",
+    normas: "Baixar Extração Pro",
+    licitacoes: "Baixar Licitações",
+    repasses: "Baixar Extração de Repasses",
     contratos: "Contratos / Aditivos",
     publicacao: "Publicação CR2",
     sessao: "Publicação de Sessão",
     pub_repasses: "Publicação de Repasses",
     mapa: "Mapa do Site",
     dic_est_ter: "Publicação Dic/Est/Ter",
-    repasses: "Extração de Repasses",
   };
 
   const STATUS_PT = {
@@ -1544,6 +1542,24 @@
   let workspaceCache = null;
   let currentUsername = null;
   let authRequired = false;
+
+  function ownerShortName(owner) {
+    const raw = String(owner || currentUsername || "local").trim();
+    if (!raw) return "local";
+    const at = raw.indexOf("@");
+    return (at > 0 ? raw.slice(0, at) : raw).trim() || "local";
+  }
+
+  function downloadLabel(serviceId, owner) {
+    const base = SERVICE_LABELS[serviceId] || serviceId || "Download";
+    const withBaixar = /^baixar\s/i.test(base) ? base : `Baixar ${base}`;
+    return `${withBaixar} - ${ownerShortName(owner)}`;
+  }
+
+  function ownersMatch(a, b) {
+    if (!a || !b) return false;
+    return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  }
   let resumedOnce = false;
 
   const _PATH_FIELD_IDS = new Set([
@@ -1711,10 +1727,16 @@
       const r = await authFetch(`${API}/api/jobs/${jobId}/download`);
       if (!r.ok) return false;
       const blob = await r.blob();
-      let fname = `opto-${jobId}.zip`;
+      let fname = downloadLabel(boundServiceId, currentUsername) + ".zip";
       const cd = r.headers.get("content-disposition") || "";
-      const m = /filename=\"?([^\";]+)\"?/i.exec(cd);
-      if (m) fname = m[1];
+      const m = /filename\*?=(?:UTF-8''|\"?)([^\";]+)/i.exec(cd);
+      if (m) {
+        try {
+          fname = decodeURIComponent(m[1].replace(/\"/g, ""));
+        } catch (_) {
+          fname = m[1].replace(/\"/g, "");
+        }
+      }
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = fname;
@@ -1792,18 +1814,20 @@
     if (!btn) return;
     btn.hidden = false;
     const waiting = !!(opts && opts.waiting);
+    const svc = (opts && opts.serviceId) || boundServiceId;
+    const label = downloadLabel(svc, (opts && opts.owner) || currentUsername);
     if (ready && jobId) {
       btn.disabled = false;
       btn.removeAttribute("aria-disabled");
       btn.className = "btn btn-primary btn-sm";
-      btn.textContent = "Baixar ZIP";
-      btn.title = "Baixar pacote ZIP com os arquivos gerados";
+      btn.textContent = label;
+      btn.title = `Baixar pacote ZIP: ${label}`;
       btn.onclick = () => downloadJobArtifact(jobId);
     } else {
       btn.disabled = true;
       btn.setAttribute("aria-disabled", "true");
       btn.className = "btn btn-ghost btn-sm";
-      btn.textContent = "Baixar ZIP";
+      btn.textContent = label;
       btn.title = waiting
         ? "Disponível quando o processo terminar e houver arquivos"
         : "Nenhum arquivo gerado para download";
@@ -1840,8 +1864,12 @@
 
   function downloadsForCurrentUser(items) {
     const list = items || [];
-    if (!authRequired || !currentUsername) return list;
-    return list.filter((j) => j.owner === currentUsername);
+    // Sempre isola por usuário quando sabemos quem está logado.
+    if (currentUsername) {
+      return list.filter((j) => ownersMatch(j.owner, currentUsername));
+    }
+    if (authRequired) return [];
+    return list.filter((j) => !j.owner);
   }
 
   function renderDownloadBanner(items) {
@@ -1860,7 +1888,8 @@
     document.body.classList.add("has-dl-banner");
     const rows = visible
       .map((j) => {
-        const label = j.nome || SERVICE_LABELS[j.service_id] || j.service_id;
+        const label =
+          j.nome || downloadLabel(j.service_id, j.owner || currentUsername);
         return `<div class="opto-dl-banner-row">
           <span><strong>${label}</strong> finalizado — ZIP pronto</span>
           <button type="button" class="btn btn-primary btn-sm" data-dl-job="${j.id}">Baixar ZIP</button>
@@ -2177,7 +2206,7 @@
       showJobDownloadButton(job.id);
       showNotice(
         (job.result && job.result.mensagem) ||
-          `${SERVICE_LABELS[job.service_id] || job.service_id} finalizado — clique em Baixar ZIP.`,
+          `${downloadLabel(job.service_id, job.owner || currentUsername)} finalizado — clique para baixar.`,
         "ok"
       );
     } else if (!workspaceCache?.local_mode) {
@@ -2294,7 +2323,10 @@
         dl.hidden = true;
       }
 
-      const label = SERVICE_LABELS[job.service_id] || job.service_id || "Automação";
+      const label = downloadLabel(
+        job.service_id,
+        job.owner || currentUsername
+      );
       const already = noticeShownFor === jobId;
       const finished = ["completed", "failed", "cancelled"].includes(job.status);
       const st = el("job-status");
@@ -2339,7 +2371,7 @@
         if (!already) {
           noticeShownFor = jobId;
           const fallback = job.has_download
-            ? `${label} finalizado — clique em Baixar ZIP para baixar.`
+            ? `${label} finalizado — clique para baixar.`
             : `${label} finalizado.`;
           showNotice((job.result && job.result.mensagem) || fallback, "ok");
         }

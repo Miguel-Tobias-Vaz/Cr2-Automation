@@ -261,11 +261,15 @@ def test_list_downloads_ready_somente_dono():
     j_b.status = JobStatus.COMPLETED
     j_b.result["zip"] = "/tmp/b.zip"
 
+    j_admin2 = Job(id="d1", service_id="normas", config={}, owner="admin2")
+    j_admin2.status = JobStatus.COMPLETED
+    j_admin2.result["zip"] = "/tmp/d.zip"
+
     j_orfa = Job(id="c1", service_id="documentos", config={}, owner=None)
     j_orfa.status = JobStatus.COMPLETED
     j_orfa.result["zip"] = "/tmp/c.zip"
 
-    mgr._jobs = {j.id: j for j in (j_a, j_b, j_orfa)}
+    mgr._jobs = {j.id: j for j in (j_a, j_b, j_admin2, j_orfa)}
 
     maria = mgr.list_downloads_ready("maria@test.com")
     assert [x["id"] for x in maria] == ["a1"]
@@ -273,8 +277,40 @@ def test_list_downloads_ready_somente_dono():
     joao = mgr.list_downloads_ready("joao@test.com")
     assert [x["id"] for x in joao] == ["b1"]
 
+    admin2 = mgr.list_downloads_ready("admin2")
+    assert [x["id"] for x in admin2] == ["d1"]
+
+    # Case-insensitive
+    assert [x["id"] for x in mgr.list_downloads_ready("Admin2")] == ["d1"]
+
     local = mgr.list_downloads_ready(None)
     assert [x["id"] for x in local] == ["c1"]
+
+    # Jobs órfãos não vazam para usuários autenticados
+    assert mgr.list_downloads_ready("admin") == []
+
+
+def test_job_visibility_nao_mistura_usuarios():
+    mgr = JobManager()
+    mgr._persist_enabled = False
+    j_a = Job(id="a1", service_id="normas", config={}, owner="admin")
+    j_b = Job(id="b1", service_id="normas", config={}, owner="admin2")
+    j_orfa = Job(id="c1", service_id="normas", config={}, owner=None)
+    assert mgr._job_visible_to_user(j_a, "admin", is_admin=False) is True
+    assert mgr._job_visible_to_user(j_b, "admin", is_admin=False) is False
+    assert mgr._job_visible_to_user(j_orfa, "admin", is_admin=False) is False
+    assert mgr._job_visible_to_user(j_b, "admin2", is_admin=False) is True
+    assert mgr._job_visible_to_user(j_a, "admin2", is_admin=True) is True
+
+
+def test_download_display_name_inclui_usuario():
+    from backend.main import download_display_name, download_filename
+
+    assert download_display_name("normas", "admin2") == "Baixar Extração Pro - admin2"
+    assert download_display_name("normas", "admin2@empresa.com") == "Baixar Extração Pro - admin2"
+    assert download_filename("normas", "admin2", "abc123").endswith(".zip")
+    assert "admin2" in download_filename("normas", "admin2", "abc123")
+    assert "Extração Pro" in download_filename("normas", "admin2", "abc123")
 
 
 def test_timeout_marks_job(monkeypatch):

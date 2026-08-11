@@ -253,11 +253,11 @@ def can_cancel_job(sess: Session | None, owner: str | None) -> bool:
         return True
     if not sess:
         return False
-    if is_admin(sess):
+    if is_panel_admin(sess):
         return True
     if not owner:
-        return True
-    return sess.username == owner
+        return False
+    return sess.username.strip().lower() == owner.strip().lower()
 
 
 reload_users()
