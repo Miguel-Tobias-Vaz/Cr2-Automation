@@ -249,7 +249,9 @@ export function mountFileBrowser(container, opts = {}) {
         const icon = entry.kind === "dir" ? "📁" : "📄";
         const name = escapeHtml(entry.name);
         const size =
-          entry.kind === "file" && entry.size != null ? formatBytes(entry.size) : "—";
+          entry.size != null
+            ? formatBytes(entry.size) + (entry.size_partial ? "+" : "")
+            : "—";
         const modified = entry.modified ? formatDate(entry.modified * 1000) : "—";
         const isJobs = entry.path === "jobs" || entry.path.startsWith("jobs/");
         const pickBtn =

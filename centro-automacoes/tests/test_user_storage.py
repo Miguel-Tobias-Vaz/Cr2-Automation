@@ -204,6 +204,24 @@ def test_list_workspace_files(users_root):
     assert "teste.pdf" in names
 
 
+def test_list_workspace_files_pasta_com_tamanho(users_root):
+    info = workspace_info("ana")
+    out = Path(info["output_dir"])
+    pasta = out / "licitacoes" / "Licitacao_001"
+    pasta.mkdir(parents=True)
+    (pasta / "a.pdf").write_bytes(b"12345")
+    (pasta / "b.pdf").write_bytes(b"67890")
+
+    data = list_workspace_files("ana", "output")
+    lic = next(e for e in data["entries"] if e["name"] == "licitacoes")
+    assert lic["kind"] == "dir"
+    assert lic.get("size") == 5 + 5
+
+    inner = list_workspace_files("ana", "output/licitacoes")
+    sub = next(e for e in inner["entries"] if e["name"] == "Licitacao_001")
+    assert sub.get("size") == 5 + 5
+
+
 def test_resolve_user_path_bloqueia_traversal(users_root):
     root = resolve_user_path("ana", "")
     escaped = resolve_user_path("ana", "../../../windows/system32")
@@ -307,6 +325,31 @@ def test_build_download_zip_pasta(users_root, tmp_path):
     dest = build_download_zip(job)
     assert dest and dest.is_file()
     assert job.result.get("zip")
+
+
+def test_build_download_zip_licitacoes_muitas_pastas(users_root, tmp_path):
+    """165+ pastas de licitação preservam estrutura no ZIP."""
+    import zipfile
+
+    saida = tmp_path / "licitacoes"
+    for i in range(1, 170):
+        pasta = saida / f"Licitacao_{i:03d}"
+        pasta.mkdir(parents=True)
+        (pasta / "edital.pdf").write_bytes(b"%PDF-1.4 test")
+    (saida / "subirLicitacoes.xlsx").write_bytes(b"PK\x03\x04x")
+
+    job = Job(id="lic1", service_id="licitacoes", config={})
+    job.status = JobStatus.COMPLETED
+    job.result["pasta"] = str(saida)
+    job.result["planilha_licitacoes"] = str(saida / "subirLicitacoes.xlsx")
+
+    dest = build_download_zip(job)
+    assert dest and dest.is_file()
+    assert job.result.get("download_files", 0) >= 170
+    with zipfile.ZipFile(dest, "r") as zf:
+        names = zf.namelist()
+    assert any("Licitacao_001/edital.pdf" in n for n in names)
+    assert any(n.endswith("subirLicitacoes.xlsx") for n in names)
 
 
 def test_find_job_zip_resultado(tmp_path):

@@ -12,16 +12,25 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from backend.zip_fast import write_zip_file
+
 ROOT = Path(__file__).resolve().parent.parent
 USERS_ROOT = ROOT / "data" / "users"
 
 MAX_UPLOAD_BYTES = max(
     1, int(os.getenv("OPTO_MAX_UPLOAD_MB", "150"))
 ) * 1024 * 1024
-MAX_ZIP_FILES = max(100, int(os.getenv("OPTO_MAX_ZIP_FILES", "5000")))
+MAX_ZIP_FILES = max(100, int(os.getenv("OPTO_MAX_ZIP_FILES", "50000")))
 MAX_ZIP_UNCOMPRESSED = max(
-    10, int(os.getenv("OPTO_MAX_ZIP_MB", "500"))
+    10, int(os.getenv("OPTO_MAX_ZIP_MB", "2048"))
 ) * 1024 * 1024
+
+FOLDER_SIZE_ENABLED = os.getenv("OPTO_FOLDER_SIZE", "1").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+)
+FOLDER_SIZE_MAX_FILES = max(100, int(os.getenv("OPTO_FOLDER_SIZE_MAX_FILES", "25000")))
 
 ALLOWED_SINGLE = frozenset(
     {".xlsx", ".xlsm", ".xls", ".csv", ".pdf", ".zip"}
@@ -297,6 +306,35 @@ def ensure_owner_workspace(owner_id: str) -> str:
     return safe
 
 
+def _dir_size(path: Path, *, max_files: int | None = None) -> tuple[int, bool]:
+    """
+    Soma bytes dos arquivos dentro da pasta (recursivo).
+    Retorna (total, partial) — partial=True se atingiu o limite de arquivos.
+    """
+    cap = max_files if max_files is not None else FOLDER_SIZE_MAX_FILES
+    total = 0
+    count = 0
+    stack = [path]
+    while stack:
+        current = stack.pop()
+        try:
+            with os.scandir(current) as it:
+                for entry in it:
+                    try:
+                        if entry.is_file(follow_symlinks=False):
+                            total += entry.stat(follow_symlinks=False).st_size
+                            count += 1
+                            if count >= cap:
+                                return total, True
+                        elif entry.is_dir(follow_symlinks=False):
+                            stack.append(Path(entry.path))
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return total, False
+
+
 def list_workspace_files(
     owner: str | None,
     subpath: str = "",
@@ -316,16 +354,20 @@ def list_workspace_files(
         except OSError:
             continue
         child_rel = item.relative_to(root).as_posix()
-        entries.append(
-            {
-                "name": item.name,
-                "path": child_rel,
-                "abs_path": str(item.resolve()),
-                "kind": "dir" if item.is_dir() else "file",
-                "size": stat.st_size if item.is_file() else None,
-                "modified": stat.st_mtime,
-            }
-        )
+        entry: dict[str, Any] = {
+            "name": item.name,
+            "path": child_rel,
+            "abs_path": str(item.resolve()),
+            "kind": "dir" if item.is_dir() else "file",
+            "size": stat.st_size if item.is_file() else None,
+            "modified": stat.st_mtime,
+        }
+        if item.is_dir() and FOLDER_SIZE_ENABLED:
+            total, partial = _dir_size(item)
+            entry["size"] = total
+            if partial:
+                entry["size_partial"] = True
+        entries.append(entry)
     return {
         "path": rel,
         "abs_path": str(target.resolve()),
@@ -402,7 +444,7 @@ def prepare_workspace_download(
                         f"{MAX_ZIP_UNCOMPRESSED // (1024 * 1024)} MB para download."
                     )
                 arc = str(file_path.relative_to(target)).replace("\\", "/")
-                zf.write(file_path, arc)
+                write_zip_file(zf, file_path, arc)
     except Exception:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise

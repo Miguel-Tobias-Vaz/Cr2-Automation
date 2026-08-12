@@ -2291,6 +2291,8 @@ import { injectFooter } from "./modules/nav.js";
       if (!workspaceCache?.local_mode) {
         if (job.has_download) {
           syncDownloadUi(jobId, job.service_id, true, { owner: job.owner });
+        } else if (job.zip_building) {
+          syncDownloadUi(jobId, job.service_id, false, { waiting: true });
         } else if (
           job.status === "running" ||
           job.status === "pending" ||
@@ -2354,16 +2356,25 @@ import { injectFooter } from "./modules/nav.js";
         }
       } else if (job.status === "completed") {
         setLogState("Finalizado");
+        const zipErr =
+          job.zip_error || (job.result && job.result._zip_error) || "";
         if (!already) {
           noticeShownFor = jobId;
-          const fallback = job.has_download
-            ? `${label} finalizado — clique para baixar.`
-            : `${label} finalizado.`;
-          showNotice((job.result && job.result.mensagem) || fallback, "ok");
+          if (zipErr && !job.has_download) {
+            showNotice(zipErr, "warn");
+          } else {
+            const fallback = job.has_download
+              ? `${label} finalizado — clique para baixar.`
+              : `${label} finalizado.`;
+            showNotice((job.result && job.result.mensagem) || fallback, "ok");
+          }
         }
         if (job.has_download && !workspaceCache?.local_mode) {
           syncDownloadUi(jobId, job.service_id, true, { owner: job.owner });
           pollDownloadsReady().catch(() => {});
+        } else if (job.zip_building && !workspaceCache?.local_mode) {
+          syncDownloadUi(jobId, job.service_id, false, { waiting: true });
+          setTimeout(() => refreshStatus(jobId).catch(() => {}), 1200);
         } else if (
           !workspaceCache?.local_mode &&
           zipRetryFor !== jobId

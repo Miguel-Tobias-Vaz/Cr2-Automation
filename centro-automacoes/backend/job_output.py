@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import threading
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from backend.user_storage import MAX_ZIP_FILES, MAX_ZIP_UNCOMPRESSED
+from backend.zip_fast import write_zip_file
 
 if TYPE_CHECKING:
     from backend.jobs import Job, JobManager, JobStatus
@@ -13,6 +17,8 @@ if TYPE_CHECKING:
 ZIP_LOGIC_VERSION = 2
 
 ZIP_FILENAMES = ("resultado.zip", "download.zip")
+
+_zip_build_locks: dict[str, threading.Lock] = {}
 
 _FILE_KEYS = (
     "planilha",
@@ -63,7 +69,17 @@ def ensure_download_zip(job: Job) -> Path | None:
     """Garante ZIP existente; tenta montar se ainda não houver."""
     if job_has_download(job):
         return Path(str(job.result["zip"]))
-    return build_download_zip(job)
+    if job.result.get("_zip_building"):
+        return None
+    lock = _zip_build_locks.setdefault(job.id, threading.Lock())
+    if not lock.acquire(blocking=False):
+        return None
+    try:
+        if job_has_download(job):
+            return Path(str(job.result["zip"]))
+        return build_download_zip(job)
+    finally:
+        lock.release()
 
 
 def ensure_disk_download(job_id: str, owner: str | None = None) -> bool:
@@ -149,8 +165,106 @@ def _files_modified_since(folder: Path, since: float, *, margin: float = 3.0) ->
 
 
 def _arcname_for(base: Path, file_path: Path) -> str:
-    rel = file_path.relative_to(base)
-    return str(rel).replace("\\", "/")
+    try:
+        rel = file_path.resolve().relative_to(base.resolve())
+        return str(rel).replace("\\", "/")
+    except ValueError:
+        return file_path.name
+
+
+def _iter_folder_files(job: Job, folder: Path) -> list[Path]:
+    if _is_shared_output_root(job, folder) and job.started_at:
+        files = _files_modified_since(folder, job.started_at)
+        if not files:
+            sub = _service_output_folder(job)
+            if sub and sub.is_dir() and sub != folder.resolve():
+                files = [f for f in sub.rglob("*") if f.is_file()]
+        return [f for f in files if f.is_file() and not _skip_zip_file(f)]
+    return [
+        f
+        for f in folder.rglob("*")
+        if f.is_file() and not _skip_zip_file(f)
+    ]
+
+
+def _collect_zip_entries(job: Job) -> list[tuple[Path, str]]:
+    """Monta lista (arquivo, caminho dentro do zip) preservando subpastas."""
+    explicit_files, explicit_dirs = _collect_explicit_artifacts(job)
+    items: list[tuple[Path, str]] = []
+    seen: set[str] = set()
+
+    def add(path: Path, arc: str) -> None:
+        arc = arc.replace("\\", "/").lstrip("/")
+        if not arc or arc in seen or not path.is_file() or _skip_zip_file(path):
+            return
+        seen.add(arc)
+        items.append((path.resolve(), arc))
+
+    for f in explicit_files:
+        add(f, f.name)
+
+    for d in explicit_dirs:
+        if not d.is_dir():
+            continue
+        for f in d.rglob("*"):
+            if f.is_file():
+                add(
+                    f,
+                    "{0}/{1}".format(d.name, f.relative_to(d)).replace("\\", "/"),
+                )
+
+    folders = _folder_candidates(job)
+    multi_root = len(folders) > 1
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+        prefix = (folder.name + "/") if multi_root else ""
+        for f in _iter_folder_files(job, folder):
+            add(f, prefix + str(f.relative_to(folder)).replace("\\", "/"))
+
+    return items
+
+
+def _check_zip_limits(items: list[tuple[Path, str]]) -> str | None:
+    if len(items) > MAX_ZIP_FILES:
+        return (
+            "Muitos arquivos para o ZIP ({0} > limite {1}). "
+            "Baixe a pasta em Arquivos ou aumente OPTO_MAX_ZIP_FILES."
+        ).format(len(items), MAX_ZIP_FILES)
+    total = 0
+    for path, _ in items:
+        try:
+            total += path.stat().st_size
+        except OSError:
+            continue
+        if total > MAX_ZIP_UNCOMPRESSED:
+            mb = MAX_ZIP_UNCOMPRESSED // (1024 * 1024)
+            return (
+                "Saída muito grande para o ZIP (~{0} MB+). "
+                "Baixe a pasta em Arquivos ou aumente OPTO_MAX_ZIP_MB."
+            ).format(mb)
+    return None
+
+
+def _write_zip_items(dest: Path, items: list[tuple[Path, str]], job: Job | None = None) -> int:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(".zip.part")
+    n = 0
+    try:
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+            for path, arc in sorted(items, key=lambda x: x[1].lower()):
+                write_zip_file(zf, path, arc)
+                n += 1
+                if job and n % 500 == 0:
+                    job.emit("info", "Montando ZIP… {0} arquivo(s)".format(n))
+        tmp.replace(dest)
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+    return n
 
 
 def _zip_file_list(dest: Path, base: Path, files: list[Path]) -> int:
@@ -169,7 +283,7 @@ def _zip_file_list(dest: Path, base: Path, files: list[Path]) -> int:
             if arc in seen:
                 continue
             seen.add(arc)
-            zf.write(f, arc)
+            write_zip_file(zf, f, arc)
             n += 1
     return n
 
@@ -181,7 +295,7 @@ def _zip_tree(dest: Path, folder: Path, arc_prefix: str) -> int:
             if not f.is_file() or _skip_zip_file(f):
                 continue
             rel = f.relative_to(folder)
-            zf.write(f, arc_prefix + str(rel).replace("\\", "/"))
+            write_zip_file(zf, f, arc_prefix + str(rel).replace("\\", "/"))
             n += 1
     return n
 
@@ -239,6 +353,7 @@ def build_download_zip(job: Job) -> Path | None:
     if job.result.get("_zip_v") != ZIP_LOGIC_VERSION:
         job.result.pop("zip", None)
         job.result.pop("download_files", None)
+        job.result.pop("_zip_error", None)
 
     existing = job.result.get("zip")
     if existing:
@@ -246,71 +361,33 @@ def build_download_zip(job: Job) -> Path | None:
         if path.is_file() and job.result.get("_zip_v") == ZIP_LOGIC_VERSION:
             return path
 
-    explicit_files, explicit_dirs = _collect_explicit_artifacts(job)
+    items = _collect_zip_entries(job)
+    if not items:
+        return None
 
-    # Artefatos explícitos + arquivos da pasta de saída deste job
-    if explicit_files or explicit_dirs:
-        entries: list[Path] = list(explicit_files)
-        for d in explicit_dirs:
-            entries.extend(f for f in d.rglob("*") if f.is_file())
-        for folder in _folder_candidates(job):
-            if _is_shared_output_root(job, folder) and job.started_at:
-                entries.extend(_files_modified_since(folder, job.started_at))
-            elif not _is_shared_output_root(job, folder):
-                entries.extend(f for f in folder.rglob("*") if f.is_file())
-        if entries:
-            root = _user_output_root(job)
-            if root:
-                base = root
-            else:
-                bases = {f.parent for f in entries if f.is_file()}
-                base = min(bases, key=lambda p: len(str(p))) if bases else entries[0].parent
-            dest = job.dir / "resultado.zip"
-            count = _zip_file_list(dest, base, entries)
-            if count > 0:
-                job.result["zip"] = str(dest)
-                job.result["download_files"] = count
-                job.result["_zip_v"] = ZIP_LOGIC_VERSION
-                return dest
+    limit_err = _check_zip_limits(items)
+    if limit_err:
+        job.result["_zip_error"] = limit_err
+        if hasattr(job, "emit"):
+            job.emit("warn", limit_err)
+        return None
 
-    for folder in _folder_candidates(job):
-        if _is_shared_output_root(job, folder) and job.started_at:
-            files = _files_modified_since(folder, job.started_at)
-            if not files:
-                sub = _service_output_folder(job)
-                if sub and sub != folder.resolve():
-                    files = [f for f in sub.rglob("*") if f.is_file()]
-                    if files:
-                        folder = sub
-            if not files:
-                continue
-            dest = job.dir / "resultado.zip"
-            count = _zip_file_list(dest, folder, files)
-        else:
-            dest = job.dir / "resultado.zip"
-            prefix = folder.name + "/"
-            count = _zip_tree(dest, folder, prefix)
-        if count > 0:
-            job.result["zip"] = str(dest)
-            job.result["download_files"] = count
-            job.result["_zip_v"] = ZIP_LOGIC_VERSION
-            return dest
+    dest = job.dir / "resultado.zip"
+    try:
+        count = _write_zip_items(dest, items, job)
+    except OSError as exc:
+        msg = "Falha ao gravar ZIP: {0}".format(str(exc)[:160])
+        job.result["_zip_error"] = msg
+        if hasattr(job, "emit"):
+            job.emit("error", msg)
+        return None
 
-    # Planilha única sem pasta (fallback legado)
-    for key in _FILE_KEYS:
-        raw = (job.result or {}).get(key)
-        if not raw:
-            continue
-        p = Path(str(raw))
-        if p.is_file():
-            dest = job.dir / "resultado.zip"
-            with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zf:
-                zf.write(p, p.name)
-            job.result["zip"] = str(dest)
-            job.result["download_files"] = 1
-            job.result["_zip_v"] = ZIP_LOGIC_VERSION
-            return dest
-
+    if count > 0:
+        job.result["zip"] = str(dest)
+        job.result["download_files"] = count
+        job.result["_zip_v"] = ZIP_LOGIC_VERSION
+        job.result.pop("_zip_error", None)
+        return dest
     return None
 
 
@@ -321,17 +398,55 @@ def finalize_job_output(manager: JobManager, job: Job) -> None:
         return
     if job.result.get("zip") and job.result.get("_zip_v") == ZIP_LOGIC_VERSION:
         return
-    path = build_download_zip(job)
-    if path:
-        job.emit(
-            "info",
-            "Pacote de download pronto ({0} arquivo(s)).".format(
-                job.result.get("download_files", "?")
-            ),
-        )
-    else:
-        job.emit(
-            "warn",
-            "Nenhum arquivo encontrado para montar o ZIP — use Arquivos no menu "
-            "ou baixe a pasta de saída pelo admin.",
-        )
+    job.result["_zip_building"] = True
+    try:
+        path = build_download_zip(job)
+        if path:
+            job.emit(
+                "info",
+                "Pacote de download pronto ({0} arquivo(s)).".format(
+                    job.result.get("download_files", "?")
+                ),
+            )
+        elif job.result.get("_zip_error"):
+            pass
+        else:
+            job.emit(
+                "warn",
+                "Nenhum arquivo encontrado para montar o ZIP — use Arquivos no menu "
+                "ou baixe a pasta de saída.",
+            )
+    except Exception as exc:
+        msg = "Falha ao montar ZIP: {0}".format(str(exc)[:200])
+        job.result["_zip_error"] = msg
+        job.emit("error", msg)
+    finally:
+        job.result.pop("_zip_building", None)
+
+
+def schedule_finalize_job_output(manager: JobManager, job: Job) -> None:
+    """Monta ZIP em thread separada para não segurar o status concluído."""
+    from backend.jobs import JobStatus
+
+    if job.status != JobStatus.COMPLETED:
+        return
+    if job_has_download(job):
+        return
+
+    def _run() -> None:
+        try:
+            finalize_job_output(manager, job)
+        finally:
+            try:
+                manager._persist()
+            except Exception:
+                pass
+            try:
+                from backend import queue_store
+
+                queue_store.save_completed(manager)
+            except Exception:
+                pass
+
+    job.result["_zip_building"] = True
+    threading.Thread(target=_run, daemon=True, name="zip-{0}".format(job.id)).start()

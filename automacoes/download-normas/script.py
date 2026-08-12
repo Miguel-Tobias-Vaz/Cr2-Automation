@@ -25,8 +25,10 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlparse
 
@@ -108,8 +110,11 @@ MODELO_IA = "llama3.2:3b"
 OLLAMA_URL = "http://127.0.0.1:11434"
 IA_SEMPRE = False
 
-# Acumulador de linhas da planilha de Diárias (preenchido em baixar_e_salvar).
-REGISTROS_DIARIAS: list[dict] = []
+# Conexões paralelas (painel VPS: OPTO_DOWNLOAD_WORKERS).
+DOWNLOAD_WORKERS = 1
+
+_REG_LOCK = threading.Lock()
+_TLS = threading.local()
 # Acumulador do relatório por categoria + auditoria (Extração Pro).
 REGISTROS_NORMAS: list[dict] = []
 
@@ -124,6 +129,16 @@ HEADERS = {
 
 _SESSION = requests.Session()
 _SESSION.headers.update(HEADERS)
+
+
+def _http_session() -> requests.Session:
+    """Sessão HTTP por thread (downloads paralelos)."""
+    sess = getattr(_TLS, "session", None)
+    if sess is None:
+        sess = requests.Session()
+        sess.headers.update(HEADERS)
+        _TLS.session = sess
+    return sess
 
 
 # =============================================================
@@ -605,7 +620,8 @@ def _registrar_norma_planilha(
         situacao_origem=sit_origem,
         situacao_trecho=sit_trecho,
     )
-    REGISTROS_NORMAS.append(reg)
+    with _REG_LOCK:
+        REGISTROS_NORMAS.append(reg)
 
 
 def _aplicar_ia_nome(nome: str, textos: list[str]) -> str:
@@ -831,7 +847,8 @@ def _tentar_extrair_diarias(
     # remove meta se sobrou
     reg.pop("_ia_alterou", None)
 
-    REGISTROS_DIARIAS.append(reg)
+    with _REG_LOCK:
+        REGISTROS_DIARIAS.append(reg)
     preenchidos = sum(1 for k, v in reg.items() if k != "arquivo" and v)
     print(
         "    [DIARIAS]  {0} — {1}/10 campos ({2})".format(
@@ -1321,7 +1338,7 @@ def baixar_e_salvar(
     )
     criar_pasta(pasta)
     try:
-        resp = _SESSION.get(url_pdf, timeout=60, stream=True)
+        resp = _http_session().get(url_pdf, timeout=60, stream=True)
         resp.raise_for_status()
         chunks = []
         for chunk in resp.iter_content(8192):
@@ -1597,6 +1614,66 @@ def _salvar_planilhas_normas_agora() -> dict[str, str]:
 # Processadores por modo
 # =============================================================
 
+def _executar_downloads_pdfs(
+    items,
+    contadores: dict,
+    *,
+    titulo: str,
+    pasta_hint: str,
+    url_fonte: str,
+    pasta_fixa: str | None = None,
+    ano_fixo: int | None = None,
+) -> None:
+    """Baixa PDFs em série ou em paralelo (DOWNLOAD_WORKERS)."""
+    workers = max(1, min(12, int(DOWNLOAD_WORKERS or 1)))
+
+    def _baixar_item(item):
+        _abortar_se_cancelado()
+        if len(item) == 3:
+            texto_link, url_pdf, ano = item
+        else:
+            texto_link, url_pdf = item
+            ano = ano_fixo or extrair_ano(texto_link, url_pdf, titulo, url_fonte)
+        pasta = pasta_fixa or os.path.join(
+            PASTA_BASE, pasta_hint, str(ano or "sem_ano")
+        )
+        nome_previo = montar_nome_documento(
+            texto_link=texto_link or "",
+            titulo_post=titulo or "",
+            url_pdf=url_pdf,
+            pasta_hint=pasta_hint,
+            ano_fallback=ano,
+        )
+        return baixar_e_salvar(
+            url_pdf,
+            pasta,
+            nome_previo,
+            ler_pdf=True,
+            textos_extras=[texto_link or "", titulo or ""],
+            pasta_hint=pasta_hint,
+            ano_fallback=ano,
+            url_fonte=url_fonte,
+        )
+
+    if workers <= 1:
+        for item in items:
+            resultado = _baixar_item(item)
+            contadores[resultado] = contadores.get(resultado, 0) + 1
+        return
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_baixar_item, item) for item in items]
+        for fut in as_completed(futures):
+            _abortar_se_cancelado()
+            try:
+                resultado = fut.result()
+            except Cancelado:
+                raise
+            except Exception:
+                resultado = "erro"
+            contadores[resultado] = contadores.get(resultado, 0) + 1
+
+
 def processar_categoria(fonte: dict, contadores: dict) -> None:
     url = fonte["url"]
     titulo_fonte = ""
@@ -1670,28 +1747,16 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
         pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
         print(f"    {len(pdfs)} PDF(s) | titulo: {(titulo or '')[:80]}")
 
-        for texto_link, url_pdf in pdfs:
-            _abortar_se_cancelado()
-            # texto_link do PDF + título/listagem do card do site
-            nome_previo = montar_nome_documento(
-                texto_link=texto_link or texto_lista,
-                titulo_post=titulo or texto_lista,
-                url_pdf=url_pdf,
-                pasta_hint=pasta_hint,
-                ano_fallback=ano,
-            )
-            resultado = baixar_e_salvar(
-                url_pdf,
-                pasta,
-                nome_previo,
-                ler_pdf=True,
-                textos_extras=[texto_link or texto_lista, titulo or texto_lista],
-                pasta_hint=pasta_hint,
-                ano_fallback=ano,
-                url_fonte=url,
-            )
-            contadores[resultado] = contadores.get(resultado, 0) + 1
-        time.sleep(0.35)
+        _executar_downloads_pdfs(
+            pdfs,
+            contadores,
+            titulo=titulo or "",
+            pasta_hint=pasta_hint,
+            url_fonte=url,
+            pasta_fixa=pasta,
+            ano_fixo=ano,
+        )
+        time.sleep(0.15 if int(DOWNLOAD_WORKERS or 1) > 1 else 0.25)
 
     _salvar_planilhas_normas_agora()
 
@@ -1747,27 +1812,16 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
         pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
         print(f"    {len(pdfs)} PDF(s)")
 
-        for texto_link, url_pdf in pdfs:
-            _abortar_se_cancelado()
-            nome_previo = montar_nome_documento(
-                texto_link=texto_link,
-                titulo_post=titulo,
-                url_pdf=url_pdf,
-                pasta_hint=pasta_hint,
-                ano_fallback=ano,
-            )
-            resultado = baixar_e_salvar(
-                url_pdf,
-                pasta,
-                nome_previo,
-                ler_pdf=True,
-                textos_extras=[texto_link, titulo],
-                pasta_hint=pasta_hint,
-                ano_fallback=ano,
-                url_fonte=url,
-            )
-            contadores[resultado] = contadores.get(resultado, 0) + 1
-        time.sleep(0.4)
+        _executar_downloads_pdfs(
+            pdfs,
+            contadores,
+            titulo=titulo or "",
+            pasta_hint=pasta_hint,
+            url_fonte=url,
+            pasta_fixa=pasta,
+            ano_fixo=ano,
+        )
+        time.sleep(0.15 if int(DOWNLOAD_WORKERS or 1) > 1 else 0.4)
 
     _salvar_planilhas_normas_agora()
 
@@ -1841,32 +1895,13 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
         if len(nums_fila) > 40:
             print("  ... +{0} outras".format(len(nums_fila) - 40))
 
-    for item in pdfs:
-        _abortar_se_cancelado()
-        if len(item) == 3:
-            texto_link, url_pdf, ano = item
-        else:
-            texto_link, url_pdf = item
-            ano = extrair_ano(texto_link, url_pdf, titulo, url) or ano_pagina
-        pasta = os.path.join(PASTA_BASE, pasta_hint, str(ano or "sem_ano"))
-        nome_previo = montar_nome_documento(
-            texto_link=texto_link,
-            titulo_post=titulo,
-            url_pdf=url_pdf,
-            pasta_hint=pasta_hint,
-            ano_fallback=ano,
-        )
-        resultado = baixar_e_salvar(
-            url_pdf,
-            pasta,
-            nome_previo,
-            ler_pdf=True,
-            textos_extras=[texto_link, titulo],
-            pasta_hint=pasta_hint,
-            ano_fallback=ano,
-            url_fonte=url,
-        )
-        contadores[resultado] = contadores.get(resultado, 0) + 1
+    _executar_downloads_pdfs(
+        pdfs,
+        contadores,
+        titulo=titulo or "",
+        pasta_hint=pasta_hint,
+        url_fonte=url,
+    )
 
     _salvar_planilhas_normas_agora()
 
@@ -1889,6 +1924,7 @@ def main():
     print(f"  Diárias → planilha: {'sim' if EXTRAI_DIARIAS else 'não'}")
     print(f"  Relatório XLSX + auditoria: sim")
     print(f"  IA local: {'sim ({0})'.format(MODELO_IA) if REFINAR_IA else 'não'}")
+    print(f"  Downloads paralelos: {max(1, min(12, int(DOWNLOAD_WORKERS or 1)))}")
     filtro = _anos_filtro_norm()
     print(f"  Anos: {', '.join(filtro) if filtro else 'todos'}")
     if LER_PDF and not PdfReader:

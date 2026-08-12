@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from backend.config import DOWNLOAD_WORKERS
 from backend.runners.base import SCRIPTS, apply_globals, load_module, run_main_with_logs
 
 _MODOS = ("categoria", "hub_anos", "pagina")
@@ -112,10 +113,13 @@ def run(job) -> None:
         or "http://127.0.0.1:11434",
         "IA_SEMPRE": bool(cfg.get("ia_sempre", False)),
         "EXTRAI_DIARIAS": True,  # regra geral (fonte/PDF de diárias → planilha)
+        "DOWNLOAD_WORKERS": DOWNLOAD_WORKERS,
     }
     if site:
         mapping["SITE"] = site.rstrip("/")
     apply_globals(mod, mapping)
+    if DOWNLOAD_WORKERS > 1:
+        job.emit("info", "Downloads paralelos: {0} conexões".format(DOWNLOAD_WORKERS))
     if anos_filtro:
         job.emit("info", "Filtro de anos: {0}".format(", ".join(anos_filtro)))
     else:

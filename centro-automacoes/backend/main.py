@@ -649,7 +649,7 @@ def get_job(job_id: str, user=Depends(require_user)):
         _assert_can_access_job(job, user)
         from backend.jobs import JobStatus
 
-        if job.status == JobStatus.COMPLETED:
+        if job.status == JobStatus.COMPLETED and not job.result.get("_zip_building"):
             ensure_download_zip(job)
         logs = list(job.logs[-200:])
         if len(logs) < 5:

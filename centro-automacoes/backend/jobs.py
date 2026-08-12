@@ -126,6 +126,8 @@ class Job:
             "error": self.error,
             "result": self.result,
             "has_download": self._has_download(),
+            "zip_building": bool((self.result or {}).get("_zip_building")),
+            "zip_error": (self.result or {}).get("_zip_error"),
             "cancel_requested": self.cancel_requested,
             "owner": self.owner,
             "queue_rank": self.queue_rank,
@@ -630,9 +632,9 @@ class JobManager:
                     job.emit("info", "— fim —")
                 else:
                     job.status = JobStatus.COMPLETED
-                    from backend.job_output import finalize_job_output
+                    from backend.job_output import schedule_finalize_job_output
 
-                    finalize_job_output(self, job)
+                    schedule_finalize_job_output(self, job)
                     msg = (job.result or {}).get("mensagem") or "Automação concluída com sucesso."
                     job.emit("ok", "CONCLUIDO — {0}".format(msg))
                     job.emit("info", "— fim —")
