@@ -76,18 +76,12 @@ def session_from_token(token: str, sessions: dict, lock) -> Session | None:
             headers={**_headers(token), "Accept": "application/json"},
             timeout=12,
         )
-        if profile_resp.status_code != 200:
-            return None
 
-        rows = profile_resp.json()
-        if not isinstance(rows, list) or not rows:
-            return None
-
-        profile = rows[0]
-        if profile.get("ativo") is False:
-            with lock:
-                sessions.pop(token, None)
-            return None
+        profile: dict = {}
+        if profile_resp.status_code == 200:
+            rows = profile_resp.json()
+            if isinstance(rows, list) and rows:
+                profile = rows[0]
 
         username = str(profile.get("email") or email or uid).strip()
         nome = str(profile.get("nome") or "").strip()

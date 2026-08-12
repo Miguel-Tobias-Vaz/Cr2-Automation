@@ -70,7 +70,7 @@ def test_session_from_token_supabase_ok(supabase_env, monkeypatch):
     assert auth.session_from_token("jwt-token-abc") is sess
 
 
-def test_session_inactive_user(supabase_env, monkeypatch):
+def test_session_without_profile(supabase_env, monkeypatch):
     class FakeResp:
         def __init__(self, status, payload):
             self.status_code = status
@@ -81,8 +81,11 @@ def test_session_inactive_user(supabase_env, monkeypatch):
 
     def fake_get(url, **kwargs):
         if url.endswith("/auth/v1/user"):
-            return FakeResp(200, {"id": "uid-2", "email": "off@x.com"})
-        return FakeResp(200, [{"role": "editor", "ativo": False, "email": "off@x.com"}])
+            return FakeResp(200, {"id": "uid-2", "email": "novo@x.com"})
+        return FakeResp(200, [])
 
     monkeypatch.setattr(supabase_auth.requests, "get", fake_get)
-    assert auth.session_from_token("tok-off") is None
+    sess = auth.session_from_token("tok-new")
+    assert sess is not None
+    assert sess.username == "novo@x.com"
+    assert sess.role == "user"

@@ -128,18 +128,18 @@ def test_milagre_status_requires_auth(api_client):
     assert r.status_code == 401
 
 
-def test_fail_closed_without_auth(monkeypatch):
+def test_open_without_auth(monkeypatch):
     monkeypatch.delenv("OPTO_SUPABASE_URL", raising=False)
     monkeypatch.delenv("OPTO_SUPABASE_ANON_KEY", raising=False)
     monkeypatch.delenv("OPTO_USERS", raising=False)
     monkeypatch.delenv("OPTO_LOCAL", raising=False)
-    monkeypatch.setenv("OPTO_REQUIRE_AUTH", "1")
+    monkeypatch.delenv("OPTO_REQUIRE_AUTH", raising=False)
     monkeypatch.setattr(auth, "USERS_FILE", auth.AUTH_DIR / "users.test-empty.json")
     auth.reload_users()
     jobs._persist_enabled = False
     with TestClient(app) as client:
         r = client.get("/api/jobs")
-        assert r.status_code == 503
+        assert r.status_code == 200
     jobs._persist_enabled = True
     auth.reload_users()
 

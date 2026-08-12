@@ -84,8 +84,7 @@ Ver [`centro-automacoes/deploy/opto.env.example`](../centro-automacoes/deploy/op
 | `OPTO_MAX_JOBS` | Jobs simultâneos |
 | `OPTO_MAX_QUEUE` | Tamanho máximo da fila |
 | `OPTO_JOB_TIMEOUT_S` | Timeout por job (0=off) |
-| `OPTO_REQUIRE_AUTH` | Exige login na VPS |
-| `OPTO_SUPABASE_*` | Login por e-mail |
+| `OPTO_SUPABASE_*` | Login por e-mail (opcional) |
 | `OPTO_PRINCIPAL_ADMIN` | E-mail do painel Admin |
 | `OPTO_CORS_ORIGINS` | Origens CORS permitidas |
 | `OPTO_COMPLETED_TTL_S` | Retenção de jobs concluídos no disco |
@@ -115,10 +114,6 @@ bash centro-automacoes/deploy/backup-data.sh
 bash centro-automacoes/deploy/check-health.sh
 # Cron: */5 * * * *
 ```
-
-## Segurança
-
-Ver [`centro-automacoes/deploy/SUPABASE_SEGURANCA.md`](../centro-automacoes/deploy/SUPABASE_SEGURANCA.md).
 
 ## Testes
 

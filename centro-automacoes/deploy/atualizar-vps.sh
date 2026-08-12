@@ -45,12 +45,6 @@ ENV_FILE="$APP_DIR/centro-automacoes/deploy/opto.env"
   echo "==> validando opto.env"
   # shellcheck disable=SC1090
   source "$ENV_FILE"
-  if [[ "${OPTO_REQUIRE_AUTH:-}" =~ ^(1|true|yes|on)$ ]]; then
-    if [[ -z "${OPTO_SUPABASE_URL:-}" && -z "${OPTO_USERS:-}" ]]; then
-      echo "AVISO: OPTO_REQUIRE_AUTH=1 mas Supabase/OPTO_USERS não configurados."
-      echo "       Edite $ENV_FILE antes de usar o painel."
-    fi
-  fi
   if [[ -n "${OPTO_SUPABASE_URL:-}" && -n "${OPTO_SUPABASE_ANON_KEY:-}" ]]; then
     echo "==> gerando front/supabase-config.js a partir de opto.env"
     SUPABASE_JS="$APP_DIR/centro-automacoes/front/supabase-config.js"

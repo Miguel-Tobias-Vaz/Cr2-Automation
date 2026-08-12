@@ -13,7 +13,6 @@
       <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="48" height="48" />
       <h1>Opto Automações</h1>
       <p class="login-lede" id="login-lede">Entre para usar o painel.</p>
-      <p class="login-status" id="login-status" hidden></p>
       <form id="login-form" class="login-form">
         <label id="login-user-label">
           <span id="login-user-caption">Usuário</span>
@@ -27,7 +26,7 @@
         <button type="submit" class="btn btn-primary" id="login-btn">Entrar</button>
       </form>
       <p class="login-hint admin-muted" id="login-hint">
-        Carregando configuração do servidor…
+        Sem login configurado? O painel abre direto (modo aberto).
       </p>
     </main>
     <script src="/assets/supabase-config.js?v=1" onerror="void 0"></script>
@@ -40,56 +39,35 @@ document.addEventListener("opto-ready", () => {
         const next = params.get("next") || "/";
         const form = document.getElementById("login-form");
         const err = document.getElementById("login-error");
-        const status = document.getElementById("login-status");
         const userInput = document.getElementById("login-user");
         const userCaption = document.getElementById("login-user-caption");
         const lede = document.getElementById("login-lede");
         const hint = document.getElementById("login-hint");
-        const loginBtn = document.getElementById("login-btn");
 
         let authMode = "off";
         let supabaseClient = null;
-        let authConfigured = false;
-
-        function showStatus(msg, kind) {
-          if (!status) return;
-          status.hidden = !msg;
-          status.textContent = msg || "";
-          status.className = "login-status" + (kind ? " login-status--" + kind : "");
-        }
 
         async function loadAuthConfig() {
-          let cfg = { mode: "off" };
-          try {
-            const r = await fetch("/api/auth/config");
-            if (r.ok) cfg = await r.json();
-          } catch (_) {
-            throw new Error("Não foi possível contactar o servidor (/api/auth/config).");
-          }
           if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
             return {
-              ...cfg,
               mode: "supabase",
               supabase_url: window.SUPABASE_URL,
               supabase_anon_key: window.SUPABASE_ANON_KEY,
             };
           }
-          return cfg;
+          const r = await fetch("/api/auth/config");
+          if (!r.ok) return { mode: "off" };
+          return r.json();
         }
 
         function applyMode(cfg) {
           authMode = cfg.mode || "off";
-          authConfigured = cfg.auth_configured !== false && authMode !== "off";
-
           if (authMode === "supabase") {
             userCaption.textContent = "E-mail";
             userInput.type = "email";
             userInput.autocomplete = "email";
-            userInput.placeholder = "seu@email.com";
-            lede.textContent = "Entre com seu e-mail (Supabase Auth).";
-            hint.textContent =
-              "Conta desativada ou sem perfil? Peça ao administrador.";
-            showStatus("Login: Supabase", "ok");
+            lede.textContent = "Entre com seu e-mail.";
+            hint.textContent = "Conta Supabase Auth.";
             if (window.supabase && cfg.supabase_url && cfg.supabase_anon_key) {
               supabaseClient = window.supabase.createClient(
                 cfg.supabase_url,
@@ -103,30 +81,12 @@ document.addEventListener("opto-ready", () => {
                   },
                 }
               );
-            } else {
-              showStatus("Biblioteca Supabase não carregou. Verifique bloqueio de CDN.", "err");
-              loginBtn.disabled = true;
             }
           } else if (authMode === "local") {
-            userCaption.textContent = "Usuário";
-            userInput.type = "text";
-            userInput.placeholder = "";
-            lede.textContent = "Entre com usuário e senha (OPTO_USERS).";
-            hint.textContent =
-              "Credenciais definidas em opto.env na VPS (OPTO_USERS).";
-            showStatus("Login: usuários locais", "ok");
-          } else if (cfg.auth_required) {
-            lede.textContent = "Autenticação exigida, mas não configurada.";
-            hint.textContent =
-              cfg.setup_hint ||
-              "Na VPS: edite deploy/opto.env com OPTO_SUPABASE_URL + OPTO_SUPABASE_ANON_KEY (ou OPTO_USERS) e reinicie o serviço.";
-            showStatus("Servidor sem auth configurada", "err");
-            loginBtn.disabled = true;
-            form.hidden = true;
+            lede.textContent = "Entre com usuário e senha.";
+            hint.textContent = "Usuários definidos em OPTO_USERS (opto.env).";
           } else {
-            lede.textContent = "Modo local — login não exigido.";
-            hint.textContent = "Redirecionando para o painel…";
-            showStatus("Auth desligada", "ok");
+            hint.textContent = "Login não configurado — o painel funciona sem autenticação.";
           }
         }
 
@@ -143,35 +103,14 @@ document.addEventListener("opto-ready", () => {
         }
 
         async function loginSupabase(email, password) {
-          if (!supabaseClient) {
-            throw new Error(
-              "Supabase não configurado. Confira opto.env e supabase-config.js na VPS."
-            );
-          }
+          if (!supabaseClient) throw new Error("Supabase não configurado.");
           const { data, error } = await supabaseClient.auth.signInWithPassword({
             email,
             password,
           });
           if (error) throw new Error(error.message || "Falha no login");
-          const session = data.session;
-          if (!session || !session.access_token) throw new Error("Sessão inválida");
-
-          const { data: profile, error: pErr } = await supabaseClient
-            .from("profiles")
-            .select("role, ativo, nome, email")
-            .eq("id", data.user.id)
-            .maybeSingle();
-
-          if (pErr) throw new Error(pErr.message || "Erro ao ler perfil");
-          if (!profile) {
-            throw new Error("Perfil não encontrado. Confira a tabela profiles no Supabase.");
-          }
-          if (profile.ativo === false) {
-            await supabaseClient.auth.signOut();
-            throw new Error("Conta desativada. Contacte o administrador.");
-          }
-
-          saveSessionTokens(session);
+          if (!data.session?.access_token) throw new Error("Sessão inválida");
+          saveSessionTokens(data.session);
           location.href = next;
         }
 
@@ -198,37 +137,24 @@ document.addEventListener("opto-ready", () => {
         form.addEventListener("submit", async (ev) => {
           ev.preventDefault();
           err.hidden = true;
-          loginBtn.disabled = true;
+          const btn = document.getElementById("login-btn");
+          btn.disabled = true;
           const ident = userInput.value.trim();
           const pass = document.getElementById("login-pass").value;
           try {
-            if (authMode === "supabase") {
-              await loginSupabase(ident, pass);
-            } else if (authMode === "local") {
-              await loginLocal(ident, pass);
-            } else {
-              location.href = next;
-            }
+            if (authMode === "supabase") await loginSupabase(ident, pass);
+            else if (authMode === "local") await loginLocal(ident, pass);
+            else location.href = next;
           } catch (e) {
             err.textContent = e.message || "Erro ao entrar";
             err.hidden = false;
-            loginBtn.disabled = false;
+            btn.disabled = false;
           }
         });
 
         loadAuthConfig()
           .then(async (cfg) => {
             applyMode(cfg);
-            if (authMode === "supabase" && supabaseClient) {
-              try {
-                const { data } = await supabaseClient.auth.getSession();
-                if (data && data.session) saveSessionTokens(data.session);
-              } catch (_) {}
-            }
-            if (authMode === "off" && !cfg.auth_required) {
-              location.href = next;
-              return;
-            }
             const meFetch =
               window.OptoAutomacoes && OptoAutomacoes.authFetch
                 ? OptoAutomacoes.authFetch
@@ -240,11 +166,7 @@ document.addEventListener("opto-ready", () => {
                 else if (d.user) location.href = next;
               });
           })
-          .catch((e) => {
-            hint.textContent = String(e.message || e);
-            showStatus("Erro de configuração", "err");
-            loginBtn.disabled = true;
-          });
+          .catch(() => {});
       })();
 });
 </script></body>

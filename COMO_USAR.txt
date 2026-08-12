@@ -63,13 +63,11 @@ No topo aparece uma "pilula" verde mostrando se esta Online ou rodando algo.
   Autenticacao multi-usuario (VPS):
   OPTO_SUPABASE_URL + OPTO_SUPABASE_ANON_KEY   login por e-mail (recomendado)
   OPTO_PRINCIPAL_ADMIN=seu@email.com           quem abre o painel Admin
-  OPTO_REQUIRE_AUTH=1                          exige login na VPS (sem bypass)
   OPTO_CORS_ORIGINS=https://seu-dominio.com    origem permitida no navegador
   OPTO_USERS=admin:senha:admin,maria:123:user  alternativa sem Supabase
   ou crie data/auth/users.json (copie users.example.json)
   OPTO_AUTH_BOOTSTRAP=admin:senha:admin   cria admin na 1a subida
 
-  Seguranca Supabase (RLS, cadastro fechado): deploy/SUPABASE_SEGURANCA.md
   HTTPS: certbot --nginx -d SEU_DOMINIO (ver deploy/nginx-opto.conf)
 
   Coloque no opto.env (VPS) ou INICIAR.bat (PC local) antes de abrir.

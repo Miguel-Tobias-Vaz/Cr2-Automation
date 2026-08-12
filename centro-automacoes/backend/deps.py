@@ -2,21 +2,9 @@
 
 from __future__ import annotations
 
-import os
-
 from fastapi import Depends, Header, HTTPException, Query
 
 from backend import auth
-from backend.user_storage import is_local_mode
-
-
-def require_auth_strict() -> bool:
-    return os.getenv("OPTO_REQUIRE_AUTH", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
 
 
 def _local_bypass_session() -> auth.Session:
@@ -47,7 +35,7 @@ def get_optional_user(
     access_token: str | None = Query(None),
 ) -> auth.Session | None:
     if not auth.is_enabled():
-        return None
+        return _local_bypass_session()
     token = _token_from_request(authorization, access_token)
     if not token:
         return None
@@ -59,9 +47,7 @@ def require_user(
     access_token: str | None = Query(None),
 ) -> auth.Session:
     if not auth.is_enabled():
-        if is_local_mode() and not require_auth_strict():
-            return _local_bypass_session()
-        raise HTTPException(503, "Autenticação não configurada neste servidor.")
+        return _local_bypass_session()
     token = _token_from_request(authorization, access_token)
     sess = auth.session_from_token(token) if token else None
     if not sess:
