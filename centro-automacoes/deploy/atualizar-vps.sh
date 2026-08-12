@@ -41,14 +41,26 @@ rsync -a --delete \
   "$SRC/" "$APP_DIR/"
 
 ENV_FILE="$APP_DIR/centro-automacoes/deploy/opto.env"
-if [[ -f "$ENV_FILE" ]]; then
+  if [[ -f "$ENV_FILE" ]]; then
   echo "==> validando opto.env"
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   if [[ "${OPTO_REQUIRE_AUTH:-}" =~ ^(1|true|yes|on)$ ]]; then
     if [[ -z "${OPTO_SUPABASE_URL:-}" && -z "${OPTO_USERS:-}" ]]; then
       echo "AVISO: OPTO_REQUIRE_AUTH=1 mas Supabase/OPTO_USERS não configurados."
+      echo "       Edite $ENV_FILE antes de usar o painel."
     fi
+  fi
+  if [[ -n "${OPTO_SUPABASE_URL:-}" && -n "${OPTO_SUPABASE_ANON_KEY:-}" ]]; then
+    echo "==> gerando front/supabase-config.js a partir de opto.env"
+    SUPABASE_JS="$APP_DIR/centro-automacoes/front/supabase-config.js"
+    cat > "$SUPABASE_JS" <<EOF
+// Gerado automaticamente pelo deploy — não commitar.
+window.SUPABASE_URL = "${OPTO_SUPABASE_URL}";
+window.SUPABASE_ANON_KEY = "${OPTO_SUPABASE_ANON_KEY}";
+EOF
+    chown "$APP_USER:$APP_USER" "$SUPABASE_JS"
+    chmod 640 "$SUPABASE_JS"
   fi
 else
   echo "AVISO: $ENV_FILE não encontrado — copie de opto.env.example"

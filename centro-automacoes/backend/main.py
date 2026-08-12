@@ -332,16 +332,34 @@ def _health_payload(user) -> dict:
 def auth_config():
     """Modo de login para o front (Supabase ou local)."""
     from backend import supabase_auth
+    from backend.deps import require_auth_strict
 
+    configured = auth.is_enabled()
     if supabase_auth.is_configured():
         return {
             "mode": "supabase",
+            "auth_required": True,
+            "auth_configured": True,
             "supabase_url": supabase_auth.supabase_url(),
             "supabase_anon_key": supabase_auth.supabase_anon_key(),
         }
-    if auth.is_enabled():
-        return {"mode": "local"}
-    return {"mode": "off"}
+    if configured:
+        return {
+            "mode": "local",
+            "auth_required": True,
+            "auth_configured": True,
+        }
+    strict = require_auth_strict()
+    return {
+        "mode": "off",
+        "auth_required": strict,
+        "auth_configured": False,
+        "setup_hint": (
+            "Configure OPTO_SUPABASE_URL + OPTO_SUPABASE_ANON_KEY ou OPTO_USERS em opto.env."
+            if strict
+            else None
+        ),
+    }
 
 
 @app.get("/api/auth/me")

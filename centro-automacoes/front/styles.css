@@ -3703,6 +3703,25 @@ body.login-page {
   font-size: 0.85rem;
 }
 
+.login-status {
+  margin: 0.5rem 0 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.login-status--ok {
+  color: var(--mint, #2eea7a);
+  background: rgba(46, 234, 122, 0.08);
+}
+
+.login-status--err {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.25);
+}
+
 .login-hint {
   margin-top: 1rem;
   font-size: 0.8rem;
