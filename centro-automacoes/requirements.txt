@@ -13,4 +13,5 @@ numpy>=1.24.0
 pymupdf>=1.24.0
 pytesseract>=0.3.10
 pdf2image>=1.17.0
+curl_cffi>=0.7.0
 # OCR: Tesseract + PyMuPDF. EasyOCR/PaddleOCR nao sao mais instalados.

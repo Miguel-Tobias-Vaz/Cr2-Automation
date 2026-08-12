@@ -45,11 +45,12 @@ HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 
-# Força Playwright desde o início (OPTO_TCM_PLAYWRIGHT=1 no opto.env da VPS).
+# Força navegador/curl_cffi desde o início (OPTO_TCM_PLAYWRIGHT=1 no opto.env da VPS).
 _FORCE_PLAYWRIGHT = os.environ.get("OPTO_TCM_PLAYWRIGHT", "").strip().lower() in (
     "1", "true", "yes", "on",
 )
 _PW_FETCHER = None
+_CURL_CFFI = None
 
 _EXT_MAP = {
     "application/pdf": ".pdf",
@@ -688,25 +689,111 @@ class _FetchResponse:
             yield self.content[i : i + chunk_size]
 
 
+def _is_cloudflare_html(text: str) -> bool:
+    t = (text or "").lower()
+    return any(
+        x in t
+        for x in (
+            "attention required",
+            "cf-challenge",
+            "challenge-platform",
+            "checking your browser",
+            "just a moment",
+            "cloudflare",
+        )
+    )
+
+
+def _response_from_requests(r) -> _FetchResponse:
+    return _FetchResponse(r.status_code, r.text, r.content, dict(r.headers))
+
+
+class _CurlCffiFetcher:
+    """TLS fingerprint de Chrome — costuma passar Cloudflare sem abrir navegador."""
+
+    def __init__(self):
+        from curl_cffi import requests as creq
+
+        self._mod = creq
+        self._session = creq.Session(impersonate="chrome124")
+        try:
+            self._session.get(BASE_URL + "/", timeout=30)
+        except Exception:
+            pass
+
+    def fetch(self, url: str) -> _FetchResponse:
+        r = self._session.get(url, timeout=90)
+        text = r.text if hasattr(r, "text") else r.content.decode("utf-8", errors="replace")
+        content = r.content if isinstance(r.content, bytes) else text.encode("utf-8")
+        resp = _FetchResponse(r.status_code, text, content, dict(getattr(r, "headers", {}) or {}))
+        resp.raise_for_status()
+        if _is_cloudflare_html(text):
+            raise requests.HTTPError("Cloudflare challenge page", response=resp)
+        return resp
+
+    def fetch_binary(self, url: str) -> _FetchResponse:
+        return self.fetch(url)
+
+
+def _ensure_curl_cffi() -> _CurlCffiFetcher:
+    global _CURL_CFFI
+    if _CURL_CFFI is None:
+        print("  [i] Tentando acesso com fingerprint Chrome (curl_cffi)…")
+        _CURL_CFFI = _CurlCffiFetcher()
+    return _CURL_CFFI
+
+
+def _close_curl_cffi():
+    global _CURL_CFFI
+    _CURL_CFFI = None
+
+
 class _PlaywrightFetcher:
     def __init__(self):
         from playwright.sync_api import sync_playwright
 
+        headed = os.environ.get("OPTO_TCM_PLAYWRIGHT_HEADED", "").strip().lower() in (
+            "1", "true", "yes", "on",
+        )
         self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch(headless=True)
+        self._browser = self._pw.chromium.launch(
+            headless=not headed,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+            ],
+        )
         self._ctx = self._browser.new_context(
             user_agent=HEADERS["User-Agent"],
             locale="pt-BR",
+            timezone_id="America/Belem",
+            viewport={"width": 1366, "height": 900},
             extra_http_headers={
                 k: v for k, v in HEADERS.items() if k.lower() != "user-agent"
             },
         )
+        self._ctx.add_init_script(
+            """
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.chrome = window.chrome || { runtime: {} };
+            """
+        )
         self._page = self._ctx.new_page()
         self._page.goto(BASE_URL + "/", wait_until="domcontentloaded", timeout=60000)
-        try:
-            self._page.wait_for_load_state("networkidle", timeout=15000)
-        except Exception:
-            pass
+        self._aguardar_cloudflare(self._page, timeout_s=90)
+
+    def _aguardar_cloudflare(self, page, *, timeout_s: int = 120) -> bool:
+        print("  [i] Aguardando verificação Cloudflare (até {0}s)…".format(timeout_s))
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            title = (page.title() or "").lower()
+            html = page.content()
+            if not _is_cloudflare_html(title + html):
+                if page.query_selector("table"):
+                    return True
+            page.wait_for_timeout(2500)
+        return False
 
     def fetch(self, url: str) -> _FetchResponse:
         page = self._page
@@ -714,26 +801,10 @@ class _PlaywrightFetcher:
         nav = page.goto(url, wait_until="domcontentloaded", timeout=90000)
         if nav:
             status = nav.status
-        if "listagem" in url:
-            try:
-                page.wait_for_selector("table tbody tr, table", timeout=45000)
-            except Exception:
-                html_probe = page.content().lower()
-                if any(x in html_probe for x in ("cloudflare", "cf-challenge", "attention required")):
-                    print("  [i] Aguardando verificação Cloudflare…")
-                    try:
-                        page.wait_for_load_state("networkidle", timeout=30000)
-                    except Exception:
-                        pass
-                    try:
-                        page.wait_for_selector("table tbody tr, table", timeout=30000)
-                    except Exception:
-                        pass
-        else:
-            try:
-                page.wait_for_load_state("networkidle", timeout=20000)
-            except Exception:
-                pass
+        if not self._aguardar_cloudflare(page, timeout_s=120 if "listagem" in url else 60):
+            html = page.content()
+            body = html.encode("utf-8")
+            return _FetchResponse(status, html, body, {})
         html = page.content()
         body = html.encode("utf-8")
         return _FetchResponse(status, html, body, {})
@@ -743,7 +814,7 @@ class _PlaywrightFetcher:
         body = resp.body()
         ctype = (resp.headers.get("content-type") or "").lower()
         text = body.decode("utf-8", errors="replace") if "text" in ctype or "html" in ctype else ""
-        if resp.status >= 400 or ("text/html" in ctype and "pdf" not in ctype):
+        if resp.status >= 400 or _is_cloudflare_html(text):
             return self.fetch(url)
         return _FetchResponse(resp.status, text, body, dict(resp.headers))
 
@@ -768,14 +839,14 @@ class _PlaywrightFetcher:
 
 
 def _playwright_ativo() -> bool:
-    return _FORCE_PLAYWRIGHT or _PW_FETCHER is not None
+    return _FORCE_PLAYWRIGHT or _PW_FETCHER is not None or _CURL_CFFI is not None
 
 
 def _ensure_playwright() -> _PlaywrightFetcher:
     global _PW_FETCHER, _FORCE_PLAYWRIGHT
     if _PW_FETCHER is not None:
         return _PW_FETCHER
-    print("  [i] Cloudflare bloqueou o acesso direto — usando navegador (Playwright).")
+    print("  [i] curl_cffi insuficiente — abrindo Chromium (Playwright stealth).")
     _PW_FETCHER = _PlaywrightFetcher()
     _FORCE_PLAYWRIGHT = True
     return _PW_FETCHER
@@ -783,6 +854,7 @@ def _ensure_playwright() -> _PlaywrightFetcher:
 
 def _close_playwright():
     global _PW_FETCHER, _FORCE_PLAYWRIGHT
+    _close_curl_cffi()
     if _PW_FETCHER is not None:
         try:
             _PW_FETCHER.close()
@@ -799,25 +871,61 @@ def _is_forbidden(exc: Exception) -> bool:
         code = getattr(getattr(exc, "response", None), "status_code", None)
         if code == 403:
             return True
+        resp = getattr(exc, "response", None)
+        if resp is not None and _is_cloudflare_html(getattr(resp, "text", "") or ""):
+            return True
     msg = str(exc).lower()
-    return "403" in msg and "forbidden" in msg
+    return ("403" in msg and "forbidden" in msg) or "cloudflare" in msg
 
 
-def _http_get(session, url, *, timeout=30, stream=False):
-    if _playwright_ativo():
+def _fetch_via_curl_or_playwright(url: str, *, stream=False):
+    last_exc = None
+    try:
+        fetcher = _ensure_curl_cffi()
+        if stream:
+            return fetcher.fetch_binary(url)
+        return fetcher.fetch(url)
+    except ImportError:
+        print("  [~] curl_cffi não instalado — pip install curl_cffi")
+    except Exception as exc:
+        last_exc = exc
+        print("  [!] curl_cffi: {0}".format(exc))
+    try:
         pw = _ensure_playwright()
         if stream:
             return pw.fetch_binary(url)
         return pw.fetch(url)
+    except Exception as exc:
+        last_exc = exc
+        raise last_exc or exc
+
+
+def _http_get(session, url, *, timeout=30, stream=False):
+    if _PW_FETCHER is not None:
+        pw = _ensure_playwright()
+        if stream:
+            return pw.fetch_binary(url)
+        return pw.fetch(url)
+    if _CURL_CFFI is not None:
+        fetcher = _ensure_curl_cffi()
+        if stream:
+            return fetcher.fetch_binary(url)
+        return fetcher.fetch(url)
+
+    if _FORCE_PLAYWRIGHT:
+        return _fetch_via_curl_or_playwright(url, stream=stream)
+
     try:
         r = session.get(url, timeout=timeout, stream=stream)
-        if r.status_code == 403:
-            raise requests.HTTPError("403 Client Error: Forbidden", response=r)
+        if r.status_code == 403 or _is_cloudflare_html(r.text):
+            raise requests.HTTPError("403/Cloudflare", response=r)
         r.raise_for_status()
         return r
     except Exception as exc:
-        if _is_forbidden(exc):
-            return _ensure_playwright().fetch(url)
+        if _is_forbidden(exc) or _is_cloudflare_html(
+            getattr(getattr(exc, "response", None), "text", "") or ""
+        ):
+            return _fetch_via_curl_or_playwright(url, stream=stream)
         raise
 
 
@@ -891,8 +999,12 @@ def get_all_licitacoes(session, cfg: dict) -> list:
         if not table:
             titulo = (soup.title.get_text(strip=True) if soup.title else "")[:80]
             print(f"  [!] Tabela não encontrada. Fim. (título: {titulo or '?'})")
-            if "cloudflare" in resp.text.lower() or "cf-challenge" in resp.text.lower():
-                print("  [!] Página de bloqueio Cloudflare — tente OPTO_TCM_PLAYWRIGHT=1 no servidor.")
+            if _is_cloudflare_html(resp.text):
+                print(
+                    "  [!] Cloudflare bloqueou o IP do servidor. "
+                    "Após deploy: pip install curl_cffi no venv. "
+                    "Se persistir, rode a extração no PC local."
+                )
             break
 
         # ── Total de páginas pelo paginador «1 2 3...10» ──────────────────────
@@ -1928,7 +2040,7 @@ def _rotulo_periodo() -> tuple[str, str]:
 def main():
     _abortar_se_cancelado()
     if _FORCE_PLAYWRIGHT:
-        print("  [i] OPTO_TCM_PLAYWRIGHT=1 — acesso via navegador desde o início.")
+        print("  [i] OPTO_TCM_PLAYWRIGHT=1 — curl_cffi + Playwright (sem requests direto).")
     try:
         _main_impl()
     finally:
