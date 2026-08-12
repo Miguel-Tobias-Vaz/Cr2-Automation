@@ -1,3 +1,5 @@
+import { whenReady } from "./modules/core.js";
+
 (() => {
   "use strict";
 
@@ -860,6 +862,5 @@
     pollTimer = setInterval(refresh, 8000);
     window.addEventListener("beforeunload", () => clearInterval(pollTimer));
   }
-  if (window.OptoAutomacoes) boot();
-  else document.addEventListener("opto-ready", boot);
+  whenReady(boot);
 })();

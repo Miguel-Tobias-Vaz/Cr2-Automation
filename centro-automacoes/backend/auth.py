@@ -307,13 +307,17 @@ def principal_admin_users() -> set[str]:
 
 
 def is_panel_admin(sess: Session | None) -> bool:
-    """Painel Admin + fila global — só o administrador principal."""
+    """Painel Admin + fila global — administrador principal ou role admin."""
     if not sess:
         return False
     principals = principal_admin_users()
+    user_key = sess.username.strip().lower()
     if principals:
-        return sess.username.strip().lower() in principals
-    return bool(sess.role == "admin")
+        if user_key in principals:
+            return True
+        # Supabase: role admin no perfil também abre o painel
+        return sess.role == "admin"
+    return sess.role == "admin"
 
 
 def is_admin(sess: Session | None) -> bool:
