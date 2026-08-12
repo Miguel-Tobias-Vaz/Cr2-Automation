@@ -29,9 +29,27 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "pt-BR,pt;q=0.9",
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8"
+    ),
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Referer": "https://www.tcm.pa.gov.br/mural-de-licitacoes/",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
 }
+
+# Força Playwright desde o início (OPTO_TCM_PLAYWRIGHT=1 no opto.env da VPS).
+_FORCE_PLAYWRIGHT = os.environ.get("OPTO_TCM_PLAYWRIGHT", "").strip().lower() in (
+    "1", "true", "yes", "on",
+)
+_PW_FETCHER = None
 
 _EXT_MAP = {
     "application/pdf": ".pdf",
@@ -641,14 +659,135 @@ def sanitize(name: str) -> str:
 def make_session() -> requests.Session:
     s = requests.Session()
     s.headers.update(HEADERS)
+    try:
+        s.get(BASE_URL + "/", timeout=25)
+    except Exception:
+        pass
     return s
 
+
+class _FetchResponse:
+    """Resposta mínima compatível com requests (HTML ou binário)."""
+
+    def __init__(self, status_code: int, text: str, content: bytes, headers: dict):
+        self.status_code = status_code
+        self.text = text
+        self.content = content
+        self.headers = headers
+        self.raw = content
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(
+                "{0} Client Error for url".format(self.status_code),
+                response=self,
+            )
+
+    def iter_content(self, chunk_size=8192):
+        for i in range(0, len(self.content), chunk_size):
+            yield self.content[i : i + chunk_size]
+
+
+class _PlaywrightFetcher:
+    def __init__(self):
+        from playwright.sync_api import sync_playwright
+
+        self._pw = sync_playwright().start()
+        self._browser = self._pw.chromium.launch(headless=True)
+        self._ctx = self._browser.new_context(
+            user_agent=HEADERS["User-Agent"],
+            locale="pt-BR",
+            extra_http_headers={
+                k: v for k, v in HEADERS.items() if k.lower() != "user-agent"
+            },
+        )
+        page = self._ctx.new_page()
+        page.goto(BASE_URL + "/", wait_until="domcontentloaded", timeout=60000)
+        page.close()
+
+    def fetch(self, url: str) -> _FetchResponse:
+        resp = self._ctx.request.get(url, timeout=60000)
+        body = resp.body()
+        ctype = (resp.headers.get("content-type") or "").lower()
+        text = body.decode("utf-8", errors="replace") if "text" in ctype or "html" in ctype else ""
+        return _FetchResponse(resp.status, text, body, dict(resp.headers))
+
+    def close(self):
+        try:
+            self._ctx.close()
+        except Exception:
+            pass
+        try:
+            self._browser.close()
+        except Exception:
+            pass
+        try:
+            self._pw.stop()
+        except Exception:
+            pass
+
+
+def _playwright_ativo() -> bool:
+    return _FORCE_PLAYWRIGHT or _PW_FETCHER is not None
+
+
+def _ensure_playwright() -> _PlaywrightFetcher:
+    global _PW_FETCHER, _FORCE_PLAYWRIGHT
+    if _PW_FETCHER is not None:
+        return _PW_FETCHER
+    print("  [i] Cloudflare bloqueou o acesso direto — usando navegador (Playwright).")
+    _PW_FETCHER = _PlaywrightFetcher()
+    _FORCE_PLAYWRIGHT = True
+    return _PW_FETCHER
+
+
+def _close_playwright():
+    global _PW_FETCHER, _FORCE_PLAYWRIGHT
+    if _PW_FETCHER is not None:
+        try:
+            _PW_FETCHER.close()
+        except Exception:
+            pass
+        _PW_FETCHER = None
+    _FORCE_PLAYWRIGHT = os.environ.get("OPTO_TCM_PLAYWRIGHT", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _is_forbidden(exc: Exception) -> bool:
+    if isinstance(exc, requests.HTTPError):
+        code = getattr(getattr(exc, "response", None), "status_code", None)
+        if code == 403:
+            return True
+    msg = str(exc).lower()
+    return "403" in msg and "forbidden" in msg
+
+
+def _http_get(session, url, *, timeout=30, stream=False):
+    if _playwright_ativo():
+        return _ensure_playwright().fetch(url)
+    try:
+        r = session.get(url, timeout=timeout, stream=stream)
+        if r.status_code == 403:
+            raise requests.HTTPError("403 Client Error: Forbidden", response=r)
+        r.raise_for_status()
+        return r
+    except Exception as exc:
+        if _is_forbidden(exc):
+            return _ensure_playwright().fetch(url)
+        raise
+
+
 def safe_get(session, url, retries=3):
+    if _playwright_ativo():
+        try:
+            return _http_get(session, url)
+        except Exception as e:
+            print(f"  [!] Erro no navegador: {e}")
+            return None
     for attempt in range(retries):
         try:
-            r = session.get(url, timeout=30)
-            r.raise_for_status()
-            return r
+            return _http_get(session, url)
         except Exception as e:
             print(f"  [!] Tentativa {attempt+1}/{retries}: {e}")
             time.sleep(2 ** attempt)
@@ -1262,8 +1401,7 @@ def download_file(session, url: str, dest_dir: str, nome_sugerido: str = "") -> 
       4. "arquivo" + extensão do Content-Type
     """
     try:
-        r = session.get(url, timeout=60, stream=True)
-        r.raise_for_status()
+        r = _http_get(session, url, timeout=60, stream=True)
 
         ct = r.headers.get("Content-Type", "").lower()
         if "text/html" in ct and "application" not in ct:
@@ -1743,6 +1881,15 @@ def _rotulo_periodo() -> tuple[str, str]:
 
 def main():
     _abortar_se_cancelado()
+    if _FORCE_PLAYWRIGHT:
+        print("  [i] OPTO_TCM_PLAYWRIGHT=1 — acesso via navegador desde o início.")
+    try:
+        _main_impl()
+    finally:
+        _close_playwright()
+
+
+def _main_impl():
     link = normalizar_link(LINK_MURAL)
 
     cfg = _parse_link(link)

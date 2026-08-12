@@ -1,9 +1,9 @@
-ï»¿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mapa do Site â€” Opto AutomaÃ§Ãµes</title>
+    <title>Mapa do Site — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home68" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home70" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -21,10 +21,10 @@
     <header class="top">
       <a class="brand-mark" href="/">
         <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
-        <span>Opto AutomaÃ§Ãµes</span>
+        <span>Opto Automações</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">Servidor â€¦</span>
+      <span class="api-pill" id="api-pill">Servidor …</span>
     </header>
 
     <main class="page-shell">
@@ -34,14 +34,14 @@
           <header class="hero-copy">
             <h1>Mapa do Site WordPress</h1>
             <p class="lede">
-              Cria pÃ¡ginas filhas com links CR2 e atualiza o mapa do site via
+              Cria páginas filhas com links CR2 e atualiza o mapa do site via
               REST API. Use senha de aplicativo do WordPress.
             </p>
           </header>
           <article class="stream is-in">
             <span class="stream-index">04</span>
             <h3>Estrutura PAGINAS</h3>
-            <p>JSON vÃ¡lido: categorias ? lista de <code>["TÃ­tulo", "url CR2"]</code>. Sem vÃ­rgula no fim e sem aspas simples.</p>
+            <p>JSON válido: categorias ? lista de <code>["Título", "url CR2"]</code>. Sem vírgula no fim e sem aspas simples.</p>
           </article>
         </div>
       </section>
@@ -52,7 +52,7 @@
           <fieldset class="bloco">
             <legend>Acesso</legend>
             <label class="field"><span class="field-label"><em>URL WordPress *</em></span><input type="url" id="wp_url" placeholder="https://prefeitura.gov.br" required /></label>
-            <label class="field"><span class="field-label"><em>UsuÃ¡rio *</em></span><input type="text" id="user" autocomplete="username" /></label>
+            <label class="field"><span class="field-label"><em>Usuário *</em></span><input type="text" id="user" autocomplete="username" /></label>
             <label class="field"><span class="field-label"><em>Senha de aplicativo *</em></span><input type="password" id="app_password" autocomplete="off" /></label>
             <label class="field"><span class="field-label"><em>Slug do mapa</em></span><input type="text" id="slug" value="mapa-do-site" /></label>
           </fieldset>
@@ -63,8 +63,8 @@
     ["Receitas", "https://www.portalcr2.com.br/receitas/receitas-exemplo"],
     ["Despesas", "https://www.portalcr2.com.br/despesas/despesas-exemplo"]
   ],
-  "LicitaÃ§Ãµes": [
-    ["LicitaÃ§Ãµes", "https://www.portalcr2.com.br/licitacoes/licitacoes-exemplo"]
+  "Licitações": [
+    ["Licitações", "https://www.portalcr2.com.br/licitacoes/licitacoes-exemplo"]
   ]
 }</textarea>
           </label>
@@ -79,16 +79,16 @@
       <section class="log-wrap" id="log">
         <header class="section-head">
           <h2>Log</h2>
-          <p>SituaÃ§Ã£o: <strong id="log-state">Parado</strong> Â· Processo: <span id="job-status">â€”</span></p>
+          <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
         </header>
         <div class="log-console" id="log-console"></div>
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home68"></script>
-    <script type="module" src="/assets/shared.js?v=home68"></script>
+    <script src="/assets/fluid-particles.js?v=home70"></script>
+    <script type="module" src="/assets/shared.js?v=home70"></script>
     <script type="module">
-import { whenReady } from "/assets/modules/core.js?v=home68";
+import { whenReady } from "/assets/modules/core.js?v=home70";
 whenReady(() => {
         const C = window.OptoAutomacoes;
         C.injectNav("mapa");

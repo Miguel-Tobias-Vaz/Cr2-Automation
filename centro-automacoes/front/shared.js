@@ -155,7 +155,7 @@ import { injectFooter } from "./modules/nav.js";
       href: "/extrair.html",
       titulo: "Extração",
       descricao:
-        "Baixas do portal: documentos, categorias, Extração Pro, licitações e repasses.",
+        "Baixas do portal: documentos, categorias, Extração Pro, licitações CR2, TCM-PA e repasses.",
       icon: "download",
       cta: "Ver ferramentas",
       tools: ["documentos", "categorias", "normas", "licitacoes", "tcm_licitacoes", "repasses"],
@@ -2566,7 +2566,7 @@ import { injectFooter } from "./modules/nav.js";
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home68";
+    s.src = "/assets/shader-background.js?v=home70";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {
