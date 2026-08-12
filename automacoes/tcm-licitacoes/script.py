@@ -701,18 +701,58 @@ class _PlaywrightFetcher:
                 k: v for k, v in HEADERS.items() if k.lower() != "user-agent"
             },
         )
-        page = self._ctx.new_page()
-        page.goto(BASE_URL + "/", wait_until="domcontentloaded", timeout=60000)
-        page.close()
+        self._page = self._ctx.new_page()
+        self._page.goto(BASE_URL + "/", wait_until="domcontentloaded", timeout=60000)
+        try:
+            self._page.wait_for_load_state("networkidle", timeout=15000)
+        except Exception:
+            pass
 
     def fetch(self, url: str) -> _FetchResponse:
-        resp = self._ctx.request.get(url, timeout=60000)
+        page = self._page
+        status = 200
+        nav = page.goto(url, wait_until="domcontentloaded", timeout=90000)
+        if nav:
+            status = nav.status
+        if "listagem" in url:
+            try:
+                page.wait_for_selector("table tbody tr, table", timeout=45000)
+            except Exception:
+                html_probe = page.content().lower()
+                if any(x in html_probe for x in ("cloudflare", "cf-challenge", "attention required")):
+                    print("  [i] Aguardando verificação Cloudflare…")
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=30000)
+                    except Exception:
+                        pass
+                    try:
+                        page.wait_for_selector("table tbody tr, table", timeout=30000)
+                    except Exception:
+                        pass
+        else:
+            try:
+                page.wait_for_load_state("networkidle", timeout=20000)
+            except Exception:
+                pass
+        html = page.content()
+        body = html.encode("utf-8")
+        return _FetchResponse(status, html, body, {})
+
+    def fetch_binary(self, url: str) -> _FetchResponse:
+        resp = self._ctx.request.get(url, timeout=90000)
         body = resp.body()
         ctype = (resp.headers.get("content-type") or "").lower()
         text = body.decode("utf-8", errors="replace") if "text" in ctype or "html" in ctype else ""
+        if resp.status >= 400 or ("text/html" in ctype and "pdf" not in ctype):
+            return self.fetch(url)
         return _FetchResponse(resp.status, text, body, dict(resp.headers))
 
     def close(self):
+        try:
+            if self._page:
+                self._page.close()
+        except Exception:
+            pass
         try:
             self._ctx.close()
         except Exception:
@@ -765,7 +805,10 @@ def _is_forbidden(exc: Exception) -> bool:
 
 def _http_get(session, url, *, timeout=30, stream=False):
     if _playwright_ativo():
-        return _ensure_playwright().fetch(url)
+        pw = _ensure_playwright()
+        if stream:
+            return pw.fetch_binary(url)
+        return pw.fetch(url)
     try:
         r = session.get(url, timeout=timeout, stream=stream)
         if r.status_code == 403:
@@ -846,7 +889,10 @@ def get_all_licitacoes(session, cfg: dict) -> list:
         soup  = BeautifulSoup(resp.text, "html.parser")
         table = soup.find("table")
         if not table:
-            print("  [!] Tabela não encontrada. Fim.")
+            titulo = (soup.title.get_text(strip=True) if soup.title else "")[:80]
+            print(f"  [!] Tabela não encontrada. Fim. (título: {titulo or '?'})")
+            if "cloudflare" in resp.text.lower() or "cf-challenge" in resp.text.lower():
+                print("  [!] Página de bloqueio Cloudflare — tente OPTO_TCM_PLAYWRIGHT=1 no servidor.")
             break
 
         # ── Total de páginas pelo paginador «1 2 3...10» ──────────────────────
