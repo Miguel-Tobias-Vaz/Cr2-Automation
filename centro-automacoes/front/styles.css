@@ -3961,6 +3961,85 @@ body.login-page {
   padding-bottom: 1rem;
 }
 
+/* —— Arquivos embed (admin iframe) —— */
+body.files-embed-page {
+  background: transparent;
+  min-height: auto;
+}
+
+body.files-embed-page .noise,
+body.files-embed-page .orb {
+  display: none;
+}
+
+.files-embed-main {
+  padding: 0;
+  max-width: none;
+}
+
+.files-embed-main .files-panel {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.files-embed-main .files-browser {
+  border-radius: 12px;
+}
+
+/* —— Admin: painel de arquivos —— */
+.admin-card--files .admin-files-head {
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.admin-files-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.admin-files-select-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 12rem;
+}
+
+.admin-files-select {
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(8, 8, 14, 0.8);
+  color: inherit;
+  font: inherit;
+  min-width: 14rem;
+}
+
+.admin-files-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.admin-files-body {
+  padding: 0;
+}
+
+.admin-files-frame {
+  display: block;
+  width: 100%;
+  min-height: 560px;
+  height: min(72vh, 720px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(8, 8, 14, 0.55);
+}
+
 /* —— Minimal footer (site-wide) —— */
 .minimal-footer {
   position: relative;

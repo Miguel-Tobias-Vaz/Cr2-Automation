@@ -31,8 +31,10 @@ from backend.state import jobs  # noqa: E402
 from backend.user_storage import (
     apply_user_defaults,
     delete_workspace_path,
+    ensure_owner_workspace,
     is_local_mode,
     list_workspace_files,
+    list_workspace_owners,
     mkdir_workspace,
     output_publicacao_hints,
     save_upload,
@@ -893,6 +895,64 @@ def _process_memory_mb() -> float | None:
     except OSError:
         pass
     return None
+
+
+@app.get("/api/admin/workspace/users")
+def admin_workspace_users(_admin=Depends(require_admin)):
+    """Lista workspaces de todos os usuários (pastas em data/users)."""
+    if is_local_mode():
+        return {"ok": True, "local_mode": True, "users": []}
+    return {"ok": True, "users": list_workspace_owners()}
+
+
+@app.get("/api/admin/workspace/files")
+def admin_workspace_files(
+    owner: str,
+    path: str = "",
+    _admin=Depends(require_admin),
+):
+    """Explorador de arquivos de qualquer usuário (admin)."""
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    try:
+        owner_id = ensure_owner_workspace(owner)
+        payload = list_workspace_files(owner_id, path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, "owner": owner_id, **payload}
+
+
+class AdminWorkspaceMkdirBody(BaseModel):
+    owner: str
+    path: str
+
+
+@app.post("/api/admin/workspace/mkdir")
+def admin_workspace_mkdir(body: AdminWorkspaceMkdirBody, _admin=Depends(require_admin)):
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    try:
+        owner_id = ensure_owner_workspace(body.owner)
+        meta = mkdir_workspace(owner_id, body.path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, "owner": owner_id, **meta}
+
+
+@app.delete("/api/admin/workspace/files")
+def admin_workspace_delete(
+    owner: str,
+    path: str,
+    _admin=Depends(require_admin),
+):
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    try:
+        owner_id = ensure_owner_workspace(owner)
+        delete_workspace_path(owner_id, path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, "owner": owner_id}
 
 
 @app.get("/api/admin/health-detail")

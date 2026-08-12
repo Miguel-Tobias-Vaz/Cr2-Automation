@@ -253,6 +253,49 @@ def resolve_user_path(owner: str | None, subpath: str = "") -> Path:
     return resolved
 
 
+def list_workspace_owners() -> list[dict[str, Any]]:
+    """Lista workspaces existentes em data/users/ (admin)."""
+    if not USERS_ROOT.is_dir():
+        return []
+    owners: list[dict[str, Any]] = []
+    for entry in sorted(USERS_ROOT.iterdir(), key=lambda p: p.name.lower()):
+        if not entry.is_dir():
+            continue
+        uploads = entry / "uploads"
+        output = entry / "output"
+        jobs = entry / "jobs"
+        size_bytes = 0
+        try:
+            for p in entry.rglob("*"):
+                if p.is_file():
+                    try:
+                        size_bytes += p.stat().st_size
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+        owners.append(
+            {
+                "id": entry.name,
+                "root_dir": str(entry.resolve()),
+                "uploads_dir": str(uploads.resolve()) if uploads.is_dir() else "",
+                "output_dir": str(output.resolve()) if output.is_dir() else "",
+                "jobs_dir": str(jobs.resolve()) if jobs.is_dir() else "",
+                "size_bytes": size_bytes,
+            }
+        )
+    return owners
+
+
+def ensure_owner_workspace(owner_id: str) -> str:
+    """Valida id de usuário (pasta em data/users)."""
+    safe = normalize_owner(owner_id)
+    root = user_root(safe)
+    if not root.is_dir():
+        raise ValueError("Workspace do usuário não encontrado.")
+    return safe
+
+
 def list_workspace_files(
     owner: str | None,
     subpath: str = "",

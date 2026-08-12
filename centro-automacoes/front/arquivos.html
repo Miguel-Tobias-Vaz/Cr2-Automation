@@ -11,14 +11,14 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home65" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home66" />
   </head>
-  <body>
-    <div class="noise" aria-hidden="true"></div>
-    <div class="orb orb-a" aria-hidden="true"></div>
-    <div class="orb orb-b" aria-hidden="true"></div>
+  <body id="files-page-body">
+    <div class="noise" aria-hidden="true" data-embed-hide></div>
+    <div class="orb orb-a" aria-hidden="true" data-embed-hide></div>
+    <div class="orb orb-b" aria-hidden="true" data-embed-hide></div>
 
-    <header class="top">
+    <header class="top" data-embed-hide>
       <a class="brand-mark" href="/">
         <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
         <span>Opto Automações</span>
@@ -27,13 +27,13 @@
       <span class="api-pill" id="api-pill">Servidor …</span>
     </header>
 
-    <main class="page-shell">
-      <section class="hero page-hero page-hero--compact">
+    <main class="page-shell" id="files-main">
+      <section class="hero page-hero page-hero--compact" data-embed-hide>
         <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
         <div class="hero-main">
           <header class="hero-copy">
-            <h1>Meus arquivos</h1>
-            <p class="lede">
+            <h1 id="files-page-title">Meus arquivos</h1>
+            <p class="lede" id="files-page-lede">
               Navegue, envie e organize arquivos no seu espaço no servidor.
               Cada usuário vê apenas a própria pasta (<code>uploads</code>, <code>output</code>, <code>jobs</code>).
             </p>
@@ -41,13 +41,13 @@
         </div>
       </section>
 
-      <section class="painel">
-        <header class="section-head">
+      <section class="painel files-panel">
+        <header class="section-head" data-embed-hide>
           <h2>Explorador</h2>
           <p id="pick-banner" class="field-hint" hidden></p>
         </header>
         <div id="files-browser"></div>
-        <p class="field-hint" style="margin-top:1rem">
+        <p class="field-hint files-tip" data-embed-hide style="margin-top:1rem">
           Dica: compacte pastas de publicação em ZIP com subpastas
           <code>RGF/</code>, <code>RREO/</code>, <code>Balancete/</code> e <code>Balanco/</code>
           e envie na tela de Publicação CR2.
@@ -55,20 +55,41 @@
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home65"></script>
-    <script type="module" src="/assets/shared.js?v=home65"></script>
+    <script src="/assets/fluid-particles.js?v=home66"></script>
+    <script type="module" src="/assets/shared.js?v=home66"></script>
     <script type="module">
-      import { whenReady } from "/assets/modules/core.js?v=home65";
-      import { mountFileBrowser } from "/assets/modules/files.js?v=home65";
+      import { whenReady } from "/assets/modules/core.js?v=home66";
+      import { mountFileBrowser } from "/assets/modules/files.js?v=home66";
 
       whenReady(() => {
-        const C = window.OptoAutomacoes;
-        C.injectNav("arquivos");
-        C.pingApi();
-
         const params = new URLSearchParams(window.location.search);
+        const embed = params.get("embed") === "1";
+        const owner = params.get("owner") || "";
+        const admin = params.get("admin") === "1" && owner;
+        const initialPath = params.get("path") || "";
         const pickField = params.get("pick") || "";
         const ret = params.get("return") || "/";
+
+        if (embed) {
+          document.body.classList.add("files-embed-page");
+          document.querySelectorAll("[data-embed-hide]").forEach((n) => {
+            n.hidden = true;
+          });
+          const main = document.getElementById("files-main");
+          if (main) main.classList.add("files-embed-main");
+        } else {
+          const C = window.OptoAutomacoes;
+          C.injectNav("arquivos");
+          C.pingApi();
+        }
+
+        if (admin) {
+          const title = document.getElementById("files-page-title");
+          const lede = document.getElementById("files-page-lede");
+          if (title) title.textContent = "Arquivos do usuário";
+          if (lede) lede.textContent = `Workspace de ${owner} — uploads, downloads (output) e jobs.`;
+        }
+
         if (pickField) {
           const banner = document.getElementById("pick-banner");
           if (banner) {
@@ -78,9 +99,18 @@
           }
         }
 
-        mountFileBrowser("files-browser", {
-          initialPath: "",
+        const browser = mountFileBrowser("files-browser", {
+          initialPath,
           pickField,
+          owner: admin ? owner : "",
+          admin: Boolean(admin),
+        });
+
+        window.addEventListener("message", (ev) => {
+          if (!ev.data || ev.data.type !== "opto-files-nav") return;
+          if (browser && typeof browser.setPath === "function") {
+            browser.setPath(ev.data.path || "");
+          }
         });
       });
     </script>

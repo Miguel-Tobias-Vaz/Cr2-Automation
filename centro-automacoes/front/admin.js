@@ -6,8 +6,12 @@
     overview: ["Visão geral", "Monitoramento em tempo real"],
     jobs: ["Processos", "Histórico e logs dos jobs"],
     services: ["Ferramentas", "Automações disponíveis no painel"],
+    files: ["Arquivos", "Uploads, downloads e jobs por usuário"],
     system: ["Sistema", "Servidor, fila e armazenamento"],
   };
+
+  let filesUsersLoaded = false;
+  let filesCurrentOwner = "";
 
   const STATUS_LABEL = {
     pending: "Na fila",
@@ -687,6 +691,99 @@
     }
   }
 
+  function filesFrameUrl(owner, path) {
+    if (!owner) return "about:blank";
+    const q = new URLSearchParams({
+      embed: "1",
+      admin: "1",
+      owner,
+    });
+    if (path) q.set("path", path);
+    return "/arquivos.html?" + q.toString();
+  }
+
+  function navigateFilesFrame(path) {
+    const frame = $("admin-files-frame");
+    if (!frame || !filesCurrentOwner) return;
+    const win = frame.contentWindow;
+    if (win) {
+      win.postMessage({ type: "opto-files-nav", path: path || "" }, window.location.origin);
+      return;
+    }
+    frame.src = filesFrameUrl(filesCurrentOwner, path);
+  }
+
+  function setFilesOwner(owner, path) {
+    filesCurrentOwner = owner || "";
+    const frame = $("admin-files-frame");
+    const openTab = $("files-open-tab");
+    if (!frame) return;
+    if (!filesCurrentOwner) {
+      frame.src = "about:blank";
+      if (openTab) openTab.href = "/arquivos.html";
+      return;
+    }
+    frame.src = filesFrameUrl(filesCurrentOwner, path || "");
+    if (openTab) {
+      openTab.href = filesFrameUrl(filesCurrentOwner, "");
+    }
+  }
+
+  async function loadFilesPanel() {
+    const select = $("files-owner-select");
+    const frame = $("admin-files-frame");
+    if (!select || !frame) return;
+
+    if (filesUsersLoaded && select.options.length > 1) {
+      if (filesCurrentOwner) setFilesOwner(filesCurrentOwner);
+      return;
+    }
+
+    select.innerHTML = '<option value="">Carregando…</option>';
+    try {
+      const r = await adminFetch(API + "/api/admin/workspace/users");
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || "Falha ao listar usuários");
+      const users = data.users || [];
+      if (!users.length) {
+        select.innerHTML = '<option value="">Nenhum workspace ainda</option>';
+        frame.srcdoc =
+          '<p style="padding:1rem;color:#a8b0c0;font-family:sans-serif">Nenhum usuário com pasta no servidor. Após o primeiro upload ou job, aparece aqui.</p>';
+        return;
+      }
+      select.innerHTML = users
+        .map((u) => {
+          const mb = u.size_bytes ? (u.size_bytes / (1024 * 1024)).toFixed(1) + " MB" : "";
+          const label = u.id + (mb ? " · " + mb : "");
+          return `<option value="${u.id}">${label}</option>`;
+        })
+        .join("");
+      filesUsersLoaded = true;
+      const first = users[0].id;
+      select.value = filesCurrentOwner || first;
+      setFilesOwner(select.value, "");
+    } catch (e) {
+      select.innerHTML = '<option value="">Erro ao carregar</option>';
+      frame.srcdoc =
+        '<p style="padding:1rem;color:#f87171;font-family:sans-serif">' +
+        (e.message || e) +
+        "</p>";
+    }
+  }
+
+  function bindFilesPanel() {
+    $("files-owner-select")?.addEventListener("change", (ev) => {
+      setFilesOwner(ev.target.value, "");
+    });
+    document.querySelectorAll("[data-files-shortcut]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const path = btn.getAttribute("data-files-shortcut") || "";
+        if (!filesCurrentOwner) return;
+        navigateFilesFrame(path);
+      });
+    });
+  }
+
   function showPanel(name) {
     document.querySelectorAll(".admin-panel").forEach((p) => {
       const on = p.getAttribute("data-panel") === name;
@@ -699,6 +796,7 @@
     const t = PANEL_TITLES[name] || ["Admin", ""];
     $("admin-page-title").textContent = t[0];
     $("admin-page-sub").textContent = t[1];
+    if (name === "files") loadFilesPanel();
   }
 
   async function refresh() {
@@ -726,6 +824,7 @@
     document.querySelectorAll(".admin-nav-item[data-panel]").forEach((btn) => {
       btn.addEventListener("click", () => showPanel(btn.getAttribute("data-panel")));
     });
+    bindFilesPanel();
 
     $("admin-sidebar-toggle")?.addEventListener("click", () => {
       document.body.classList.toggle("admin-sidebar-collapsed");

@@ -5,30 +5,61 @@ import { uploadFile } from "./upload.js";
 
 const PICK_STORAGE = "opto-folder-pick";
 
-export async function listWorkspaceFiles(path = "") {
-  const q = path ? `?path=${encodeURIComponent(path)}` : "";
-  const r = await authFetch(`${API}/api/workspace/files${q}`);
+function fileCtx(opts = {}) {
+  const owner = (opts.owner || "").trim();
+  return {
+    owner,
+    admin: Boolean(opts.admin && owner),
+    readOnly: Boolean(opts.readOnly),
+  };
+}
+
+function filesUrl(path, ctx, method = "GET") {
+  if (ctx.admin) {
+    const base = `${API}/api/admin/workspace/files?owner=${encodeURIComponent(ctx.owner)}`;
+    if (method === "DELETE") return `${base}&path=${encodeURIComponent(path)}`;
+    return path ? `${base}&path=${encodeURIComponent(path)}` : base;
+  }
+  if (method === "DELETE") {
+    return `${API}/api/workspace/files?path=${encodeURIComponent(path)}`;
+  }
+  return path
+    ? `${API}/api/workspace/files?path=${encodeURIComponent(path)}`
+    : `${API}/api/workspace/files`;
+}
+
+export async function listAdminWorkspaceUsers() {
+  const r = await authFetch(`${API}/api/admin/workspace/users`);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || "Falha ao listar usuários");
+  return data.users || [];
+}
+
+export async function listWorkspaceFiles(path = "", opts = {}) {
+  const ctx = fileCtx(opts);
+  const r = await authFetch(filesUrl(path, ctx));
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.detail || "Falha ao listar arquivos");
   return data;
 }
 
-export async function mkdirWorkspace(path) {
-  const r = await authFetch(`${API}/api/workspace/mkdir`, {
+export async function mkdirWorkspace(path, opts = {}) {
+  const ctx = fileCtx(opts);
+  const url = ctx.admin ? `${API}/api/admin/workspace/mkdir` : `${API}/api/workspace/mkdir`;
+  const body = ctx.admin ? { owner: ctx.owner, path } : { path };
+  const r = await authFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path }),
+    body: JSON.stringify(body),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.detail || "Falha ao criar pasta");
   return data;
 }
 
-export async function deleteWorkspacePath(path) {
-  const r = await authFetch(
-    `${API}/api/workspace/files?path=${encodeURIComponent(path)}`,
-    { method: "DELETE" }
-  );
+export async function deleteWorkspacePath(path, opts = {}) {
+  const ctx = fileCtx(opts);
+  const r = await authFetch(filesUrl(path, ctx, "DELETE"), { method: "DELETE" });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.detail || "Falha ao apagar");
   return data;
@@ -87,9 +118,9 @@ export function bindFolderPickButtons(root = document) {
   });
 }
 
-function breadcrumbHtml(path) {
+function breadcrumbHtml(path, rootLabel = "Meu espaço") {
   const parts = (path || "").split("/").filter(Boolean);
-  const crumbs = [{ label: "Meu espaço", path: "" }];
+  const crumbs = [{ label: rootLabel, path: "" }];
   let acc = "";
   parts.forEach((p) => {
     acc = acc ? `${acc}/${p}` : p;
@@ -109,11 +140,18 @@ export function mountFileBrowser(container, opts = {}) {
   const host = typeof container === "string" ? el(container) : container;
   if (!host) return null;
 
+  const ctx = fileCtx(opts);
+  const rootLabel = ctx.admin ? `Usuário: ${ctx.owner}` : "Meu espaço";
   const state = {
     path: opts.initialPath || "",
     pickField: opts.pickField || "",
     onSelect: opts.onSelect || null,
+    ctx,
+    rootLabel,
   };
+
+  const showUpload = !ctx.readOnly && !ctx.admin;
+  const showDelete = !ctx.readOnly;
 
   host.innerHTML = `
     <div class="files-browser">
@@ -122,10 +160,14 @@ export function mountFileBrowser(container, opts = {}) {
         <div class="files-actions">
           <button type="button" class="btn btn-ghost btn-sm" data-files-up ${state.path ? "" : "hidden"}>↑ Subir</button>
           <button type="button" class="btn btn-ghost btn-sm" data-files-mkdir>Nova pasta</button>
-          <label class="btn btn-ghost btn-sm files-upload-btn">
+          ${
+            showUpload
+              ? `<label class="btn btn-ghost btn-sm files-upload-btn">
             Enviar arquivo
             <input type="file" hidden data-files-upload multiple />
-          </label>
+          </label>`
+              : ""
+          }
         </div>
       </div>
       <p class="files-status" hidden data-files-status></p>
@@ -138,6 +180,11 @@ export function mountFileBrowser(container, opts = {}) {
       ${
         state.pickField
           ? `<p class="files-pick-hint">Selecione uma pasta e clique em <strong>Usar</strong>.</p>`
+          : ""
+      }
+      ${
+        ctx.admin
+          ? `<p class="files-pick-hint">Modo admin: visualização do workspace de <strong>${escapeHtml(ctx.owner)}</strong>.</p>`
           : ""
       }
     </div>`;
@@ -159,9 +206,9 @@ export function mountFileBrowser(container, opts = {}) {
   const render = async () => {
     bodyEl.innerHTML = `<tr><td colspan="4">Carregando…</td></tr>`;
     try {
-      const data = await listWorkspaceFiles(state.path);
+      const data = await listWorkspaceFiles(state.path, state.ctx);
       state.path = data.path || "";
-      crumbsEl.innerHTML = breadcrumbHtml(state.path);
+      crumbsEl.innerHTML = breadcrumbHtml(state.path, state.rootLabel);
       if (upBtn) upBtn.hidden = !state.path;
 
       const rows = (data.entries || []).map((entry) => {
@@ -175,7 +222,7 @@ export function mountFileBrowser(container, opts = {}) {
             ? `<button type="button" class="btn btn-primary btn-sm" data-use-path="${escapeHtml(entry.abs_path)}">Usar</button>`
             : "";
         const delBtn =
-          entry.path === "jobs" || entry.path.startsWith("jobs/")
+          !showDelete || entry.path === "jobs" || entry.path.startsWith("jobs/")
             ? ""
             : `<button type="button" class="btn btn-ghost btn-sm files-del" data-del-path="${escapeHtml(entry.path)}" title="Apagar">✕</button>`;
         const open =
@@ -213,7 +260,7 @@ export function mountFileBrowser(container, opts = {}) {
     }
     if (ev.target.closest("[data-files-up]")) {
       try {
-        const data = await listWorkspaceFiles(state.path);
+        const data = await listWorkspaceFiles(state.path, state.ctx);
         state.path = data.parent || "";
         render();
       } catch (_) {}
@@ -235,7 +282,7 @@ export function mountFileBrowser(container, opts = {}) {
       const p = del.getAttribute("data-del-path");
       if (!p || !window.confirm(`Apagar "${p.split("/").pop()}"?`)) return;
       try {
-        await deleteWorkspacePath(p);
+        await deleteWorkspacePath(p, state.ctx);
         setStatus("Apagado.", true);
         render();
       } catch (e) {
@@ -249,7 +296,7 @@ export function mountFileBrowser(container, opts = {}) {
     if (!name || !name.trim()) return;
     const base = state.path ? `${state.path}/` : "";
     try {
-      await mkdirWorkspace(base + name.trim());
+      await mkdirWorkspace(base + name.trim(), state.ctx);
       setStatus("Pasta criada.", true);
       render();
     } catch (e) {
@@ -276,5 +323,5 @@ export function mountFileBrowser(container, opts = {}) {
   });
 
   render();
-  return { refresh: render };
+  return { refresh: render, setPath: (p) => { state.path = p || ""; render(); } };
 }

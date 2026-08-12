@@ -15,11 +15,13 @@ from backend.user_storage import (
     delete_workspace_path,
     detect_publicacao_folders,
     list_workspace_files,
+    list_workspace_owners,
     mkdir_workspace,
     output_publicacao_hints,
     resolve_user_path,
     save_upload,
     workspace_info,
+    ensure_owner_workspace,
 )
 from backend.user_storage import _match_publicacao_key
 
@@ -230,6 +232,23 @@ def test_delete_workspace_bloqueia_jobs(users_root):
     marker.write_text("x", encoding="utf-8")
     with pytest.raises(ValueError, match="jobs"):
         delete_workspace_path("ana", "jobs/keep.txt")
+
+
+def test_list_workspace_owners(users_root):
+    workspace_info("ana")
+    workspace_info("joao")
+    owners = list_workspace_owners()
+    ids = {o["id"] for o in owners}
+    assert "ana" in ids
+    assert "joao" in ids
+
+
+def test_ensure_owner_workspace(users_root):
+    info = workspace_info("maria@test.com")
+    owner_id = ensure_owner_workspace("maria@test.com")
+    assert owner_id == info["username"]
+    with pytest.raises(ValueError):
+        ensure_owner_workspace("nao-existe")
 
 
 def test_build_download_zip_pasta(users_root, tmp_path):

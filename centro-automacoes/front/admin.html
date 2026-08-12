@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home64" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home66" />
   </head>
   <body class="admin-page">
     <div class="noise" aria-hidden="true"></div>
@@ -47,6 +47,12 @@
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             </span>
             <span class="admin-nav-label">Ferramentas</span>
+          </button>
+          <button type="button" class="admin-nav-item" data-panel="files">
+            <span class="admin-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <span class="admin-nav-label">Arquivos</span>
           </button>
           <button type="button" class="admin-nav-item" data-panel="system">
             <span class="admin-nav-icon" aria-hidden="true">
@@ -170,6 +176,40 @@
             <div class="admin-tools-grid" id="services-grid"></div>
           </section>
 
+          <section class="admin-panel" id="panel-files" data-panel="files" hidden>
+            <article class="admin-card admin-card--files">
+              <header class="admin-card-head admin-files-head">
+                <div>
+                  <h2>Arquivos dos usu&aacute;rios</h2>
+                  <p class="admin-muted">Uploads enviados, downloads (output) e logs de jobs por usu&aacute;rio</p>
+                </div>
+                <div class="admin-files-controls">
+                  <label class="admin-files-select-wrap">
+                    <span class="admin-muted">Usu&aacute;rio</span>
+                    <select id="files-owner-select" class="admin-files-select">
+                      <option value="">Carregando&hellip;</option>
+                    </select>
+                  </label>
+                  <div class="admin-files-shortcuts">
+                    <button type="button" class="btn btn-ghost btn-sm" data-files-shortcut="">Raiz</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-files-shortcut="uploads">Uploads</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-files-shortcut="output">Downloads</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-files-shortcut="jobs">Jobs</button>
+                  </div>
+                  <a class="btn btn-ghost btn-sm" id="files-open-tab" href="/arquivos.html" target="_blank" rel="noopener">Abrir em nova aba</a>
+                </div>
+              </header>
+              <div class="admin-card-body admin-files-body">
+                <iframe
+                  id="admin-files-frame"
+                  class="admin-files-frame"
+                  title="Explorador de arquivos"
+                  src="about:blank"
+                ></iframe>
+              </div>
+            </article>
+          </section>
+
           <section class="admin-panel" id="panel-system" data-panel="system" hidden>
             <div class="admin-grid-2">
               <article class="admin-card">
@@ -200,7 +240,7 @@
     </div>
 
     <script src="/assets/shader-background.js?v=home57"></script>
-    <script type="module" src="/assets/shared.js?v=home64"></script>
-    <script src="/assets/admin.js?v=home63"></script>
+    <script type="module" src="/assets/shared.js?v=home66"></script>
+    <script src="/assets/admin.js?v=home66"></script>
   </body>
 </html>
