@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
 import unicodedata
 import uuid
 import zipfile
@@ -28,6 +32,19 @@ MAX_ZIP_FILES = max(100, int(os.getenv("OPTO_MAX_ZIP_FILES", "50000")))
 MAX_ZIP_UNCOMPRESSED = max(
     10, int(os.getenv("OPTO_MAX_ZIP_MB", "2048"))
 ) * 1024 * 1024
+# Tamanho máximo por lote (cada licitação/ano fica inteira em um lote)
+LOTE_MAX_BYTES = max(
+    10,
+    int(os.getenv("OPTO_ZIP_LOTE_MB", os.getenv("OPTO_MAX_ZIP_MB", "2048"))),
+) * 1024 * 1024
+DOWNLOAD_CACHE_TTL_S = max(300, int(os.getenv("OPTO_DL_CACHE_TTL_S", "86400")))
+PREBUILD_LOTS = os.getenv("OPTO_DL_PREBUILD", "1").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+)
+
+_lot_build_locks: dict[str, threading.Lock] = {}
 
 FOLDER_SIZE_ENABLED = os.getenv("OPTO_FOLDER_SIZE", "1").strip().lower() not in (
     "0",
@@ -383,6 +400,8 @@ def list_workspace_files(
     )
     entries: list[dict[str, Any]] = []
     for item in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+        if item.name.startswith("."):
+            continue
         try:
             stat = item.stat()
         except OSError:
@@ -455,45 +474,385 @@ def workspace_download_target(
     return root, target, safe_name
 
 
-def validate_folder_download_limits(folder: Path) -> tuple[int, int]:
-    """Valida limites de ZIP. Retorna (qtd_arquivos, bytes_totais)."""
-    file_count = 0
-    total_size = 0
-    for file_path in folder.rglob("*"):
-        if not file_path.is_file():
-            continue
-        file_count += 1
-        if file_count > MAX_ZIP_FILES:
-            raise ValueError(
-                f"Pasta com muitos arquivos (máx. {MAX_ZIP_FILES}). "
-                "Baixe subpastas menores ou aumente OPTO_MAX_ZIP_FILES."
-            )
+def _count_files_under(path: Path) -> int:
+    n = 0
+    for item in path.rglob("*"):
+        if item.is_file():
+            n += 1
+    return n
+
+
+def _unit_display_name(unit: dict[str, Any]) -> str:
+    if unit["kind"] == "dir":
+        return str(unit["name"])
+    return "Arquivos na raiz"
+
+
+def _collect_download_units(folder: Path) -> list[dict[str, Any]]:
+    """
+    Unidades atômicas para lotes: cada subpasta ou grupo de arquivos na raiz.
+    Nunca divide uma licitação/ano entre lotes.
+    """
+    units: list[dict[str, Any]] = []
+    root_files: list[Path] = []
+    root_bytes = 0
+    for item in sorted(folder.iterdir(), key=lambda p: p.name.lower()):
         try:
-            total_size += file_path.stat().st_size
+            if item.is_dir():
+                total, partial = _dir_size(item)
+                units.append(
+                    {
+                        "name": item.name,
+                        "kind": "dir",
+                        "bytes": total,
+                        "files": _count_files_under(item),
+                        "partial_size": partial,
+                    }
+                )
+            elif item.is_file():
+                root_files.append(item)
+                root_bytes += item.stat().st_size
         except OSError:
-            pass
-        if total_size > MAX_ZIP_UNCOMPRESSED:
-            mb = MAX_ZIP_UNCOMPRESSED // (1024 * 1024)
+            continue
+    if root_files:
+        units.append(
+            {
+                "name": "__root_files__",
+                "kind": "root_files",
+                "bytes": root_bytes,
+                "files": len(root_files),
+                "file_names": sorted(f.name for f in root_files),
+            }
+        )
+    return units
+
+
+def _partition_download_units(
+    units: list[dict[str, Any]],
+    max_bytes: int,
+    max_files: int,
+) -> list[dict[str, Any]]:
+    lots: list[dict[str, Any]] = []
+    cur: dict[str, Any] | None = None
+
+    def _new_lot() -> dict[str, Any]:
+        return {"units": [], "bytes": 0, "files": 0, "names": []}
+
+    for unit in units:
+        label = _unit_display_name(unit)
+        u_bytes = int(unit["bytes"])
+        u_files = int(unit["files"])
+        if u_files > max_files:
             raise ValueError(
-                f"Pasta excede {mb} MB para download. "
-                "Baixe subpastas ou aumente OPTO_MAX_ZIP_MB."
+                f'"{label}" tem arquivos demais para um lote ({u_files}). '
+                "Aumente OPTO_MAX_ZIP_FILES ou baixe essa pasta separadamente."
             )
-    if file_count == 0:
+        if u_bytes > max_bytes:
+            mb = max_bytes // (1024 * 1024)
+            got = max(1, u_bytes // (1024 * 1024))
+            raise ValueError(
+                f'"{label}" sozinha tem ~{got} MB (máx. {mb} MB por lote). '
+                "Baixe essa pasta separadamente."
+            )
+        if cur is None:
+            cur = _new_lot()
+        elif cur["bytes"] + u_bytes > max_bytes or cur["files"] + u_files > max_files:
+            lots.append(cur)
+            cur = _new_lot()
+        cur["units"].append(unit)
+        cur["bytes"] += u_bytes
+        cur["files"] += u_files
+        cur["names"].append(label)
+    if cur and cur["units"]:
+        lots.append(cur)
+    return lots
+
+
+def _download_cache_dir(owner: str | None, subpath: str) -> Path:
+    key = hashlib.sha256(subpath.encode("utf-8")).hexdigest()[:24]
+    cache = user_root(owner) / ".dl-cache" / key
+    cache.mkdir(parents=True, exist_ok=True)
+    return cache
+
+
+def _lot_zip_names(units: list[dict[str, Any]]) -> list[str]:
+    names: list[str] = []
+    for unit in units:
+        if unit["kind"] == "dir":
+            names.append(unit["name"])
+        elif unit["kind"] == "root_files":
+            names.extend(unit.get("file_names") or [])
+    return names
+
+
+def _fingerprint_lot_units(folder: Path, units: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for unit in units:
+        if unit["kind"] == "dir":
+            p = folder / unit["name"]
+            try:
+                st = p.stat()
+                parts.append(f"d:{unit['name']}:{st.st_mtime_ns}:{st.st_size}")
+            except OSError:
+                parts.append(f"d:{unit['name']}:0:0")
+        else:
+            fn = ",".join(unit.get("file_names") or [])
+            parts.append(f"r:{fn}:{unit.get('bytes', 0)}")
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
+def _lot_cache_paths(owner: str | None, subpath: str, lot_index: int) -> tuple[Path, Path]:
+    base = _download_cache_dir(owner, subpath)
+    n = lot_index
+    return base / f"lote-{n:02d}.zip", base / f"lote-{n:02d}.json"
+
+
+def lot_cache_ready(
+    owner: str | None,
+    subpath: str,
+    lot_index: int,
+    folder: Path,
+    units: list[dict[str, Any]],
+) -> bool:
+    zip_path, meta_path = _lot_cache_paths(owner, subpath, lot_index)
+    if not zip_path.is_file() or not meta_path.is_file():
+        return False
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        age = time.time() - zip_path.stat().st_mtime
+        if age > DOWNLOAD_CACHE_TTL_S:
+            return False
+        return meta.get("fingerprint") == _fingerprint_lot_units(folder, units)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return False
+
+
+def get_lot_cache_file(
+    owner: str | None,
+    subpath: str,
+    lot_index: int,
+    folder: Path,
+    units: list[dict[str, Any]],
+) -> Path | None:
+    if lot_cache_ready(owner, subpath, lot_index, folder, units):
+        return _lot_cache_paths(owner, subpath, lot_index)[0]
+    return None
+
+
+def _build_lot_zip_on_disk(folder: Path, units: list[dict[str, Any]], dest: Path) -> None:
+    names = _lot_zip_names(units)
+    if not names:
+        raise ValueError("Lote vazio.")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    partial = dest.with_suffix(".zip.part")
+    partial.unlink(missing_ok=True)
+    if can_stream_folder_zip():
+        cmd = ["zip", "-r", "-0", str(partial), *names]
+        proc = subprocess.run(
+            cmd,
+            cwd=folder,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            err = (proc.stderr or b"").decode("utf-8", errors="replace")
+            raise RuntimeError(err[:400] or "zip falhou")
+        partial.replace(dest)
+        return
+    with zipfile.ZipFile(partial, "w", zipfile.ZIP_DEFLATED) as zf:
+        _write_lot_zip_file(zf, folder, units)
+    partial.replace(dest)
+
+
+def ensure_lot_cached(
+    owner: str | None,
+    subpath: str,
+    lot_index: int,
+    folder: Path,
+    units: list[dict[str, Any]],
+) -> Path:
+    """Gera ZIP do lote em cache (reutilizado nos próximos downloads)."""
+    if cached := get_lot_cache_file(owner, subpath, lot_index, folder, units):
+        return cached
+
+    lock_key = f"{owner}:{subpath}:{lot_index}"
+    lock = _lot_build_locks.setdefault(lock_key, threading.Lock())
+    with lock:
+        if cached := get_lot_cache_file(owner, subpath, lot_index, folder, units):
+            return cached
+        zip_path, meta_path = _lot_cache_paths(owner, subpath, lot_index)
+        fingerprint = _fingerprint_lot_units(folder, units)
+        _build_lot_zip_on_disk(folder, units, zip_path)
+        meta_path.write_text(
+            json.dumps(
+                {
+                    "fingerprint": fingerprint,
+                    "built_at": time.time(),
+                    "path": subpath,
+                    "lot": lot_index,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return zip_path
+
+
+def schedule_lots_prebuild(owner: str | None, subpath: str) -> None:
+    """Monta lotes em background — download fica instantâneo quando pronto."""
+    if not PREBUILD_LOTS:
+        return
+
+    def _worker() -> None:
+        try:
+            _root, target, _safe = workspace_download_target(owner, subpath)
+            if not target.is_dir():
+                return
+            units = _collect_download_units(target)
+            if not units:
+                return
+            rel = target.relative_to(_root).as_posix()
+            if rel == ".":
+                rel = ""
+            lots = _partition_download_units(units, LOTE_MAX_BYTES, MAX_ZIP_FILES)
+            for i, lot in enumerate(lots, 1):
+                ensure_lot_cached(owner, rel, i, target, lot["units"])
+        except Exception as exc:
+            _log.warning("Pré-montagem de lotes falhou (%s): %s", subpath, exc)
+
+    threading.Thread(target=_worker, daemon=True, name="opto-lot-prebuild").start()
+
+
+def _folder_lots_partitioned(
+    owner: str | None, subpath: str
+) -> tuple[Path, str, list[dict[str, Any]], list[dict[str, Any]]]:
+    _root, target, safe_name = workspace_download_target(owner, subpath)
+    if not target.is_dir():
+        raise ValueError("Não é uma pasta.")
+    units = _collect_download_units(target)
+    if not units:
         raise ValueError("Pasta vazia — nada para baixar.")
-    return file_count, total_size
+    rel = target.relative_to(_root).as_posix()
+    if rel == ".":
+        rel = ""
+    lots = _partition_download_units(units, LOTE_MAX_BYTES, MAX_ZIP_FILES)
+    return target, rel, safe_name, lots
+
+
+def folder_download_plan(owner: str | None, subpath: str) -> dict[str, Any]:
+    """Plano de download: um ZIP ou vários lotes (subpastas inteiras)."""
+    root, target, safe_name = workspace_download_target(owner, subpath)
+    rel = target.relative_to(root).as_posix()
+    if rel == ".":
+        rel = ""
+
+    if target.is_file():
+        try:
+            size = target.stat().st_size
+        except OSError:
+            size = 0
+        return {
+            "mode": "file",
+            "path": rel,
+            "name": safe_name,
+            "bytes": size,
+            "files": 1,
+            "lots": [],
+        }
+
+    target, rel, safe_name, lots = _folder_lots_partitioned(owner, subpath)
+    total_lots = len(lots)
+    lot_rows: list[dict[str, Any]] = []
+    for i, lot in enumerate(lots):
+        n = i + 1
+        cached = lot_cache_ready(owner, rel, n, target, lot["units"])
+        lot_rows.append(
+            {
+                "lot": n,
+                "total_lots": total_lots,
+                "bytes": lot["bytes"],
+                "files": lot["files"],
+                "units": lot["names"],
+                "unit_count": len(lot["units"]),
+                "cached": cached,
+                "label": f"Lote {n} de {total_lots}" if total_lots > 1 else safe_name,
+                "filename": (
+                    f"{safe_name}-lote{n:02d}-de-{total_lots:02d}.zip"
+                    if total_lots > 1
+                    else f"{safe_name}.zip"
+                ),
+            }
+        )
+
+    if total_lots > 1:
+        schedule_lots_prebuild(owner, rel)
+
+    return {
+        "mode": "lots" if total_lots > 1 else "single",
+        "path": rel,
+        "name": safe_name,
+        "bytes": sum(l["bytes"] for l in lots),
+        "files": sum(l["files"] for l in lots),
+        "lot_count": total_lots,
+        "lote_max_mb": LOTE_MAX_BYTES // (1024 * 1024),
+        "prebuild": PREBUILD_LOTS,
+        "lots": lot_rows,
+    }
+
+
+def _resolve_lot_units(
+    owner: str | None, subpath: str, lot_index: int
+) -> tuple[Path, str, dict[str, Any], list[dict[str, Any]], str]:
+    _root, target, safe_name = workspace_download_target(owner, subpath)
+    if target.is_file():
+        if lot_index not in (0, 1):
+            raise ValueError("Lote inválido.")
+        return target, safe_name, {"filename": safe_name}, [], ""
+
+    target, rel, safe_name, lots = _folder_lots_partitioned(owner, subpath)
+    if lot_index < 1 or lot_index > len(lots):
+        raise ValueError("Lote inválido.")
+    lot = lots[lot_index - 1]
+    n = lot_index
+    total_lots = len(lots)
+    lot_meta = {
+        "lot": n,
+        "total_lots": total_lots,
+        "bytes": lot["bytes"],
+        "files": lot["files"],
+        "units": lot["names"],
+        "unit_count": len(lot["units"]),
+        "cached": lot_cache_ready(owner, rel, n, target, lot["units"]),
+        "label": f"Lote {n} de {total_lots}" if total_lots > 1 else safe_name,
+        "filename": (
+            f"{safe_name}-lote{n:02d}-de-{total_lots:02d}.zip"
+            if total_lots > 1
+            else f"{safe_name}.zip"
+        ),
+    }
+    return target, safe_name, lot_meta, lot["units"], rel
 
 
 def can_stream_folder_zip() -> bool:
     return shutil.which("zip") is not None
 
 
-def iter_folder_zip_stream(folder: Path) -> Iterator[bytes]:
-    """
-    ZIP em streaming (zip -0) — não usa /tmp; ideal para pastas grandes na VPS.
-    """
+def _zip_args_for_units(units: list[dict[str, Any]]) -> list[str]:
+    args = ["zip", "-r", "-0", "-"]
+    for unit in units:
+        if unit["kind"] == "dir":
+            args.append(unit["name"])
+        elif unit["kind"] == "root_files":
+            args.extend(unit.get("file_names") or [])
+    if len(args) <= 3:
+        raise ValueError("Lote vazio.")
+    return args
+
+
+def iter_lot_zip_stream(folder: Path, units: list[dict[str, Any]]) -> Iterator[bytes]:
+    """ZIP em streaming só das unidades do lote (subpastas inteiras)."""
     folder = folder.resolve()
     proc = subprocess.Popen(
-        ["zip", "-r", "-0", "-", "."],
+        _zip_args_for_units(units),
         cwd=folder,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -513,8 +872,8 @@ def iter_folder_zip_stream(folder: Path) -> Iterator[bytes]:
             err = (proc.stderr.read() if proc.stderr else b"").decode(
                 "utf-8", errors="replace"
             )
-            _log.error("zip falhou (rc=%s): %s", rc, err[:800])
-            raise RuntimeError("Falha ao compactar pasta para download.")
+            _log.error("zip lote falhou (rc=%s): %s", rc, err[:800])
+            raise RuntimeError("Falha ao compactar lote para download.")
     except GeneratorExit:
         proc.kill()
         proc.wait()
@@ -526,30 +885,44 @@ def iter_folder_zip_stream(folder: Path) -> Iterator[bytes]:
         raise
 
 
-def prepare_workspace_download(
-    owner: str | None, subpath: str
+def _write_lot_zip_file(
+    zf: zipfile.ZipFile, folder: Path, units: list[dict[str, Any]]
+) -> None:
+    for unit in units:
+        if unit["kind"] == "dir":
+            base = folder / unit["name"]
+            for file_path in sorted(base.rglob("*")):
+                if not file_path.is_file():
+                    continue
+                arc = str(file_path.relative_to(folder)).replace("\\", "/")
+                write_zip_file(zf, file_path, arc)
+        elif unit["kind"] == "root_files":
+            for fname in unit.get("file_names") or []:
+                fp = folder / fname
+                if fp.is_file():
+                    write_zip_file(zf, fp, fname)
+
+
+def prepare_lot_download(
+    owner: str | None, subpath: str, lot_index: int
 ) -> tuple[Path, str, Path | None]:
-    """Prepara arquivo ou ZIP de pasta (fallback sem zip no PATH)."""
+    """ZIP do lote — usa cache em disco quando possível."""
+    target, _safe, lot_meta, units, rel = _resolve_lot_units(owner, subpath, lot_index)
+    if not units:
+        return target.resolve(), lot_meta["filename"], None
+    zip_path = ensure_lot_cached(owner, rel, lot_index, target, units)
+    return zip_path, lot_meta["filename"], None
+
+
+def prepare_workspace_download(
+    owner: str | None, subpath: str, *, lot: int = 1
+) -> tuple[Path, str, Path | None]:
+    """Prepara download de arquivo ou lote de pasta."""
     _root, target, safe_name = workspace_download_target(owner, subpath)
     if target.is_file():
         return target.resolve(), safe_name, None
-
-    validate_folder_download_limits(target)
-
-    tmp_dir = Path(tempfile.mkdtemp(prefix="opto-dl-"))
-    zip_path = tmp_dir / f"{safe_name}.zip"
-    try:
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for file_path in sorted(target.rglob("*")):
-                if not file_path.is_file():
-                    continue
-                arc = str(file_path.relative_to(target)).replace("\\", "/")
-                write_zip_file(zf, file_path, arc)
-    except Exception:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        raise
-
-    return zip_path.resolve(), zip_path.name, tmp_dir
+    _resolve_lot_units(owner, subpath, lot)
+    return prepare_lot_download(owner, subpath, lot)
 
 
 def _safe_name(name: str) -> str:

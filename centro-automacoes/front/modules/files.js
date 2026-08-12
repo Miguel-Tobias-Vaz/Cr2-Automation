@@ -58,14 +58,6 @@ async function loadFolderSizes(paths, ctx, bodyEl) {
 }
 loadFolderSizes._seq = 0;
 
-function folderDownloadStatus(bytes) {
-  const sizeHint =
-    bytes != null && bytes >= 1024 * 1024 * 1024
-      ? " Pasta grande — o download deve começar em segundos; a transferência pode levar bastante tempo."
-      : " Não feche a aba até o download começar.";
-  return "Preparando ZIP no servidor…" + sizeHint;
-}
-
 function filesUrl(path, ctx, method = "GET") {
   if (ctx.admin) {
     const base = `${API}/api/admin/workspace/files?owner=${encodeURIComponent(ctx.owner)}`;
@@ -80,7 +72,7 @@ function filesUrl(path, ctx, method = "GET") {
     : `${API}/api/workspace/files`;
 }
 
-export function workspaceDownloadUrl(path, opts = {}) {
+export function workspaceDownloadUrl(path, opts = {}, lot = 1) {
   const ctx = fileCtx(opts);
   const rel = (path || "").trim();
   if (!rel) return "";
@@ -92,32 +84,33 @@ export function workspaceDownloadUrl(path, opts = {}) {
   } else {
     url = `${API}/api/workspace/files/download?path=${encodeURIComponent(rel)}`;
   }
+  url += `&lot=${Math.max(1, Number(lot) || 1)}`;
   const token = authToken();
   if (token) {
-    url += (url.includes("?") ? "&" : "?") + `access_token=${encodeURIComponent(token)}`;
+    url += `&access_token=${encodeURIComponent(token)}`;
   }
   return url;
 }
 
-function downloadCheckUrl(path, ctx) {
+function downloadPlanUrl(path, ctx) {
   if (ctx.admin) {
     return (
-      `${API}/api/admin/workspace/files/download/check?owner=${encodeURIComponent(ctx.owner)}` +
+      `${API}/api/admin/workspace/files/download/plan?owner=${encodeURIComponent(ctx.owner)}` +
       `&path=${encodeURIComponent(path)}`
     );
   }
-  return `${API}/api/workspace/files/download/check?path=${encodeURIComponent(path)}`;
+  return `${API}/api/workspace/files/download/plan?path=${encodeURIComponent(path)}`;
 }
 
-async function checkWorkspaceDownload(path, ctx) {
-  const r = await authFetch(downloadCheckUrl(path, ctx));
+async function fetchDownloadPlan(path, ctx) {
+  const r = await authFetch(downloadPlanUrl(path, ctx));
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || "Download não permitido");
+  if (!r.ok) throw new Error(data.detail || "Falha ao planejar download");
   return data;
 }
 
-function triggerDownload(path, ctx) {
-  const url = workspaceDownloadUrl(path, ctx);
+function triggerDownload(path, ctx, lot = 1) {
+  const url = workspaceDownloadUrl(path, ctx, lot);
   if (!url) return;
   const a = document.createElement("a");
   a.href = url;
@@ -128,11 +121,126 @@ function triggerDownload(path, ctx) {
   a.remove();
 }
 
-async function triggerWorkspaceDownload(path, ctx, kind = "file") {
-  if (kind === "dir") {
-    await checkWorkspaceDownload(path, ctx);
+function closeLotsModal() {
+  document.querySelector(".files-lots-backdrop")?.remove();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function renderLotsRows(lots) {
+  return (lots || [])
+    .map((lot) => {
+      const units = (lot.units || []).slice(0, 8);
+      const more = (lot.units || []).length > 8 ? ` +${lot.units.length - 8}` : "";
+      const unitList = units.map((u) => escapeHtml(u)).join(", ") + more;
+      const status = lot.cached
+        ? `<span class="files-lots-badge files-lots-badge--ok">Pronto</span>`
+        : `<span class="files-lots-badge">Gerando…</span>`;
+      return `<li class="files-lots-item">
+        <div class="files-lots-item-head">
+          <strong>${escapeHtml(lot.label)}</strong>
+          <span>${escapeHtml(formatBytes(lot.bytes))} · ${lot.unit_count} pasta(s) ${status}</span>
+        </div>
+        <p class="files-lots-units">${unitList}</p>
+        <button type="button" class="btn btn-primary btn-sm" data-lot-dl="${lot.lot}">Baixar ${escapeHtml(lot.filename)}</button>
+      </li>`;
+    })
+    .join("");
+}
+
+function showLotsModal(plan, path, ctx, setStatus) {
+  closeLotsModal();
+  let pollTimer = null;
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "files-lots-backdrop";
+  backdrop.innerHTML = `<div class="files-lots-panel" role="dialog" aria-labelledby="files-lots-title">
+    <header class="files-lots-head">
+      <h3 id="files-lots-title">Download em lotes — ${escapeHtml(plan.name || "")}</h3>
+      <button type="button" class="btn btn-ghost btn-sm" data-lots-close aria-label="Fechar">✕</button>
+    </header>
+    <p class="files-lots-lede">
+      Pasta grande (${escapeHtml(formatBytes(plan.bytes))}) dividida em
+      <strong>${plan.lot_count} lotes</strong> (até ${plan.lote_max_mb} MB cada).
+      Cada licitação ou subpasta fica <strong>inteira</strong> em um lote.
+      ${plan.prebuild ? " O servidor <strong>prepara os ZIPs em background</strong> — lotes marcados Pronto baixam na hora." : ""}
+    </p>
+    <div class="files-lots-actions">
+      <button type="button" class="btn btn-ghost btn-sm" data-lots-all>Baixar todos em sequência</button>
+    </div>
+    <ul class="files-lots-list" data-lots-list>${renderLotsRows(plan.lots)}</ul>
+    <p class="files-lots-hint">Aguarde o status <strong>Pronto</strong> para download instantâneo. No modo sequência, espere cada arquivo terminar no navegador.</p>
+  </div>`;
+
+  const stopPoll = () => {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  };
+
+  const refreshPlan = async () => {
+    try {
+      const fresh = await fetchDownloadPlan(path, ctx);
+      const list = backdrop.querySelector("[data-lots-list]");
+      if (list && fresh.lots) list.innerHTML = renderLotsRows(fresh.lots);
+      const allReady = (fresh.lots || []).every((l) => l.cached);
+      if (allReady) stopPoll();
+    } catch (_) {}
+  };
+
+  pollTimer = setInterval(refreshPlan, 2500);
+
+  backdrop.addEventListener("click", async (ev) => {
+    if (ev.target === backdrop || ev.target.closest("[data-lots-close]")) {
+      stopPoll();
+      closeLotsModal();
+      return;
+    }
+    const btn = ev.target.closest("[data-lot-dl]");
+    if (btn) {
+      const lot = Number(btn.getAttribute("data-lot-dl") || "1");
+      setStatus(`Iniciando lote ${lot}…`, null);
+      triggerDownload(path, ctx, lot);
+      return;
+    }
+    if (ev.target.closest("[data-lots-all]")) {
+      const lots = plan.lots || [];
+      setStatus("Sequência iniciada — aguarde cada lote terminar no navegador.", true);
+      for (let i = 0; i < lots.length; i++) {
+        const lot = lots[i];
+        setStatus(`Lote ${lot.lot} de ${lots.length} — baixando…`, null);
+        triggerDownload(path, ctx, lot.lot);
+        if (i < lots.length - 1) {
+          await sleep(45000);
+        }
+      }
+    }
+  });
+
+  document.body.appendChild(backdrop);
+  const ready = (plan.lots || []).filter((l) => l.cached).length;
+  setStatus(
+    `${plan.lot_count} lotes — ${ready} pronto(s). ${plan.prebuild ? "Gerando os demais em background…" : ""}`,
+    true
+  );
+}
+
+async function startFolderDownload(path, ctx, setStatus) {
+  setStatus("Calculando lotes…", null);
+  try {
+    const plan = await fetchDownloadPlan(path, ctx);
+    if (plan.mode === "file" || plan.mode === "single") {
+      setStatus("Iniciando download…", null);
+      triggerDownload(path, ctx, 1);
+      return;
+    }
+    showLotsModal(plan, path, ctx, setStatus);
+  } catch (e) {
+    setStatus(String(e.message || e), false);
   }
-  triggerDownload(path, ctx);
 }
 
 export async function listAdminWorkspaceUsers() {
@@ -395,9 +503,13 @@ export function mountFileBrowser(container, opts = {}) {
       const p = dl.getAttribute("data-dl-path");
       const kind = dl.getAttribute("data-dl-kind") || "file";
       if (p) {
-        setStatus(kind === "dir" ? folderDownloadStatus() : "Preparando download…", null);
-        triggerDownload(p, state.ctx);
-        if (kind !== "dir") setStatus("Download iniciado.", true);
+        if (kind === "dir") {
+          void startFolderDownload(p, state.ctx, setStatus);
+        } else {
+          setStatus("Preparando download…", null);
+          triggerDownload(p, state.ctx, 1);
+          setStatus("Download iniciado.", true);
+        }
       }
       return;
     }
@@ -441,8 +553,7 @@ export function mountFileBrowser(container, opts = {}) {
 
   dlCurrentBtn?.addEventListener("click", () => {
     if (!state.path) return;
-    setStatus(folderDownloadStatus(), null);
-    triggerDownload(state.path, state.ctx);
+    void startFolderDownload(state.path, state.ctx, setStatus);
   });
 
   uploadInput?.addEventListener("change", async () => {

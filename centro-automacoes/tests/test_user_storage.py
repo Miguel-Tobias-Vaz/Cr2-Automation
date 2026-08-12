@@ -277,6 +277,44 @@ def test_delete_workspace_bloqueia_jobs(users_root):
         delete_workspace_path("ana", "jobs/keep.txt")
 
 
+def test_folder_download_plan_lotes(users_root, monkeypatch):
+    import backend.user_storage as us
+
+    monkeypatch.setattr(us, "LOTE_MAX_BYTES", 80)
+    info = workspace_info("ana")
+    out = Path(info["output_dir"]) / "licitacoes"
+    for name in ("Licitacao_A", "Licitacao_B", "Licitacao_C"):
+        d = out / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "doc.pdf").write_bytes(b"x" * 40)
+
+    from backend.user_storage import folder_download_plan
+
+    plan = folder_download_plan("ana", "output/licitacoes")
+    assert plan["mode"] == "lots"
+    assert plan["lot_count"] >= 2
+    seen: list[str] = []
+    for lot in plan["lots"]:
+        for unit in lot["units"]:
+            assert unit not in seen, f"{unit} apareceu em mais de um lote"
+            seen.append(unit)
+    assert set(seen) == {"Licitacao_A", "Licitacao_B", "Licitacao_C"}
+
+
+def test_folder_download_plan_single(users_root):
+    from backend.user_storage import folder_download_plan
+
+    info = workspace_info("ana")
+    folder = Path(info["output_dir"]) / "normas"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "a.pdf").write_bytes(b"123")
+
+    plan = folder_download_plan("ana", "output/normas")
+    assert plan["mode"] == "single"
+    assert plan["lot_count"] == 1
+    assert len(plan["lots"]) == 1
+
+
 def test_prepare_workspace_download_arquivo(users_root):
     info = workspace_info("ana")
     f = Path(info["uploads_dir"]) / "doc.pdf"
@@ -297,14 +335,13 @@ def test_prepare_workspace_download_pasta(users_root):
     path, name, tmp = prepare_workspace_download("ana", "output/documentos")
     assert path.is_file()
     assert name == "documentos.zip"
-    assert tmp is not None
+    assert tmp is None
     import zipfile
 
     with zipfile.ZipFile(path, "r") as zf:
         names = zf.namelist()
     assert "a.txt" in names
     assert any("sub/b.txt" in n or "sub\\b.txt" in n for n in names)
-    shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_prepare_workspace_download_bloqueia_jobs(users_root):
