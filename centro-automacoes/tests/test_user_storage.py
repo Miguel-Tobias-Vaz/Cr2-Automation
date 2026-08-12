@@ -212,14 +212,31 @@ def test_list_workspace_files_pasta_com_tamanho(users_root):
     (pasta / "a.pdf").write_bytes(b"12345")
     (pasta / "b.pdf").write_bytes(b"67890")
 
-    data = list_workspace_files("ana", "output")
+    data = list_workspace_files("ana", "output", include_folder_sizes=True)
     lic = next(e for e in data["entries"] if e["name"] == "licitacoes")
     assert lic["kind"] == "dir"
     assert lic.get("size") == 5 + 5
 
-    inner = list_workspace_files("ana", "output/licitacoes")
+    inner = list_workspace_files("ana", "output/licitacoes", include_folder_sizes=True)
     sub = next(e for e in inner["entries"] if e["name"] == "Licitacao_001")
     assert sub.get("size") == 5 + 5
+
+
+def test_workspace_folder_size(users_root):
+    from backend.user_storage import workspace_folder_size
+
+    info = workspace_info("ana")
+    out = Path(info["output_dir"])
+    pasta = out / "normas" / "2024"
+    pasta.mkdir(parents=True)
+    (pasta / "doc.pdf").write_bytes(b"x" * 100)
+
+    data = list_workspace_files("ana", "output")
+    normas = next(e for e in data["entries"] if e["name"] == "normas")
+    assert normas.get("size") is None
+
+    sized = workspace_folder_size("ana", "output/normas")
+    assert sized["size"] == 100
 
 
 def test_resolve_user_path_bloqueia_traversal(users_root):

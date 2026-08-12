@@ -15,7 +15,7 @@ import { whenReady } from "./modules/core.js";
   let filesUsersLoaded = false;
   let filesCurrentOwner = "";
   let filesBrowser = null;
-  const FILES_MODULE = "/assets/modules/files.js?v=home69";
+  const FILES_MODULE = "/assets/modules/files.js?v=home71";
 
   const STATUS_LABEL = {
     pending: "Na fila",

@@ -17,6 +17,10 @@ Opto-Automacoes.zip
 **/.cache/
 
 # Dados de runtime — NUNCA versionar (produção vive só no servidor)
+automacoes/dic-est-ter/data/
+automacoes/dic-est-ter/runtime/logs/
+automacoes/dic-est-ter/runtime/screenshots/
+automacoes/dic-est-ter/runtime/jobs/
 centro-automacoes/data/users/
 centro-automacoes/data/jobs/
 centro-automacoes/data/auth/users.json

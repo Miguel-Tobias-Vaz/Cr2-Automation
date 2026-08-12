@@ -14,6 +14,58 @@ function fileCtx(opts = {}) {
   };
 }
 
+function folderSizeUrl(path, ctx) {
+  if (ctx.admin) {
+    return (
+      `${API}/api/admin/workspace/files/folder-size?owner=${encodeURIComponent(ctx.owner)}` +
+      `&path=${encodeURIComponent(path)}`
+    );
+  }
+  return `${API}/api/workspace/files/folder-size?path=${encodeURIComponent(path)}`;
+}
+
+async function fetchWorkspaceFolderSize(path, ctx) {
+  const r = await authFetch(folderSizeUrl(path, ctx));
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || "Falha ao calcular tamanho");
+  return data;
+}
+
+function formatEntrySize(entry) {
+  if (entry.size == null) return entry.kind === "dir" ? "…" : "—";
+  return formatBytes(entry.size) + (entry.size_partial ? "+" : "");
+}
+
+async function loadFolderSizes(paths, ctx, bodyEl) {
+  const listId = ++loadFolderSizes._seq;
+  for (const relPath of paths) {
+    if (listId !== loadFolderSizes._seq) return;
+    const cell = bodyEl.querySelector(`[data-size-path="${CSS.escape(relPath)}"]`);
+    if (!cell) continue;
+    try {
+      const data = await fetchWorkspaceFolderSize(relPath, ctx);
+      if (listId !== loadFolderSizes._seq) return;
+      if (data.size == null) {
+        cell.textContent = "—";
+      } else {
+        cell.textContent = formatBytes(data.size) + (data.size_partial ? "+" : "");
+      }
+    } catch (_) {
+      if (listId !== loadFolderSizes._seq) return;
+      cell.textContent = "—";
+    }
+  }
+}
+loadFolderSizes._seq = 0;
+
+function folderDownloadStatus(bytes) {
+  const sizeHint =
+    bytes != null && bytes >= 1024 * 1024 * 1024
+      ? " Pasta grande — o download deve começar em segundos; a transferência pode levar bastante tempo."
+      : " Não feche a aba até o download começar.";
+  return "Preparando ZIP no servidor…" + sizeHint;
+}
+
 function filesUrl(path, ctx, method = "GET") {
   if (ctx.admin) {
     const base = `${API}/api/admin/workspace/files?owner=${encodeURIComponent(ctx.owner)}`;
@@ -47,6 +99,23 @@ export function workspaceDownloadUrl(path, opts = {}) {
   return url;
 }
 
+function downloadCheckUrl(path, ctx) {
+  if (ctx.admin) {
+    return (
+      `${API}/api/admin/workspace/files/download/check?owner=${encodeURIComponent(ctx.owner)}` +
+      `&path=${encodeURIComponent(path)}`
+    );
+  }
+  return `${API}/api/workspace/files/download/check?path=${encodeURIComponent(path)}`;
+}
+
+async function checkWorkspaceDownload(path, ctx) {
+  const r = await authFetch(downloadCheckUrl(path, ctx));
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || "Download não permitido");
+  return data;
+}
+
 function triggerDownload(path, ctx) {
   const url = workspaceDownloadUrl(path, ctx);
   if (!url) return;
@@ -57,6 +126,13 @@ function triggerDownload(path, ctx) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+async function triggerWorkspaceDownload(path, ctx, kind = "file") {
+  if (kind === "dir") {
+    await checkWorkspaceDownload(path, ctx);
+  }
+  triggerDownload(path, ctx);
 }
 
 export async function listAdminWorkspaceUsers() {
@@ -248,10 +324,7 @@ export function mountFileBrowser(container, opts = {}) {
       const rows = (data.entries || []).map((entry) => {
         const icon = entry.kind === "dir" ? "📁" : "📄";
         const name = escapeHtml(entry.name);
-        const size =
-          entry.size != null
-            ? formatBytes(entry.size) + (entry.size_partial ? "+" : "")
-            : "—";
+        const size = formatEntrySize(entry);
         const modified = entry.modified ? formatDate(entry.modified * 1000) : "—";
         const isJobs = entry.path === "jobs" || entry.path.startsWith("jobs/");
         const pickBtn =
@@ -260,7 +333,7 @@ export function mountFileBrowser(container, opts = {}) {
             : "";
         const dlBtn = isJobs
           ? ""
-          : `<button type="button" class="btn btn-ghost btn-sm files-dl" data-dl-path="${escapeHtml(entry.path)}" title="${entry.kind === "dir" ? "Baixar pasta (ZIP)" : "Baixar arquivo"}">↓</button>`;
+          : `<button type="button" class="btn btn-ghost btn-sm files-dl" data-dl-path="${escapeHtml(entry.path)}" data-dl-kind="${entry.kind}" title="${entry.kind === "dir" ? "Baixar pasta (ZIP)" : "Baixar arquivo"}">↓</button>`;
         const delBtn =
           !showDelete || isJobs
             ? ""
@@ -269,9 +342,13 @@ export function mountFileBrowser(container, opts = {}) {
           entry.kind === "dir"
             ? `<button type="button" class="files-link" data-open-path="${escapeHtml(entry.path)}">${icon} ${name}</button>`
             : `<span>${icon} ${name}</span>`;
+        const sizeCell =
+          entry.kind === "dir"
+            ? `<td data-size-path="${escapeHtml(entry.path)}">${size}</td>`
+            : `<td>${size}</td>`;
         return `<tr>
           <td>${open}</td>
-          <td>${size}</td>
+          ${sizeCell}
           <td>${modified}</td>
           <td class="files-row-actions">${pickBtn}${dlBtn}${delBtn}</td>
         </tr>`;
@@ -279,6 +356,13 @@ export function mountFileBrowser(container, opts = {}) {
       bodyEl.innerHTML = rows.length
         ? rows.join("")
         : `<tr><td colspan="4" class="files-empty">Pasta vazia.</td></tr>`;
+
+      const dirPaths = (data.entries || [])
+        .filter((e) => e.kind === "dir" && e.size == null)
+        .map((e) => e.path);
+      if (dirPaths.length) {
+        void loadFolderSizes(dirPaths, state.ctx, bodyEl);
+      }
     } catch (e) {
       bodyEl.innerHTML = `<tr><td colspan="4">${escapeHtml(e.message || e)}</td></tr>`;
       setStatus(String(e.message || e), false);
@@ -309,10 +393,11 @@ export function mountFileBrowser(container, opts = {}) {
     const dl = ev.target.closest("[data-dl-path]");
     if (dl) {
       const p = dl.getAttribute("data-dl-path");
+      const kind = dl.getAttribute("data-dl-kind") || "file";
       if (p) {
-        setStatus("Preparando download…", null);
+        setStatus(kind === "dir" ? folderDownloadStatus() : "Preparando download…", null);
         triggerDownload(p, state.ctx);
-        setStatus("Download iniciado.", true);
+        if (kind !== "dir") setStatus("Download iniciado.", true);
       }
       return;
     }
@@ -356,9 +441,8 @@ export function mountFileBrowser(container, opts = {}) {
 
   dlCurrentBtn?.addEventListener("click", () => {
     if (!state.path) return;
-    setStatus("Preparando download…", null);
+    setStatus(folderDownloadStatus(), null);
     triggerDownload(state.path, state.ctx);
-    setStatus("Download iniciado.", true);
   });
 
   uploadInput?.addEventListener("change", async () => {

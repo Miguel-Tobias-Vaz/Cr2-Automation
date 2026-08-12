@@ -16,32 +16,17 @@ echo "==> git pull"
 cd "$SRC"
 git pull --ff-only
 
+EXCLUDE_FILE="$SRC/centro-automacoes/deploy/rsync-exclude.txt"
+if [[ ! -f "$EXCLUDE_FILE" ]]; then
+  echo "ERRO: $EXCLUDE_FILE não encontrado"
+  exit 1
+fi
+
 echo "==> rsync (NÃO toca data/, venv, opto.env, caches, logs)"
-rsync -a --delete \
-  --exclude '.git/' \
-  --exclude 'venv/' \
-  --exclude '**/venv/' \
-  --exclude 'centro-automacoes/venv/' \
-  --exclude 'centro-automacoes/data/' \
-  --exclude 'centro-automacoes/deploy/opto.env' \
-  --exclude 'opto.env' \
-  --exclude '.env' \
-  --exclude '__pycache__/' \
-  --exclude '*.pyc' \
-  --exclude '.pytest_cache/' \
-  --exclude '**/cache_ia/' \
-  --exclude '**/cache/' \
-  --exclude '**/.cache/' \
-  --exclude '*.log' \
-  --exclude 'instalacao-log.txt' \
-  --exclude 'iniciar-log.txt' \
-  --exclude 'diagnostico-log.txt' \
-  --exclude 'runtime.json' \
-  --exclude '**/runtime.json' \
-  "$SRC/" "$APP_DIR/"
+rsync -a --delete --exclude-from="$EXCLUDE_FILE" "$SRC/" "$APP_DIR/"
 
 ENV_FILE="$APP_DIR/centro-automacoes/deploy/opto.env"
-  if [[ -f "$ENV_FILE" ]]; then
+if [[ -f "$ENV_FILE" ]]; then
   echo "==> validando opto.env"
   # shellcheck disable=SC1090
   source "$ENV_FILE"

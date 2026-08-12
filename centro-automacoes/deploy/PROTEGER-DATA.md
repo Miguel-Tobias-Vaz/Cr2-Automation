@@ -2,6 +2,7 @@
 #
 # NUNCA copie / sincronize estes caminhos de /root → /opt:
 #   - centro-automacoes/data/     (usuários, jobs, PDFs, auth)
+#   - automacoes/dic-est-ter/data/ e runtime/ (cache CSV, jobs em disco)
 #   - **/venv/                   (ambiente Python)
 #   - centro-automacoes/deploy/opto.env
 #   - caches, __pycache__, *.log

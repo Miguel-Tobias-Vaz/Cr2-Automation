@@ -20,3 +20,9 @@ iniciar-log.txt
 diagnostico-log.txt
 runtime.json
 **/runtime.json
+
+# Runtime dic-est-ter (cache CSV, jobs, logs — só na VPS)
+automacoes/dic-est-ter/data/
+automacoes/dic-est-ter/runtime/logs/
+automacoes/dic-est-ter/runtime/screenshots/
+automacoes/dic-est-ter/runtime/jobs/

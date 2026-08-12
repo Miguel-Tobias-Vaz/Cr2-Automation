@@ -5,14 +5,18 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import unicodedata
 import uuid
 import zipfile
+import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from backend.zip_fast import write_zip_file
+
+_log = logging.getLogger("uvicorn.error")
 
 ROOT = Path(__file__).resolve().parent.parent
 USERS_ROOT = ROOT / "data" / "users"
@@ -31,6 +35,13 @@ FOLDER_SIZE_ENABLED = os.getenv("OPTO_FOLDER_SIZE", "1").strip().lower() not in 
     "no",
 )
 FOLDER_SIZE_MAX_FILES = max(100, int(os.getenv("OPTO_FOLDER_SIZE_MAX_FILES", "25000")))
+# False = listagem rápida; tamanho de pasta vem depois (endpoint folder-size)
+FOLDER_SIZE_ON_LIST = os.getenv("OPTO_FOLDER_SIZE_ON_LIST", "0").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
 
 ALLOWED_SINGLE = frozenset(
     {".xlsx", ".xlsm", ".xls", ".csv", ".pdf", ".zip"}
@@ -335,9 +346,27 @@ def _dir_size(path: Path, *, max_files: int | None = None) -> tuple[int, bool]:
     return total, False
 
 
+def workspace_folder_size(owner: str | None, subpath: str) -> dict[str, Any]:
+    """Tamanho total de uma pasta (recursivo). Usado após listagem rápida."""
+    root = user_root(owner).resolve()
+    target = resolve_user_path(owner, subpath)
+    if not target.is_dir():
+        raise ValueError("Pasta não encontrada.")
+    rel = target.relative_to(root).as_posix()
+    if not FOLDER_SIZE_ENABLED:
+        return {"path": rel, "size": None}
+    total, partial = _dir_size(target)
+    out: dict[str, Any] = {"path": rel, "size": total}
+    if partial:
+        out["size_partial"] = True
+    return out
+
+
 def list_workspace_files(
     owner: str | None,
     subpath: str = "",
+    *,
+    include_folder_sizes: bool | None = None,
 ) -> dict[str, Any]:
     """Lista diretório dentro do workspace do usuário."""
     root = user_root(owner).resolve()
@@ -347,6 +376,11 @@ def list_workspace_files(
     rel = target.relative_to(root).as_posix()
     if rel == ".":
         rel = ""
+    compute_sizes = (
+        include_folder_sizes
+        if include_folder_sizes is not None
+        else FOLDER_SIZE_ON_LIST
+    )
     entries: list[dict[str, Any]] = []
     for item in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
         try:
@@ -362,7 +396,7 @@ def list_workspace_files(
             "size": stat.st_size if item.is_file() else None,
             "modified": stat.st_mtime,
         }
-        if item.is_dir() and FOLDER_SIZE_ENABLED:
+        if item.is_dir() and FOLDER_SIZE_ENABLED and compute_sizes:
             total, partial = _dir_size(item)
             entry["size"] = total
             if partial:
@@ -410,48 +444,110 @@ def _assert_download_allowed(owner: str | None, target: Path, root: Path) -> Non
         raise ValueError("Download da pasta jobs não permitido.")
 
 
-def prepare_workspace_download(
+def workspace_download_target(
     owner: str | None, subpath: str
-) -> tuple[Path, str, Path | None]:
-    """Prepara arquivo ou ZIP de pasta. Retorna (caminho, nome, pasta_temp_ou_None)."""
+) -> tuple[Path, Path, str]:
+    """Retorna (root, alvo, nome_seguro)."""
     root = user_root(owner).resolve()
     target = resolve_user_path(owner, subpath)
     _assert_download_allowed(owner, target, root)
-
     safe_name = _safe_name(target.name) or "download"
+    return root, target, safe_name
+
+
+def validate_folder_download_limits(folder: Path) -> tuple[int, int]:
+    """Valida limites de ZIP. Retorna (qtd_arquivos, bytes_totais)."""
+    file_count = 0
+    total_size = 0
+    for file_path in folder.rglob("*"):
+        if not file_path.is_file():
+            continue
+        file_count += 1
+        if file_count > MAX_ZIP_FILES:
+            raise ValueError(
+                f"Pasta com muitos arquivos (máx. {MAX_ZIP_FILES}). "
+                "Baixe subpastas menores ou aumente OPTO_MAX_ZIP_FILES."
+            )
+        try:
+            total_size += file_path.stat().st_size
+        except OSError:
+            pass
+        if total_size > MAX_ZIP_UNCOMPRESSED:
+            mb = MAX_ZIP_UNCOMPRESSED // (1024 * 1024)
+            raise ValueError(
+                f"Pasta excede {mb} MB para download. "
+                "Baixe subpastas ou aumente OPTO_MAX_ZIP_MB."
+            )
+    if file_count == 0:
+        raise ValueError("Pasta vazia — nada para baixar.")
+    return file_count, total_size
+
+
+def can_stream_folder_zip() -> bool:
+    return shutil.which("zip") is not None
+
+
+def iter_folder_zip_stream(folder: Path) -> Iterator[bytes]:
+    """
+    ZIP em streaming (zip -0) — não usa /tmp; ideal para pastas grandes na VPS.
+    """
+    folder = folder.resolve()
+    proc = subprocess.Popen(
+        ["zip", "-r", "-0", "-", "."],
+        cwd=folder,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.stdout is None:
+        proc.kill()
+        proc.wait()
+        raise RuntimeError("Falha ao iniciar compactação.")
+    try:
+        while True:
+            chunk = proc.stdout.read(512 * 1024)
+            if not chunk:
+                break
+            yield chunk
+        rc = proc.wait()
+        if rc != 0:
+            err = (proc.stderr.read() if proc.stderr else b"").decode(
+                "utf-8", errors="replace"
+            )
+            _log.error("zip falhou (rc=%s): %s", rc, err[:800])
+            raise RuntimeError("Falha ao compactar pasta para download.")
+    except GeneratorExit:
+        proc.kill()
+        proc.wait()
+        raise
+    except Exception:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        raise
+
+
+def prepare_workspace_download(
+    owner: str | None, subpath: str
+) -> tuple[Path, str, Path | None]:
+    """Prepara arquivo ou ZIP de pasta (fallback sem zip no PATH)."""
+    _root, target, safe_name = workspace_download_target(owner, subpath)
     if target.is_file():
         return target.resolve(), safe_name, None
 
+    validate_folder_download_limits(target)
+
     tmp_dir = Path(tempfile.mkdtemp(prefix="opto-dl-"))
     zip_path = tmp_dir / f"{safe_name}.zip"
-    file_count = 0
-    total_size = 0
     try:
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for file_path in sorted(target.rglob("*")):
                 if not file_path.is_file():
                     continue
-                file_count += 1
-                if file_count > MAX_ZIP_FILES:
-                    raise ValueError("Pasta com arquivos demais para compactar.")
-                try:
-                    total_size += file_path.stat().st_size
-                except OSError:
-                    pass
-                if total_size > MAX_ZIP_UNCOMPRESSED:
-                    raise ValueError(
-                        "Pasta excede o limite de "
-                        f"{MAX_ZIP_UNCOMPRESSED // (1024 * 1024)} MB para download."
-                    )
                 arc = str(file_path.relative_to(target)).replace("\\", "/")
                 write_zip_file(zf, file_path, arc)
     except Exception:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise
-
-    if file_count == 0:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        raise ValueError("Pasta vazia — nada para baixar.")
 
     return zip_path.resolve(), zip_path.name, tmp_dir
 

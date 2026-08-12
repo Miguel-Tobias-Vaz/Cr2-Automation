@@ -44,6 +44,11 @@ from backend.user_storage import (
     mkdir_workspace,
     output_publicacao_hints,
     prepare_workspace_download,
+    workspace_folder_size,
+    can_stream_folder_zip,
+    iter_folder_zip_stream,
+    validate_folder_download_limits,
+    workspace_download_target,
     save_upload,
     workspace_info,
 )
@@ -521,17 +526,63 @@ def _workspace_file_response(
     background_tasks: BackgroundTasks,
 ):
     try:
+        _root, target, safe_name = workspace_download_target(owner, path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    if target.is_file():
+        media_type, _ = mimetypes.guess_type(safe_name)
+        return FileResponse(
+            target.resolve(),
+            filename=safe_name,
+            media_type=media_type or "application/octet-stream",
+        )
+
+    try:
+        validate_folder_download_limits(target)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    fname = f"{safe_name}.zip"
+    if can_stream_folder_zip():
+        return StreamingResponse(
+            iter_folder_zip_stream(target),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+        )
+
+    try:
         serve_path, fname, tmp_dir = prepare_workspace_download(owner, path)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(500, str(exc)) from exc
     if tmp_dir is not None:
         background_tasks.add_task(shutil.rmtree, tmp_dir, True)
-    media_type, _ = mimetypes.guess_type(fname)
     return FileResponse(
         serve_path,
         filename=fname,
-        media_type=media_type or "application/octet-stream",
+        media_type="application/zip",
     )
+
+
+def _workspace_download_check(owner: str | None, path: str) -> dict:
+    _root, target, safe_name = workspace_download_target(owner, path)
+    if target.is_file():
+        try:
+            size = target.stat().st_size
+        except OSError:
+            size = 0
+        return {"ok": True, "kind": "file", "name": safe_name, "bytes": size}
+    count, total = validate_folder_download_limits(target)
+    return {
+        "ok": True,
+        "kind": "dir",
+        "name": safe_name,
+        "files": count,
+        "bytes": total,
+        "stream": can_stream_folder_zip(),
+    }
 
 
 @app.get("/api/workspace")
@@ -550,14 +601,41 @@ def get_workspace(user=Depends(require_user)):
     return {"ok": True, "local_mode": False, **workspace_info(owner)}
 
 
+def _parse_sizes_query(sizes: str | None) -> bool | None:
+    if sizes is None or not str(sizes).strip():
+        return None
+    return str(sizes).strip().lower() in ("1", "true", "yes", "on")
+
+
 @app.get("/api/workspace/files")
-def get_workspace_files(path: str = "", user=Depends(require_user)):
+def get_workspace_files(
+    path: str = "",
+    sizes: str | None = None,
+    user=Depends(require_user),
+):
     """Lista arquivos e pastas do workspace do usuário."""
     if is_local_mode():
         raise HTTPException(400, "Explorador de arquivos disponível apenas na VPS.")
     owner = user.username if auth.is_enabled() else None
     try:
-        payload = list_workspace_files(owner, path)
+        payload = list_workspace_files(
+            owner, path, include_folder_sizes=_parse_sizes_query(sizes)
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, **payload}
+
+
+@app.get("/api/workspace/files/folder-size")
+def get_workspace_folder_size(path: str = "", user=Depends(require_user)):
+    """Tamanho de uma pasta (assíncrono no front — não bloqueia a listagem)."""
+    if is_local_mode():
+        raise HTTPException(400, "Explorador de arquivos disponível apenas na VPS.")
+    if not (path or "").strip():
+        raise HTTPException(400, "Informe o caminho da pasta.")
+    owner = user.username if auth.is_enabled() else None
+    try:
+        payload = workspace_folder_size(owner, path)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"ok": True, **payload}
@@ -614,6 +692,20 @@ def download_workspace_file(
         raise HTTPException(400, "Informe o caminho.")
     owner = user.username if auth.is_enabled() else None
     return _workspace_file_response(owner, path, background_tasks)
+
+
+@app.get("/api/workspace/files/download/check")
+def check_workspace_download(path: str, user=Depends(require_user)):
+    """Valida download antes de iniciar (mostra erro claro no painel)."""
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    if not (path or "").strip():
+        raise HTTPException(400, "Informe o caminho.")
+    owner = user.username if auth.is_enabled() else None
+    try:
+        return _workspace_download_check(owner, path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/uploads")
@@ -969,6 +1061,7 @@ def admin_workspace_users(_admin=Depends(require_admin)):
 def admin_workspace_files(
     owner: str,
     path: str = "",
+    sizes: str | None = None,
     _admin=Depends(require_admin),
 ):
     """Explorador de arquivos de qualquer usuário (admin)."""
@@ -976,7 +1069,27 @@ def admin_workspace_files(
         raise HTTPException(400, "Disponível apenas na VPS.")
     try:
         owner_id = ensure_owner_workspace(owner)
-        payload = list_workspace_files(owner_id, path)
+        payload = list_workspace_files(
+            owner_id, path, include_folder_sizes=_parse_sizes_query(sizes)
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, "owner": owner_id, **payload}
+
+
+@app.get("/api/admin/workspace/files/folder-size")
+def admin_workspace_folder_size(
+    owner: str,
+    path: str = "",
+    _admin=Depends(require_admin),
+):
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    if not (path or "").strip():
+        raise HTTPException(400, "Informe o caminho da pasta.")
+    try:
+        owner_id = ensure_owner_workspace(owner)
+        payload = workspace_folder_size(owner_id, path)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"ok": True, "owner": owner_id, **payload}
@@ -1032,6 +1145,23 @@ def admin_workspace_download(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return _workspace_file_response(owner_id, path, background_tasks)
+
+
+@app.get("/api/admin/workspace/files/download/check")
+def admin_check_workspace_download(
+    owner: str,
+    path: str,
+    _admin=Depends(require_admin),
+):
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    if not (path or "").strip():
+        raise HTTPException(400, "Informe o caminho.")
+    try:
+        owner_id = ensure_owner_workspace(owner)
+        return _workspace_download_check(owner_id, path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/admin/health-detail")
