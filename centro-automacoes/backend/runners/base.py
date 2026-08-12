@@ -115,6 +115,7 @@ SCRIPTS = {
     "categorias": AUTOMACOES / "download-categorias" / "script.py",
     "normas": AUTOMACOES / "download-normas" / "script.py",
     "licitacoes": AUTOMACOES / "download-licitacoes" / "script.py",
+    "tcm_licitacoes": AUTOMACOES / "tcm-licitacoes" / "script.py",
     "contratos": AUTOMACOES / "raspar-contratos" / "main.py",
     "publicacao": AUTOMACOES / "publicacao-cr2" / "script.py",
     "sessao": AUTOMACOES / "publicacao-sessao" / "script.py",

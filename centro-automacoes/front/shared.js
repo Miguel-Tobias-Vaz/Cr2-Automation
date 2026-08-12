@@ -47,10 +47,18 @@ import { injectFooter } from "./modules/nav.js";
     },
     licitacoes: {
       id: "licitacoes",
-      nome: "Licitações",
+      nome: "Licitações CR2",
       descricao: "Baixa anexos de licitações CR2, extrai valores e preenche planilha.",
       pagina: "/licitacoes.html",
       icon: "building",
+      cta: "Abrir",
+    },
+    tcm_licitacoes: {
+      id: "tcm_licitacoes",
+      nome: "Licitações TCM-PA",
+      descricao: "Mural do TCM-PA: documentos, contratos e planilha Excel.",
+      pagina: "/tcm-licitacoes.html",
+      icon: "table",
       cta: "Abrir",
     },
     repasses: {
@@ -150,7 +158,7 @@ import { injectFooter } from "./modules/nav.js";
         "Baixas do portal: documentos, categorias, Extração Pro, licitações e repasses.",
       icon: "download",
       cta: "Ver ferramentas",
-      tools: ["documentos", "categorias", "normas", "licitacoes", "repasses"],
+      tools: ["documentos", "categorias", "normas", "licitacoes", "tcm_licitacoes", "repasses"],
       // ocultos por enquanto: "contratos"
     },
     {
@@ -794,6 +802,7 @@ import { injectFooter } from "./modules/nav.js";
     if (mm) {
       const mapa = {
         licitacoes: "licitações",
+        tcm_licitacoes: "licitações TCM",
         repasses: "repasses",
         normas: "normas",
         categorias: "categorias",
@@ -1405,7 +1414,8 @@ import { injectFooter } from "./modules/nav.js";
     documentos: "Baixar Documentos",
     categorias: "Baixar por Categoria",
     normas: "Baixar Extração Pro",
-    licitacoes: "Baixar Licitações",
+    licitacoes: "Baixar Licitações CR2",
+    tcm_licitacoes: "Baixar Licitações TCM-PA",
     repasses: "Baixar Extração de Repasses",
     contratos: "Contratos / Aditivos",
     publicacao: "Publicação CR2",
@@ -2505,6 +2515,7 @@ import { injectFooter } from "./modules/nav.js";
       categorias: "categorias",
       normas: "normas",
       licitacoes: "licitacoes",
+      "tcm-licitacoes": "tcm_licitacoes",
       repasses: "repasses",
       contratos: "contratos",
       publicacao: "publicacao",

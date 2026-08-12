@@ -10,6 +10,7 @@ from backend.runners import (
     publicacao,
     repasses,
     sessao,
+    tcm_licitacoes,
 )
 from backend.runners.isolated import run_isolated, uses_subprocess
 
@@ -18,6 +19,7 @@ RUNNERS = {
     "categorias": categorias.run,
     "normas": normas.run,
     "licitacoes": licitacoes.run,
+    "tcm_licitacoes": tcm_licitacoes.run,
     "contratos": contratos.run,
     "publicacao": publicacao.run,
     "sessao": sessao.run,
