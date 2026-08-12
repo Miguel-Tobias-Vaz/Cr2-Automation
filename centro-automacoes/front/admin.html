@@ -196,16 +196,13 @@
                     <button type="button" class="btn btn-ghost btn-sm" data-files-shortcut="output">Downloads</button>
                     <button type="button" class="btn btn-ghost btn-sm" data-files-shortcut="jobs">Jobs</button>
                   </div>
-                  <a class="btn btn-ghost btn-sm" id="files-open-tab" href="/arquivos.html" target="_blank" rel="noopener">Abrir em nova aba</a>
+                  <a class="btn btn-ghost btn-sm" id="files-open-tab" href="/arquivos.html" target="_blank" rel="noopener">Abrir página completa</a>
                 </div>
               </header>
               <div class="admin-card-body admin-files-body">
-                <iframe
-                  id="admin-files-frame"
-                  class="admin-files-frame"
-                  title="Explorador de arquivos"
-                  src="about:blank"
-                ></iframe>
+                <div id="admin-files-browser" class="admin-files-browser">
+                  <p class="admin-muted">Selecione um usuário para ver os arquivos no servidor.</p>
+                </div>
               </div>
             </article>
           </section>
@@ -240,7 +237,7 @@
     </div>
 
     <script src="/assets/shader-background.js?v=home68"></script>
-    <script type="module" src="/assets/shared.js?v=home68"></script>
-    <script type="module" src="/assets/admin.js?v=home69"></script>
+    <script type="module" src="/assets/shared.js?v=home69"></script>
+    <script type="module" src="/assets/admin.js?v=home70"></script>
   </body>
 </html>

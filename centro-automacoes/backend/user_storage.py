@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import tempfile
 import unicodedata
 import uuid
 import zipfile
@@ -357,6 +358,60 @@ def delete_workspace_path(owner: str | None, subpath: str) -> None:
         shutil.rmtree(target)
     else:
         target.unlink()
+
+
+def _assert_download_allowed(owner: str | None, target: Path, root: Path) -> None:
+    if not target.exists():
+        raise ValueError("Arquivo ou pasta não encontrado.")
+    rel = target.relative_to(root).as_posix()
+    if rel == "jobs" or rel.startswith("jobs/"):
+        raise ValueError("Download da pasta jobs não permitido.")
+
+
+def prepare_workspace_download(
+    owner: str | None, subpath: str
+) -> tuple[Path, str, Path | None]:
+    """Prepara arquivo ou ZIP de pasta. Retorna (caminho, nome, pasta_temp_ou_None)."""
+    root = user_root(owner).resolve()
+    target = resolve_user_path(owner, subpath)
+    _assert_download_allowed(owner, target, root)
+
+    safe_name = _safe_name(target.name) or "download"
+    if target.is_file():
+        return target.resolve(), safe_name, None
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="opto-dl-"))
+    zip_path = tmp_dir / f"{safe_name}.zip"
+    file_count = 0
+    total_size = 0
+    try:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file_path in sorted(target.rglob("*")):
+                if not file_path.is_file():
+                    continue
+                file_count += 1
+                if file_count > MAX_ZIP_FILES:
+                    raise ValueError("Pasta com arquivos demais para compactar.")
+                try:
+                    total_size += file_path.stat().st_size
+                except OSError:
+                    pass
+                if total_size > MAX_ZIP_UNCOMPRESSED:
+                    raise ValueError(
+                        "Pasta excede o limite de "
+                        f"{MAX_ZIP_UNCOMPRESSED // (1024 * 1024)} MB para download."
+                    )
+                arc = str(file_path.relative_to(target)).replace("\\", "/")
+                zf.write(file_path, arc)
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+
+    if file_count == 0:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise ValueError("Pasta vazia — nada para baixar.")
+
+    return zip_path.resolve(), zip_path.name, tmp_dir
 
 
 def _safe_name(name: str) -> str:

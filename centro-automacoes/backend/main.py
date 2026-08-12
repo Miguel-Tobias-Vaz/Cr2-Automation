@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 import os
+import shutil
 import sys
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +43,7 @@ from backend.user_storage import (
     list_workspace_owners,
     mkdir_workspace,
     output_publicacao_hints,
+    prepare_workspace_download,
     save_upload,
     workspace_info,
 )
@@ -512,6 +515,25 @@ def _assert_can_access_job(job, user) -> None:
     raise HTTPException(403, "Sem permissão para acessar este processo.")
 
 
+def _workspace_file_response(
+    owner: str | None,
+    path: str,
+    background_tasks: BackgroundTasks,
+):
+    try:
+        serve_path, fname, tmp_dir = prepare_workspace_download(owner, path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if tmp_dir is not None:
+        background_tasks.add_task(shutil.rmtree, tmp_dir, True)
+    media_type, _ = mimetypes.guess_type(fname)
+    return FileResponse(
+        serve_path,
+        filename=fname,
+        media_type=media_type or "application/octet-stream",
+    )
+
+
 @app.get("/api/workspace")
 def get_workspace(user=Depends(require_user)):
     """Pastas do usuário (uploads + saída padrão). Modo local: pastas Windows."""
@@ -577,6 +599,21 @@ def delete_workspace_file(path: str, user=Depends(require_user)):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"ok": True}
+
+
+@app.get("/api/workspace/files/download")
+def download_workspace_file(
+    path: str,
+    background_tasks: BackgroundTasks,
+    user=Depends(require_user),
+):
+    """Baixa arquivo ou pasta (ZIP) do workspace do usuário."""
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    if not (path or "").strip():
+        raise HTTPException(400, "Informe o caminho.")
+    owner = user.username if auth.is_enabled() else None
+    return _workspace_file_response(owner, path, background_tasks)
 
 
 @app.post("/api/uploads")
@@ -968,6 +1005,25 @@ def admin_workspace_delete(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"ok": True, "owner": owner_id}
+
+
+@app.get("/api/admin/workspace/files/download")
+def admin_workspace_download(
+    owner: str,
+    path: str,
+    background_tasks: BackgroundTasks,
+    _admin=Depends(require_admin),
+):
+    """Admin: baixa arquivo ou pasta (ZIP) do workspace de um usuário."""
+    if is_local_mode():
+        raise HTTPException(400, "Disponível apenas na VPS.")
+    if not (path or "").strip():
+        raise HTTPException(400, "Informe o caminho.")
+    try:
+        owner_id = ensure_owner_workspace(owner)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return _workspace_file_response(owner_id, path, background_tasks)
 
 
 @app.get("/api/admin/health-detail")

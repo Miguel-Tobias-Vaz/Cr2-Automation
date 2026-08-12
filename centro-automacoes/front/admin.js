@@ -14,6 +14,8 @@ import { whenReady } from "./modules/core.js";
 
   let filesUsersLoaded = false;
   let filesCurrentOwner = "";
+  let filesBrowser = null;
+  const FILES_MODULE = "/assets/modules/files.js?v=home69";
 
   const STATUS_LABEL = {
     pending: "Na fila",
@@ -693,48 +695,61 @@ import { whenReady } from "./modules/core.js";
     }
   }
 
-  function filesFrameUrl(owner, path) {
-    if (!owner) return "about:blank";
-    const q = new URLSearchParams({
-      embed: "1",
-      admin: "1",
-      owner,
-    });
-    if (path) q.set("path", path);
-    return "/arquivos.html?" + q.toString();
+  function filesPageUrl(owner) {
+    if (!owner) return "/arquivos.html";
+    return (
+      "/arquivos.html?admin=1&owner=" + encodeURIComponent(owner)
+    );
   }
 
-  function navigateFilesFrame(path) {
-    const frame = $("admin-files-frame");
-    if (!frame || !filesCurrentOwner) return;
-    const win = frame.contentWindow;
-    if (win) {
-      win.postMessage({ type: "opto-files-nav", path: path || "" }, window.location.origin);
+  async function mountAdminFileBrowser(owner, path) {
+    const host = $("admin-files-browser");
+    if (!host) return;
+    if (!owner) {
+      host.innerHTML =
+        '<p class="admin-muted">Selecione um usuário para ver os arquivos no servidor.</p>';
+      filesBrowser = null;
       return;
     }
-    frame.src = filesFrameUrl(filesCurrentOwner, path);
+    host.innerHTML = '<p class="admin-muted">Carregando explorador…</p>';
+    try {
+      const mod = await import(FILES_MODULE);
+      host.innerHTML = "";
+      filesBrowser = mod.mountFileBrowser(host, {
+        owner,
+        admin: true,
+        initialPath: path || "",
+      });
+    } catch (e) {
+      host.innerHTML =
+        '<p class="admin-error">Erro ao abrir explorador: ' +
+        (e.message || e) +
+        "</p>";
+      filesBrowser = null;
+    }
+  }
+
+  function navigateFilesBrowser(path) {
+    if (filesBrowser && typeof filesBrowser.setPath === "function") {
+      filesBrowser.setPath(path || "");
+      return;
+    }
+    mountAdminFileBrowser(filesCurrentOwner, path || "");
   }
 
   function setFilesOwner(owner, path) {
     filesCurrentOwner = owner || "";
-    const frame = $("admin-files-frame");
     const openTab = $("files-open-tab");
-    if (!frame) return;
-    if (!filesCurrentOwner) {
-      frame.src = "about:blank";
-      if (openTab) openTab.href = "/arquivos.html";
-      return;
-    }
-    frame.src = filesFrameUrl(filesCurrentOwner, path || "");
     if (openTab) {
-      openTab.href = filesFrameUrl(filesCurrentOwner, "");
+      openTab.href = filesPageUrl(filesCurrentOwner);
     }
+    mountAdminFileBrowser(filesCurrentOwner, path || "");
   }
 
   async function loadFilesPanel() {
     const select = $("files-owner-select");
-    const frame = $("admin-files-frame");
-    if (!select || !frame) return;
+    const host = $("admin-files-browser");
+    if (!select || !host) return;
 
     if (filesUsersLoaded && select.options.length > 1) {
       if (filesCurrentOwner) setFilesOwner(filesCurrentOwner);
@@ -749,8 +764,8 @@ import { whenReady } from "./modules/core.js";
       const users = data.users || [];
       if (!users.length) {
         select.innerHTML = '<option value="">Nenhum workspace ainda</option>';
-        frame.srcdoc =
-          '<p style="padding:1rem;color:#a8b0c0;font-family:sans-serif">Nenhum usuário com pasta no servidor. Após o primeiro upload ou job, aparece aqui.</p>';
+        host.innerHTML =
+          '<p class="admin-muted">Nenhum usuário com pasta no servidor. Após o primeiro upload ou job, aparece aqui.</p>';
         return;
       }
       select.innerHTML = users
@@ -766,10 +781,10 @@ import { whenReady } from "./modules/core.js";
       setFilesOwner(select.value, "");
     } catch (e) {
       select.innerHTML = '<option value="">Erro ao carregar</option>';
-      frame.srcdoc =
-        '<p style="padding:1rem;color:#f87171;font-family:sans-serif">' +
-        (e.message || e) +
-        "</p>";
+      if (host) {
+        host.innerHTML =
+          '<p class="admin-error">' + (e.message || e) + "</p>";
+      }
     }
   }
 
@@ -781,7 +796,7 @@ import { whenReady } from "./modules/core.js";
       btn.addEventListener("click", () => {
         const path = btn.getAttribute("data-files-shortcut") || "";
         if (!filesCurrentOwner) return;
-        navigateFilesFrame(path);
+        navigateFilesBrowser(path);
       });
     });
   }

@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home68" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home69" />
   </head>
   <body id="files-page-body">
     <div class="noise" aria-hidden="true" data-embed-hide></div>
@@ -55,63 +55,66 @@
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home68"></script>
-    <script type="module" src="/assets/shared.js?v=home68"></script>
     <script type="module">
-      import { whenReady } from "/assets/modules/core.js?v=home68";
-      import { mountFileBrowser } from "/assets/modules/files.js?v=home68";
+      import { mountFileBrowser } from "/assets/modules/files.js?v=home69";
+      import { guardAuth, ensureLogoutButton } from "/assets/modules/auth.js";
 
-      whenReady(() => {
-        const params = new URLSearchParams(window.location.search);
-        const embed = params.get("embed") === "1";
-        const owner = params.get("owner") || "";
-        const admin = params.get("admin") === "1" && owner;
-        const initialPath = params.get("path") || "";
-        const pickField = params.get("pick") || "";
-        const ret = params.get("return") || "/";
+      const params = new URLSearchParams(window.location.search);
+      const embed = params.get("embed") === "1";
+      const owner = params.get("owner") || "";
+      const admin = params.get("admin") === "1" && owner;
+      const initialPath = params.get("path") || "";
+      const pickField = params.get("pick") || "";
+      const ret = params.get("return") || "/";
 
-        if (embed) {
-          document.body.classList.add("files-embed-page");
-          document.querySelectorAll("[data-embed-hide]").forEach((n) => {
-            n.hidden = true;
-          });
-          const main = document.getElementById("files-main");
-          if (main) main.classList.add("files-embed-main");
-        } else {
-          const C = window.OptoAutomacoes;
-          C.injectNav("arquivos");
-          C.pingApi();
-        }
-
-        if (admin) {
-          const title = document.getElementById("files-page-title");
-          const lede = document.getElementById("files-page-lede");
-          if (title) title.textContent = "Arquivos do usuário";
-          if (lede) lede.textContent = `Workspace de ${owner} — uploads, downloads (output) e jobs.`;
-        }
-
-        if (pickField) {
-          const banner = document.getElementById("pick-banner");
-          if (banner) {
-            banner.hidden = false;
-            banner.innerHTML = `Escolhendo pasta para o campo <code>${pickField}</code>.
-              <a href="${ret}">Voltar sem escolher</a>`;
-          }
-        }
-
-        const browser = mountFileBrowser("files-browser", {
-          initialPath,
-          pickField,
-          owner: admin ? owner : "",
-          admin: Boolean(admin),
+      if (embed) {
+        document.body.classList.add("files-embed-page");
+        document.querySelectorAll("[data-embed-hide]").forEach((n) => {
+          n.hidden = true;
         });
+        const main = document.getElementById("files-main");
+        if (main) main.classList.add("files-embed-main");
+        ensureLogoutButton();
+        guardAuth().catch(() => {});
+      } else {
+        await import("/assets/shared.js?v=home69");
+        const { whenReady } = await import("/assets/modules/core.js?v=home69");
+        await new Promise((resolve) => whenReady(resolve));
+        const C = window.OptoAutomacoes;
+        C.injectNav("arquivos");
+        C.pingApi();
+      }
 
-        window.addEventListener("message", (ev) => {
-          if (!ev.data || ev.data.type !== "opto-files-nav") return;
-          if (browser && typeof browser.setPath === "function") {
-            browser.setPath(ev.data.path || "");
-          }
-        });
+      if (admin) {
+        const title = document.getElementById("files-page-title");
+        const lede = document.getElementById("files-page-lede");
+        if (title) title.textContent = "Arquivos do usuário";
+        if (lede) {
+          lede.textContent = `Workspace de ${owner} no servidor — uploads, downloads (output) e jobs.`;
+        }
+      }
+
+      if (pickField) {
+        const banner = document.getElementById("pick-banner");
+        if (banner) {
+          banner.hidden = false;
+          banner.innerHTML = `Escolhendo pasta para o campo <code>${pickField}</code>.
+            <a href="${ret}">Voltar sem escolher</a>`;
+        }
+      }
+
+      const browser = mountFileBrowser("files-browser", {
+        initialPath,
+        pickField,
+        owner: admin ? owner : "",
+        admin: Boolean(admin),
+      });
+
+      window.addEventListener("message", (ev) => {
+        if (!ev.data || ev.data.type !== "opto-files-nav") return;
+        if (browser && typeof browser.setPath === "function") {
+          browser.setPath(ev.data.path || "");
+        }
       });
     </script>
   </body>

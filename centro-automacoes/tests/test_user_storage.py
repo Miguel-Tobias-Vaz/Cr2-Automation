@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from backend.user_storage import (
     list_workspace_owners,
     mkdir_workspace,
     output_publicacao_hints,
+    prepare_workspace_download,
     resolve_user_path,
     save_upload,
     workspace_info,
@@ -238,6 +240,44 @@ def test_delete_workspace_bloqueia_jobs(users_root):
     marker.write_text("x", encoding="utf-8")
     with pytest.raises(ValueError, match="jobs"):
         delete_workspace_path("ana", "jobs/keep.txt")
+
+
+def test_prepare_workspace_download_arquivo(users_root):
+    info = workspace_info("ana")
+    f = Path(info["uploads_dir"]) / "doc.pdf"
+    f.write_bytes(b"%PDF-1.4")
+    path, name, tmp = prepare_workspace_download("ana", "uploads/doc.pdf")
+    assert path.is_file()
+    assert name == "doc.pdf"
+    assert tmp is None
+
+
+def test_prepare_workspace_download_pasta(users_root):
+    info = workspace_info("ana")
+    folder = Path(info["output_dir"]) / "documentos"
+    folder.mkdir(parents=True)
+    (folder / "a.txt").write_text("ok", encoding="utf-8")
+    (folder / "sub").mkdir()
+    (folder / "sub" / "b.txt").write_text("x", encoding="utf-8")
+    path, name, tmp = prepare_workspace_download("ana", "output/documentos")
+    assert path.is_file()
+    assert name == "documentos.zip"
+    assert tmp is not None
+    import zipfile
+
+    with zipfile.ZipFile(path, "r") as zf:
+        names = zf.namelist()
+    assert "a.txt" in names
+    assert any("sub/b.txt" in n or "sub\\b.txt" in n for n in names)
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_prepare_workspace_download_bloqueia_jobs(users_root):
+    info = workspace_info("ana")
+    jobs = Path(info["jobs_dir"])
+    jobs.mkdir(parents=True, exist_ok=True)
+    with pytest.raises(ValueError, match="jobs"):
+        prepare_workspace_download("ana", "jobs")
 
 
 def test_list_workspace_owners(users_root):

@@ -1,6 +1,6 @@
 /** Explorador de arquivos do workspace (ES module). */
 import { API, el, escapeHtml, formatBytes, formatDate } from "./core.js";
-import { authFetch } from "./auth.js";
+import { authFetch, authToken } from "./auth.js";
 import { uploadFile } from "./upload.js";
 
 const PICK_STORAGE = "opto-folder-pick";
@@ -26,6 +26,37 @@ function filesUrl(path, ctx, method = "GET") {
   return path
     ? `${API}/api/workspace/files?path=${encodeURIComponent(path)}`
     : `${API}/api/workspace/files`;
+}
+
+export function workspaceDownloadUrl(path, opts = {}) {
+  const ctx = fileCtx(opts);
+  const rel = (path || "").trim();
+  if (!rel) return "";
+  let url;
+  if (ctx.admin) {
+    url =
+      `${API}/api/admin/workspace/files/download?owner=${encodeURIComponent(ctx.owner)}` +
+      `&path=${encodeURIComponent(rel)}`;
+  } else {
+    url = `${API}/api/workspace/files/download?path=${encodeURIComponent(rel)}`;
+  }
+  const token = authToken();
+  if (token) {
+    url += (url.includes("?") ? "&" : "?") + `access_token=${encodeURIComponent(token)}`;
+  }
+  return url;
+}
+
+function triggerDownload(path, ctx) {
+  const url = workspaceDownloadUrl(path, ctx);
+  if (!url) return;
+  const a = document.createElement("a");
+  a.href = url;
+  a.rel = "noopener";
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 export async function listAdminWorkspaceUsers() {
@@ -159,7 +190,8 @@ export function mountFileBrowser(container, opts = {}) {
         <nav class="files-breadcrumbs" aria-label="Pastas"></nav>
         <div class="files-actions">
           <button type="button" class="btn btn-ghost btn-sm" data-files-up ${state.path ? "" : "hidden"}>↑ Subir</button>
-          <button type="button" class="btn btn-ghost btn-sm" data-files-mkdir>Nova pasta</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-files-dl-current ${state.path ? "" : "hidden"} title="Baixar esta pasta como ZIP">↓ Baixar pasta</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-files-mkdir ${ctx.readOnly ? "hidden" : ""}>Nova pasta</button>
           ${
             showUpload
               ? `<label class="btn btn-ghost btn-sm files-upload-btn">
@@ -184,7 +216,7 @@ export function mountFileBrowser(container, opts = {}) {
       }
       ${
         ctx.admin
-          ? `<p class="files-pick-hint">Modo admin: visualização do workspace de <strong>${escapeHtml(ctx.owner)}</strong>.</p>`
+          ? `<p class="files-pick-hint files-admin-hint">Arquivos no servidor (VPS) — usuário <strong>${escapeHtml(ctx.owner)}</strong>.</p>`
           : ""
       }
     </div>`;
@@ -193,6 +225,7 @@ export function mountFileBrowser(container, opts = {}) {
   const bodyEl = host.querySelector("[data-files-body]");
   const statusEl = host.querySelector("[data-files-status]");
   const upBtn = host.querySelector("[data-files-up]");
+  const dlCurrentBtn = host.querySelector("[data-files-dl-current]");
   const uploadInput = host.querySelector("[data-files-upload]");
 
   const setStatus = (msg, ok) => {
@@ -210,6 +243,7 @@ export function mountFileBrowser(container, opts = {}) {
       state.path = data.path || "";
       crumbsEl.innerHTML = breadcrumbHtml(state.path, state.rootLabel);
       if (upBtn) upBtn.hidden = !state.path;
+      if (dlCurrentBtn) dlCurrentBtn.hidden = !state.path;
 
       const rows = (data.entries || []).map((entry) => {
         const icon = entry.kind === "dir" ? "📁" : "📄";
@@ -217,12 +251,16 @@ export function mountFileBrowser(container, opts = {}) {
         const size =
           entry.kind === "file" && entry.size != null ? formatBytes(entry.size) : "—";
         const modified = entry.modified ? formatDate(entry.modified * 1000) : "—";
+        const isJobs = entry.path === "jobs" || entry.path.startsWith("jobs/");
         const pickBtn =
           entry.kind === "dir" && state.pickField
             ? `<button type="button" class="btn btn-primary btn-sm" data-use-path="${escapeHtml(entry.abs_path)}">Usar</button>`
             : "";
+        const dlBtn = isJobs
+          ? ""
+          : `<button type="button" class="btn btn-ghost btn-sm files-dl" data-dl-path="${escapeHtml(entry.path)}" title="${entry.kind === "dir" ? "Baixar pasta (ZIP)" : "Baixar arquivo"}">↓</button>`;
         const delBtn =
-          !showDelete || entry.path === "jobs" || entry.path.startsWith("jobs/")
+          !showDelete || isJobs
             ? ""
             : `<button type="button" class="btn btn-ghost btn-sm files-del" data-del-path="${escapeHtml(entry.path)}" title="Apagar">✕</button>`;
         const open =
@@ -233,7 +271,7 @@ export function mountFileBrowser(container, opts = {}) {
           <td>${open}</td>
           <td>${size}</td>
           <td>${modified}</td>
-          <td class="files-row-actions">${pickBtn}${delBtn}</td>
+          <td class="files-row-actions">${pickBtn}${dlBtn}${delBtn}</td>
         </tr>`;
       });
       bodyEl.innerHTML = rows.length
@@ -264,6 +302,16 @@ export function mountFileBrowser(container, opts = {}) {
         state.path = data.parent || "";
         render();
       } catch (_) {}
+      return;
+    }
+    const dl = ev.target.closest("[data-dl-path]");
+    if (dl) {
+      const p = dl.getAttribute("data-dl-path");
+      if (p) {
+        setStatus("Preparando download…", null);
+        triggerDownload(p, state.ctx);
+        setStatus("Download iniciado.", true);
+      }
       return;
     }
     const use = ev.target.closest("[data-use-path]");
@@ -302,6 +350,13 @@ export function mountFileBrowser(container, opts = {}) {
     } catch (e) {
       setStatus(String(e.message || e), false);
     }
+  });
+
+  dlCurrentBtn?.addEventListener("click", () => {
+    if (!state.path) return;
+    setStatus("Preparando download…", null);
+    triggerDownload(state.path, state.ctx);
+    setStatus("Download iniciado.", true);
   });
 
   uploadInput?.addEventListener("change", async () => {

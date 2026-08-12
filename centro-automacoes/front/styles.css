@@ -3963,13 +3963,21 @@ body.login-page {
 .files-row-actions {
   white-space: nowrap;
   text-align: right;
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  align-items: center;
 }
 
+.files-dl,
 .files-del {
   opacity: 0.55;
-  margin-left: 0.25rem;
+  margin-left: 0;
+  min-width: 2rem;
+  padding-inline: 0.45rem;
 }
 
+.files-dl:hover,
 .files-del:hover {
   opacity: 1;
 }
@@ -4020,7 +4028,11 @@ body.files-embed-page .orb {
   border-radius: 12px;
 }
 
-/* —— Admin: painel de arquivos —— */
+.files-admin-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
 .admin-card--files .admin-files-head {
   flex-wrap: wrap;
   gap: 1rem;
@@ -4061,14 +4073,22 @@ body.files-embed-page .orb {
   padding: 0;
 }
 
-.admin-files-frame {
-  display: block;
-  width: 100%;
-  min-height: 560px;
-  height: min(72vh, 720px);
+.admin-files-browser {
+  min-height: 520px;
+  padding: 0.75rem 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   background: rgba(8, 8, 14, 0.55);
+}
+
+.admin-files-browser .files-browser {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.admin-files-browser .files-toolbar {
+  margin-bottom: 0.65rem;
 }
 
 /* —— Minimal footer (site-wide) —— */
