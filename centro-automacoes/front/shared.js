@@ -1427,6 +1427,7 @@ import { injectFooter } from "./modules/nav.js";
   let streamJobId = null;
   let currentJobId = null;
   let noticeShownFor = null;
+  let zipRetryFor = null;
   let boundServiceId = null;
   let workspaceCache = null;
   let currentUsername = null;
@@ -1640,6 +1641,24 @@ import { injectFooter } from "./modules/nav.js";
     }
   }
 
+  function ensureLogTitleRow() {
+    const head = document.querySelector(".log-wrap .section-head");
+    if (!head) return null;
+    let row = head.querySelector(".log-title-row");
+    if (!row) {
+      row = document.createElement("div");
+      row.className = "log-title-row";
+      const h2 = head.querySelector(":scope > h2");
+      if (h2) {
+        head.insertBefore(row, h2);
+        row.appendChild(h2);
+      } else {
+        head.insertBefore(row, head.firstChild);
+      }
+    }
+    return row;
+  }
+
   function ensureDownloadButton() {
     let btn = el("btn-download");
     if (btn && btn.tagName === "A") {
@@ -1652,18 +1671,23 @@ import { injectFooter } from "./modules/nav.js";
       btn.replaceWith(next);
       btn = next;
     }
-    if (btn) {
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-download btn-download-idle btn-sm";
+      btn.id = "btn-download";
+      btn.innerHTML =
+        '<span class="btn-download-icon" aria-hidden="true">↓</span><span class="btn-download-text">Baixar ZIP</span>';
+      btn.disabled = true;
+      btn.setAttribute("aria-disabled", "true");
+    } else {
       btn.classList.add("btn-download");
+    }
+    const titleRow = ensureLogTitleRow();
+    if (titleRow) {
+      titleRow.appendChild(btn);
       return btn;
     }
-    btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "btn btn-download btn-download-idle btn-sm";
-    btn.id = "btn-download";
-    btn.innerHTML =
-      '<span class="btn-download-icon" aria-hidden="true">↓</span><span class="btn-download-text">Baixar ZIP</span>';
-    btn.disabled = true;
-    btn.setAttribute("aria-disabled", "true");
     let bar = document.querySelector(".log-wrap .job-bar") || document.querySelector(".job-bar");
     if (!bar) {
       const logWrap = document.querySelector(".log-wrap");
@@ -1683,15 +1707,8 @@ import { injectFooter } from "./modules/nav.js";
     return btn;
   }
 
-  function setJobDownloadButton(jobId, ready, opts) {
-    if (workspaceCache && workspaceCache.local_mode) {
-      const hide = el("btn-download");
-      if (hide) hide.hidden = true;
-      return;
-    }
-    const btn = ensureDownloadButton();
+  function applyDownloadButtonState(btn, jobId, ready, opts) {
     if (!btn) return;
-    btn.hidden = false;
     const waiting = !!(opts && opts.waiting);
     const svc = (opts && opts.serviceId) || boundServiceId;
     const owner = (opts && opts.owner) || currentUsername;
@@ -1709,6 +1726,7 @@ import { injectFooter } from "./modules/nav.js";
       btn.disabled = false;
       btn.removeAttribute("aria-disabled");
       btn.className = "btn btn-download btn-download-ready btn-sm";
+      if (btn.id === "btn-download-nav") btn.classList.add("nav-download");
       textEl().textContent = "Baixar ZIP";
       btn.title = fullName;
       btn.setAttribute("aria-label", fullName);
@@ -1717,6 +1735,7 @@ import { injectFooter } from "./modules/nav.js";
       btn.disabled = true;
       btn.setAttribute("aria-disabled", "true");
       btn.className = "btn btn-download btn-download-idle btn-sm";
+      if (btn.id === "btn-download-nav") btn.classList.add("nav-download");
       textEl().textContent = waiting ? "Preparando ZIP…" : "Baixar ZIP";
       btn.title = waiting
         ? "Disponível quando o processo terminar"
@@ -1726,13 +1745,109 @@ import { injectFooter } from "./modules/nav.js";
     }
   }
 
+  function isJobServicePage(serviceId) {
+    return !!(
+      boundServiceId &&
+      serviceId &&
+      boundServiceId === serviceId &&
+      document.querySelector(".log-wrap")
+    );
+  }
+
+  function ensureNavDownloadButton() {
+    let btn = el("btn-download-nav");
+    if (btn) return btn;
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "btn-download-nav";
+    btn.className = "btn btn-download btn-download-idle btn-sm nav-download";
+    btn.hidden = true;
+    btn.innerHTML =
+      '<span class="btn-download-icon" aria-hidden="true">↓</span><span class="btn-download-text">Baixar ZIP</span>';
+    const logout = el("btn-logout");
+    if (logout && logout.parentNode) {
+      logout.insertAdjacentElement("beforebegin", btn);
+    } else {
+      const pill = el("api-pill");
+      if (pill && pill.parentNode) {
+        pill.insertAdjacentElement("afterend", btn);
+      } else {
+        const top = document.querySelector("header.top");
+        if (top) top.appendChild(btn);
+      }
+    }
+    return btn;
+  }
+
+  function hideNavDownloadButton() {
+    const btn = el("btn-download-nav");
+    if (btn) btn.hidden = true;
+  }
+
+  function setNavDownloadButton(jobId, ready, opts) {
+    if (workspaceCache && workspaceCache.local_mode) {
+      hideNavDownloadButton();
+      return;
+    }
+    const btn = ensureNavDownloadButton();
+    if (!btn) return;
+    btn.hidden = !(ready && jobId);
+    if (btn.hidden) return;
+    applyDownloadButtonState(btn, jobId, ready, opts);
+  }
+
+  function syncDownloadUi(jobId, serviceId, ready, opts = {}) {
+    if (workspaceCache && workspaceCache.local_mode) {
+      hideNavDownloadButton();
+      const logBtn = el("btn-download");
+      if (logBtn) logBtn.hidden = true;
+      return;
+    }
+    const sid = serviceId || boundServiceId;
+    const waiting = !!(opts && opts.waiting);
+    if (isJobServicePage(sid)) {
+      hideNavDownloadButton();
+      setJobDownloadButton(jobId, ready, { ...opts, serviceId: sid, waiting });
+      return;
+    }
+    const logBtn = el("btn-download");
+    if (logBtn) logBtn.hidden = true;
+    if (ready && jobId && !isDownloadDismissed(jobId)) {
+      setNavDownloadButton(jobId, true, { ...opts, serviceId: sid });
+    } else if (waiting && isJobServicePage(boundServiceId)) {
+      hideNavDownloadButton();
+      setJobDownloadButton(jobId, false, {
+        ...opts,
+        serviceId: boundServiceId,
+        waiting: true,
+      });
+    } else {
+      hideNavDownloadButton();
+    }
+  }
+
+  function setJobDownloadButton(jobId, ready, opts) {
+    if (workspaceCache && workspaceCache.local_mode) {
+      const hide = el("btn-download");
+      if (hide) hide.hidden = true;
+      hideNavDownloadButton();
+      return;
+    }
+    const btn = ensureDownloadButton();
+    if (!btn) return;
+    btn.hidden = false;
+    applyDownloadButtonState(btn, jobId, ready, opts);
+  }
+
   function initJobDownloadButton() {
     if (workspaceCache && workspaceCache.local_mode) return;
+    ensureLogTitleRow();
+    ensureNavDownloadButton();
     setJobDownloadButton(null, false, { waiting: false });
   }
 
-  function showJobDownloadButton(jobId) {
-    setJobDownloadButton(jobId, true);
+  function showJobDownloadButton(jobId, serviceId) {
+    syncDownloadUi(jobId, serviceId || boundServiceId, true);
   }
 
   function ensureDownloadBanner() {
@@ -1770,14 +1885,24 @@ import { injectFooter } from "./modules/nav.js";
     if (workspaceCache && workspaceCache.local_mode) return;
     try {
       ensureDownloadBanner();
+      ensureNavDownloadButton();
       const r = await authFetch(`${API}/api/jobs/downloads-ready`);
       if (!r.ok) return;
       const data = await r.json();
       const downloads = downloadsForCurrentUser(data.downloads || []);
+      const ready = downloads.find(
+        (d) => d && d.id && !isDownloadDismissed(d.id)
+      );
+      if (ready) {
+        syncDownloadUi(ready.id, ready.service_id, true, { owner: ready.owner });
+        return;
+      }
       const mem = readRememberedJob(boundServiceId);
       const jid = currentJobId || (mem && mem.jobId);
-      if (jid && downloads.some((d) => d.id === jid) && !isDownloadDismissed(jid)) {
-        showJobDownloadButton(jid);
+      if (jid && boundServiceId && isJobServicePage(boundServiceId)) {
+        syncDownloadUi(jid, boundServiceId, false, { waiting: true });
+      } else {
+        hideNavDownloadButton();
       }
     } catch (_) {}
   }
@@ -2059,7 +2184,7 @@ import { injectFooter } from "./modules/nav.js";
     const runBtn = el("btn-run");
     if (runBtn) runBtn.disabled = false;
     if (job.has_download) {
-      showJobDownloadButton(job.id);
+      showJobDownloadButton(job.id, job.service_id);
       showNotice(
         (job.result && job.result.mensagem) ||
           `${downloadLabel(job.service_id, job.owner || currentUsername)} finalizado — clique para baixar.`,
@@ -2165,15 +2290,20 @@ import { injectFooter } from "./modules/nav.js";
       const dl = el("btn-download");
       if (!workspaceCache?.local_mode) {
         if (job.has_download) {
-          showJobDownloadButton(jobId);
+          syncDownloadUi(jobId, job.service_id, true, { owner: job.owner });
         } else if (
           job.status === "running" ||
           job.status === "pending" ||
           job.cancel_requested
         ) {
-          setJobDownloadButton(jobId, false, { waiting: true });
+          syncDownloadUi(jobId, job.service_id, false, { waiting: true });
+        } else if (job.status === "completed") {
+          syncDownloadUi(jobId, job.service_id, false, { waiting: false });
         } else {
-          setJobDownloadButton(jobId, false, { waiting: false });
+          hideNavDownloadButton();
+          if (isJobServicePage(job.service_id)) {
+            setJobDownloadButton(jobId, false, { waiting: false, serviceId: job.service_id });
+          }
         }
       } else if (dl) {
         dl.hidden = true;
@@ -2232,8 +2362,14 @@ import { injectFooter } from "./modules/nav.js";
           showNotice((job.result && job.result.mensagem) || fallback, "ok");
         }
         if (job.has_download && !workspaceCache?.local_mode) {
-          showJobDownloadButton(jobId);
+          syncDownloadUi(jobId, job.service_id, true, { owner: job.owner });
           pollDownloadsReady().catch(() => {});
+        } else if (
+          !workspaceCache?.local_mode &&
+          zipRetryFor !== jobId
+        ) {
+          zipRetryFor = jobId;
+          setTimeout(() => refreshStatus(jobId).catch(() => {}), 900);
         }
       } else if (job.status === "running" && job.cancel_requested) {
         setLogState("Parando…");
@@ -2393,6 +2529,7 @@ import { injectFooter } from "./modules/nav.js";
 
   guardAuth().catch(() => {});
   ensureLogoutButton();
+  ensureNavDownloadButton();
   autoInjectNav();
   autoInitHubContent();
   autoPingApi();

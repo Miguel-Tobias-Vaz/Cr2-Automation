@@ -1151,6 +1151,26 @@ main {
   margin-left: 0;
 }
 
+.top .nav-download {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.top .nav-download.btn-download-ready {
+  box-shadow: 0 0 0 1px rgba(46, 234, 122, 0.35);
+}
+
+@media (max-width: 720px) {
+  .top .nav-download .btn-download-text {
+    display: none;
+  }
+
+  .top .nav-download {
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+  }
+}
+
 .opto-dl-banner {
   position: fixed;
   top: auto;
@@ -1676,6 +1696,26 @@ body.has-dl-banner:not(.has-subnav) main {
   align-items: flex-end;
   justify-content: space-between;
   gap: 1.5rem;
+  max-width: none;
+}
+
+.log-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem 1.15rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.log-title-row h2 {
+  margin: 0;
+}
+
+.log-wrap .section-head .log-title-row + p {
+  margin-top: 0;
+}
+
+.log-wrap .section-head {
   max-width: none;
 }
 

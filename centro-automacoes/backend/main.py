@@ -28,7 +28,7 @@ from backend import auth  # noqa: E402
 from backend.config import JOB_TIMEOUT_S  # noqa: E402
 from backend.deps import get_optional_user, require_admin, require_user  # noqa: E402
 from backend.jobs import JobManager, JobStatus, QueueFullError  # noqa: E402
-from backend.job_output import ZIP_LOGIC_VERSION, build_download_zip  # noqa: E402
+from backend.job_output import ZIP_LOGIC_VERSION, ensure_disk_download, ensure_download_zip  # noqa: E402
 from backend import cleanup  # noqa: E402
 from backend import audit_log  # noqa: E402
 from backend.milagre_routes import router as milagre_router  # noqa: E402
@@ -647,6 +647,10 @@ def get_job(job_id: str, user=Depends(require_user)):
     job = jobs.get(job_id)
     if job:
         _assert_can_access_job(job, user)
+        from backend.jobs import JobStatus
+
+        if job.status == JobStatus.COMPLETED:
+            ensure_download_zip(job)
         logs = list(job.logs[-200:])
         if len(logs) < 5:
             disk_logs = read_job_log_entries(job.dir, limit=400)
@@ -666,6 +670,10 @@ def get_job(job_id: str, user=Depends(require_user)):
     disk = disk_job_payload(job_id)
     if not disk:
         raise HTTPException(404, "Processo não encontrado")
+
+    if disk.get("status") == "completed" and not disk.get("has_download"):
+        if ensure_disk_download(job_id, disk.get("owner")):
+            disk["has_download"] = True
 
     class _DiskJob:
         owner = disk.get("owner")
@@ -758,7 +766,7 @@ def download_job(job_id: str, user=Depends(require_user)):
         or not Path(zip_path).is_file()
         or job.result.get("_zip_v") != ZIP_LOGIC_VERSION
     ):
-        build_download_zip(job)
+        ensure_download_zip(job)
         zip_path = job.result.get("zip")
     if zip_path and Path(zip_path).is_file():
         fname = download_filename(job.service_id, job.owner, job_id)

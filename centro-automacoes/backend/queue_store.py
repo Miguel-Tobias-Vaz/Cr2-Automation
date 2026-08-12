@@ -131,9 +131,16 @@ def restore_completed(manager: JobManager) -> int:
             finished = float(raw.get("finished_at") or 0)
             if finished and (now - finished) > COMPLETED_TTL_S:
                 continue
+            from backend.job_output import find_job_zip_file
+            from backend.job_paths import find_job_dir
+
+            job_dir = find_job_dir(job_id, raw.get("owner"))
             zip_path = raw.get("zip")
-            if zip_path and not Path(str(zip_path)).is_file():
-                continue
+            zip_file = None
+            if zip_path and Path(str(zip_path)).is_file():
+                zip_file = Path(str(zip_path))
+            elif job_dir:
+                zip_file = find_job_zip_file(job_dir)
             job = Job(
                 id=job_id,
                 service_id=service_id,
@@ -143,9 +150,8 @@ def restore_completed(manager: JobManager) -> int:
                 finished_at=finished or now,
                 owner=raw.get("owner"),
             )
-            if zip_path:
-                job.result["zip"] = str(zip_path)
-                job.result["has_download"] = True
+            if zip_file:
+                job.result["zip"] = str(zip_file)
             manager._jobs[job_id] = job
             restored += 1
     return restored

@@ -307,3 +307,28 @@ def test_build_download_zip_pasta(users_root, tmp_path):
     dest = build_download_zip(job)
     assert dest and dest.is_file()
     assert job.result.get("zip")
+
+
+def test_find_job_zip_resultado(tmp_path):
+    from backend.job_output import find_job_zip_file
+
+    job_dir = tmp_path / "jobx"
+    job_dir.mkdir()
+    (job_dir / "resultado.zip").write_bytes(b"PK")
+    found = find_job_zip_file(job_dir)
+    assert found is not None
+    assert found.name == "resultado.zip"
+
+
+def test_disk_job_payload_detects_resultado_zip(users_root, tmp_path, monkeypatch):
+    from backend.job_log import disk_job_payload, write_job_meta
+    from backend.jobs import Job, JobStatus
+
+    job = Job(id="diskzip1", service_id="normas", config={}, owner="ana")
+    job.status = JobStatus.COMPLETED
+    job.result["pasta"] = str(tmp_path / "out")
+    (job.dir / "resultado.zip").write_bytes(b"PK\x03\x04")
+    write_job_meta(job)
+    payload = disk_job_payload("diskzip1", "ana")
+    assert payload is not None
+    assert payload["has_download"] is True

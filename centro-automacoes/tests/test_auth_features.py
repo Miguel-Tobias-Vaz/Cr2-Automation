@@ -250,34 +250,39 @@ def test_user_job_for_owner_by_service():
     assert len(mgr.user_jobs_for_owner("maria")) == 2
 
 
-def test_list_downloads_ready_somente_dono():
+def test_list_downloads_ready_somente_dono(tmp_path):
     mgr = JobManager()
     mgr._persist_enabled = False
 
     j_a = Job(id="a1", service_id="categorias", config={}, owner="maria@test.com")
     j_a.status = JobStatus.COMPLETED
     j_a.finished_at = time.time()
-    j_a.result["zip"] = "/tmp/a.zip"
+    (tmp_path / "a1.zip").write_bytes(b"PK")
+    j_a.result["zip"] = str(tmp_path / "a1.zip")
 
     j_b = Job(id="b1", service_id="normas", config={}, owner="joao@test.com")
     j_b.status = JobStatus.COMPLETED
     j_b.finished_at = time.time()
-    j_b.result["zip"] = "/tmp/b.zip"
+    (tmp_path / "b1.zip").write_bytes(b"PK")
+    j_b.result["zip"] = str(tmp_path / "b1.zip")
 
     j_admin2 = Job(id="d1", service_id="normas", config={}, owner="admin2")
     j_admin2.status = JobStatus.COMPLETED
     j_admin2.finished_at = time.time()
-    j_admin2.result["zip"] = "/tmp/d.zip"
+    (tmp_path / "d1.zip").write_bytes(b"PK")
+    j_admin2.result["zip"] = str(tmp_path / "d1.zip")
 
     j_orfa = Job(id="c1", service_id="documentos", config={}, owner=None)
     j_orfa.status = JobStatus.COMPLETED
     j_orfa.finished_at = time.time()
-    j_orfa.result["zip"] = "/tmp/c.zip"
+    (tmp_path / "c1.zip").write_bytes(b"PK")
+    j_orfa.result["zip"] = str(tmp_path / "c1.zip")
 
     j_old = Job(id="old1", service_id="normas", config={}, owner="admin2")
     j_old.status = JobStatus.COMPLETED
     j_old.finished_at = time.time() - 10 * 60 * 60
-    j_old.result["zip"] = "/tmp/old.zip"
+    (tmp_path / "old1.zip").write_bytes(b"PK")
+    j_old.result["zip"] = str(tmp_path / "old1.zip")
 
     mgr._jobs = {j.id: j for j in (j_a, j_b, j_admin2, j_orfa, j_old)}
 

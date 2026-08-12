@@ -206,6 +206,30 @@ def parece_fonte_sessoes(
     return bool(_RE_FONTE_SESSOES.search(blob))
 
 
+def link_indica_sessao(*urls: str) -> bool:
+    """
+    True se alguma URL contém pauta, ata ou sessão no caminho/link.
+    Portarias e demais publicações não entram como sessão só pelo título do PDF.
+    """
+    from urllib.parse import unquote
+
+    for raw in urls:
+        if not raw or not str(raw).strip():
+            continue
+        u = _norm(unquote(str(raw)))
+        if not u:
+            continue
+        if re.search(r"pautas?", u):
+            return True
+        if re.search(r"sess(?:ao|oes)", u):
+            return True
+        if re.search(r"(?:^|[/_.\-])atas?(?:[/_.\-]|$)", u):
+            return True
+        if re.search(r"\batas?\b", u):
+            return True
+    return False
+
+
 def _normalizar_tipo(bruto: str) -> str:
     n = _norm(bruto)
     for nome, rx in _TIPOS_SESSAO:
@@ -704,12 +728,19 @@ def organizar_destino_sessao(
     ano_fallback: int | None,
     textos: list[str],
     url_fonte: str = "",
+    url_pdf: str = "",
 ) -> dict[str, Any] | None:
     """
     Se for documento de sessão ou declaração da fonte de sessões, devolve:
       { pasta, arquivo_logico, meta }
     senão None (fluxo normal).
+
+    Só aplica regras de sessão quando a URL do post ou do PDF contém
+    pauta, ata ou sessão — evita classificar portarias pelo texto do PDF.
     """
+    if not link_indica_sessao(url_fonte, url_pdf):
+        return None
+
     titulo = textos[1] if len(textos) > 1 else (textos[0] if textos else "")
     fonte_ok = parece_fonte_sessoes(
         url=url_fonte,

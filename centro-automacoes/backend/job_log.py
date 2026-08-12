@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from backend.job_output import find_job_zip_file, job_has_download
 from backend.job_paths import find_job_dir, iter_all_job_dirs
 
 _LOG_LINE_RE = re.compile(
@@ -88,6 +89,7 @@ def write_job_meta(job) -> None:
                 for k, v in (job.result or {}).items()
                 if k not in ("zip",) and not str(k).startswith("_")
             },
+            "has_download": job_has_download(job),
             "cancel_requested": bool(job.cancel_requested),
             "progress": {
                 "done": getattr(job, "progress_done", 0),
@@ -112,6 +114,8 @@ def disk_job_payload(job_id: str, owner: str | None = None) -> dict[str, Any] | 
     disk_owner = owner or meta.get("owner") or owner_from_job_dir(job_dir)
     logs = read_job_log_entries(job_dir)
     status = meta.get("status") or ("completed" if logs else "unknown")
+    zip_file = find_job_zip_file(job_dir)
+    has_download = bool(meta.get("has_download")) or bool(zip_file)
     return {
         "id": job_id,
         "service_id": meta.get("service_id") or "unknown",
@@ -121,7 +125,7 @@ def disk_job_payload(job_id: str, owner: str | None = None) -> dict[str, Any] | 
         "finished_at": meta.get("finished_at"),
         "error": meta.get("error"),
         "result": meta.get("result") or {},
-        "has_download": bool((job_dir / "download.zip").is_file()),
+        "has_download": has_download,
         "cancel_requested": bool(meta.get("cancel_requested")),
         "owner": disk_owner,
         "progress": meta.get("progress") or {},

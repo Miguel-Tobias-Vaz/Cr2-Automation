@@ -1378,7 +1378,8 @@ def baixar_e_salvar(
                     textos_extras[1] if len(textos_extras) > 1 else "",
                     (texto_pdf or "")[:4000],
                 ],
-                url_fonte=url_ctx,
+                url_fonte=url_fonte or "",
+                url_pdf=url_pdf or "",
             )
             if org:
                 pasta_destino = org["pasta"]

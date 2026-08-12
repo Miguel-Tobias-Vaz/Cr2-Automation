@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -10,6 +11,8 @@ if TYPE_CHECKING:
     from backend.jobs import Job, JobManager, JobStatus
 
 ZIP_LOGIC_VERSION = 2
+
+ZIP_FILENAMES = ("resultado.zip", "download.zip")
 
 _FILE_KEYS = (
     "planilha",
@@ -33,6 +36,73 @@ def _skip_zip_file(path: Path) -> bool:
     return path.name in _SKIP_ZIP_NAMES
 
 
+def find_job_zip_file(job_dir: Path) -> Path | None:
+    """Localiza ZIP de download já gerado na pasta do job."""
+    for name in ZIP_FILENAMES:
+        path = job_dir / name
+        if path.is_file():
+            return path
+    return None
+
+
+def job_has_download(job: Job) -> bool:
+    """True se o job tem ZIP pronto (memória ou disco)."""
+    zip_ref = (job.result or {}).get("zip")
+    if zip_ref:
+        path = Path(str(zip_ref))
+        if path.is_file():
+            return True
+    found = find_job_zip_file(job.dir)
+    if found:
+        job.result["zip"] = str(found)
+        return True
+    return False
+
+
+def ensure_download_zip(job: Job) -> Path | None:
+    """Garante ZIP existente; tenta montar se ainda não houver."""
+    if job_has_download(job):
+        return Path(str(job.result["zip"]))
+    return build_download_zip(job)
+
+
+def ensure_disk_download(job_id: str, owner: str | None = None) -> bool:
+    """Tenta montar ZIP a partir de meta/config no disco (após restart)."""
+    from backend.job_log import read_job_meta
+    from backend.job_paths import find_job_dir
+    from backend.jobs import Job, JobStatus
+
+    job_dir = find_job_dir(job_id, owner)
+    if not job_dir:
+        return False
+    if find_job_zip_file(job_dir):
+        return True
+    meta = read_job_meta(job_dir)
+    if meta.get("status") != JobStatus.COMPLETED.value:
+        return False
+    config: dict[str, Any] = {}
+    config_path = job_dir / "config.json"
+    if config_path.is_file():
+        try:
+            with open(config_path, encoding="utf-8") as fh:
+                loaded = json.load(fh)
+            if isinstance(loaded, dict):
+                config = loaded
+        except (OSError, json.JSONDecodeError):
+            pass
+    job = Job(
+        id=job_id,
+        service_id=str(meta.get("service_id") or "unknown"),
+        config=config,
+        status=JobStatus.COMPLETED,
+        started_at=meta.get("started_at"),
+        finished_at=meta.get("finished_at"),
+        owner=meta.get("owner") or owner,
+    )
+    job.result.update(meta.get("result") or {})
+    return bool(build_download_zip(job))
+
+
 def _user_output_root(job: Job) -> Path | None:
     ws = (job.config or {}).get("_workspace") or {}
     raw = ws.get("output_dir")
@@ -41,6 +111,16 @@ def _user_output_root(job: Job) -> Path | None:
     p = Path(str(raw))
     if p.is_dir():
         return p.resolve()
+    return None
+
+
+def _service_output_folder(job: Job) -> Path | None:
+    root = _user_output_root(job)
+    if not root or not job.service_id:
+        return None
+    sub = root / job.service_id
+    if sub.is_dir():
+        return sub.resolve()
     return None
 
 
@@ -197,6 +277,12 @@ def build_download_zip(job: Job) -> Path | None:
         if _is_shared_output_root(job, folder) and job.started_at:
             files = _files_modified_since(folder, job.started_at)
             if not files:
+                sub = _service_output_folder(job)
+                if sub and sub != folder.resolve():
+                    files = [f for f in sub.rglob("*") if f.is_file()]
+                    if files:
+                        folder = sub
+            if not files:
                 continue
             dest = job.dir / "resultado.zip"
             count = _zip_file_list(dest, folder, files)
@@ -242,4 +328,10 @@ def finalize_job_output(manager: JobManager, job: Job) -> None:
             "Pacote de download pronto ({0} arquivo(s)).".format(
                 job.result.get("download_files", "?")
             ),
+        )
+    else:
+        job.emit(
+            "warn",
+            "Nenhum arquivo encontrado para montar o ZIP — use Arquivos no menu "
+            "ou baixe a pasta de saída pelo admin.",
         )

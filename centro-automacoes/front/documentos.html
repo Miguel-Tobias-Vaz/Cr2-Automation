@@ -93,16 +93,16 @@
 
       <section class="log-wrap" id="log">
         <header class="section-head">
-          <h2>Log ao vivo</h2>
+          <div class="log-title-row">
+            <h2>Log ao vivo</h2>
+            <button type="button" class="btn btn-download btn-download-idle btn-sm" id="btn-download" disabled aria-disabled="true">
+              <span class="btn-download-icon" aria-hidden="true">↓</span>
+              <span class="btn-download-text">Baixar ZIP</span>
+            </button>
+          </div>
           <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
         </header>
         <div class="log-console" id="log-console"><p class="log-empty">Aguardando execução…</p></div>
-        <div class="job-bar">
-          <button type="button" class="btn btn-download btn-download-idle btn-sm" id="btn-download" disabled>
-            <span class="btn-download-icon" aria-hidden="true">↓</span>
-            <span class="btn-download-text">Baixar ZIP</span>
-          </button>
-        </div>
       </section>
     </main>
 

@@ -125,7 +125,7 @@ class Job:
             "finished_at": self.finished_at,
             "error": self.error,
             "result": self.result,
-            "has_download": bool(self.result.get("zip")),
+            "has_download": self._has_download(),
             "cancel_requested": self.cancel_requested,
             "owner": self.owner,
             "queue_rank": self.queue_rank,
@@ -140,6 +140,11 @@ class Job:
         if manager is not None:
             payload["queue"] = manager.queue_meta(self)
         return payload
+
+    def _has_download(self) -> bool:
+        from backend.job_output import job_has_download
+
+        return job_has_download(self)
 
 
 class JobManager:
@@ -464,7 +469,7 @@ class JobManager:
         for j in items:
             if j.status != JobStatus.COMPLETED:
                 continue
-            if not j.result.get("zip"):
+            if not self._has_download_for(j):
                 continue
             if owner:
                 if not self._owners_match(j.owner, owner):
@@ -486,6 +491,12 @@ class JobManager:
             )
         ready.sort(key=lambda x: float(x.get("finished_at") or 0), reverse=True)
         return ready[:limit]
+
+    @staticmethod
+    def _has_download_for(job: Job) -> bool:
+        from backend.job_output import job_has_download
+
+        return job_has_download(job)
 
     def admin_snapshot(self) -> dict[str, Any]:
         with self._lock:
