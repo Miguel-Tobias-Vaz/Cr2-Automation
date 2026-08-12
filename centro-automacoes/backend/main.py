@@ -348,7 +348,12 @@ def auth_config():
 @app.get("/api/auth/me")
 def auth_me(user=Depends(get_optional_user)):
     if not auth.is_enabled():
-        return {"auth_required": False, "user": None}
+        from backend.deps import _local_bypass_session
+
+        local = _local_bypass_session()
+        pub = local.to_public()
+        pub["panel_admin"] = auth.is_panel_admin(local)
+        return {"auth_required": False, "user": pub}
     if not user:
         return {"auth_required": True, "user": None}
     pub = user.to_public()
@@ -734,6 +739,11 @@ def _page(name: str):
 @app.get("/")
 def index():
     return _page("index.html")
+
+
+@app.get("/index.html")
+def index_html():
+    return RedirectResponse(url="/", status_code=302)
 
 
 @app.get("/extrair.html")

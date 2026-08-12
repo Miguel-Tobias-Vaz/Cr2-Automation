@@ -226,6 +226,9 @@ def is_supabase() -> bool:
 
 
 def is_enabled() -> bool:
+    raw = (os.getenv("OPTO_AUTH") or "").strip().lower()
+    if raw in ("0", "off", "false", "no", "disabled"):
+        return False
     if is_supabase():
         return True
     with _lock:

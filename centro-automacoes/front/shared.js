@@ -2344,8 +2344,39 @@ import { injectFooter } from "./modules/nav.js";
   };
   window.CR2Centro = window.OptoAutomacoes;
 
+  function detectNavKey() {
+    const path = (location.pathname || "").toLowerCase();
+    if (path === "/" || path.endsWith("/index.html")) return "hub";
+    if (path.includes("admin")) return null;
+    const page = path.split("/").pop().replace(".html", "");
+    const map = {
+      extrair: "extrair",
+      publicar: "publicar",
+      mapa: "mapa",
+      arquivos: "arquivos",
+      documentos: "documentos",
+      categorias: "categorias",
+      normas: "normas",
+      licitacoes: "licitacoes",
+      repasses: "repasses",
+      contratos: "contratos",
+      publicacao: "publicacao",
+      sessao: "sessao",
+      "pub-repasses": "pub_repasses",
+      "dic-est-ter": "dic_est_ter",
+    };
+    return map[page] || "hub";
+  }
+
+  function autoInjectNav() {
+    if (!el("site-nav")) return;
+    const key = detectNavKey();
+    if (key) injectNav(key);
+  }
+
   guardAuth().catch(() => {});
   ensureLogoutButton();
+  autoInjectNav();
   applyNavAuth().catch(() => {});
   injectFooter();
   applyPendingFolderPick();

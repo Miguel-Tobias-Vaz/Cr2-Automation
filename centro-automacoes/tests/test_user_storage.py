@@ -28,6 +28,7 @@ from backend.user_storage import _match_publicacao_key
 
 @pytest.fixture
 def users_root(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPTO_LOCAL", raising=False)
     monkeypatch.setattr("backend.user_storage.USERS_ROOT", tmp_path / "users")
     return tmp_path / "users"
 
@@ -92,11 +93,16 @@ def test_apply_user_defaults_reescreve_output_raiz(users_root):
     assert out.name == "normas"
 
 
-def test_job_dir_por_usuario(users_root, monkeypatch):
+def test_job_dir_por_usuario(users_root, tmp_path, monkeypatch):
     from backend.job_paths import find_job_dir
     from backend.jobs import Job
 
+    legacy = tmp_path / "legacy_jobs"
+    legacy.mkdir()
+    monkeypatch.delenv("OPTO_LOCAL", raising=False)
     monkeypatch.setattr("backend.user_storage.USERS_ROOT", users_root)
+    monkeypatch.setattr("backend.job_paths.USERS_ROOT", users_root)
+    monkeypatch.setattr("backend.job_paths.LEGACY_JOBS_ROOT", legacy)
     job = Job(id="abc999", service_id="normas", config={}, owner="maria@test.com")
     d = job.dir
     assert d.is_dir()
