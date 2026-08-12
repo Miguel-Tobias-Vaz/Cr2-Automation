@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home64" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home68" />
     <style>
       .entidade-grid {
         display: grid;
@@ -233,12 +233,14 @@
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home57"></script>
-    <script type="module" src="/assets/shared.js?v=home64"></script>
-    <script>
-document.addEventListener("opto-ready", () => {
-CR2Centro.injectNav("normas");
-      CR2Centro.pingApi();
+    <script src="/assets/fluid-particles.js?v=home68"></script>
+    <script type="module" src="/assets/shared.js?v=home68"></script>
+    <script type="module">
+import { whenReady } from "/assets/modules/core.js?v=home68";
+whenReady(() => {
+        const C = window.OptoAutomacoes;
+        C.injectNav("normas");
+      C.pingApi();
 
       const STORAGE_KEY = "cr2-centro-normas";
 
@@ -396,7 +398,7 @@ CR2Centro.injectNav("normas");
         });
       });
 
-      CR2Centro.bindRun("normas", "form-normas", fields, () => ({
+      C.bindRun("normas", "form-normas", fields, () => ({
         entidade: getEntidade(),
         site: document.getElementById("site").value.trim(),
         pasta_base: document.getElementById("pasta_base").value.trim(),

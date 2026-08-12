@@ -2374,9 +2374,28 @@ import { injectFooter } from "./modules/nav.js";
     if (key) injectNav(key);
   }
 
+  function autoInitHubContent() {
+    const grid = el("hub-grid");
+    if (!grid) return;
+    const path = (location.pathname || "").toLowerCase();
+    if (path === "/" || path.endsWith("/index.html")) {
+      renderHomeHubs();
+      return;
+    }
+    const page = path.split("/").pop().replace(".html", "");
+    const hubPages = { extrair: "extrair", publicar: "publicar" };
+    if (hubPages[page]) renderHubTools(hubPages[page]);
+  }
+
+  function autoPingApi() {
+    if (el("api-pill")) pingApi();
+  }
+
   guardAuth().catch(() => {});
   ensureLogoutButton();
   autoInjectNav();
+  autoInitHubContent();
+  autoPingApi();
   applyNavAuth().catch(() => {});
   injectFooter();
   applyPendingFolderPick();
@@ -2388,7 +2407,7 @@ import { injectFooter } from "./modules/nav.js";
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home61";
+    s.src = "/assets/shader-background.js?v=home68";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {

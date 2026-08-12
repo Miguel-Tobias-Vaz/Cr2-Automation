@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home64" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home68" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -85,13 +85,15 @@
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home57"></script>
-    <script type="module" src="/assets/shared.js?v=home64"></script>
-    <script>
-document.addEventListener("opto-ready", () => {
-CR2Centro.injectNav("mapa");
-      CR2Centro.pingApi();
-      CR2Centro.bindRun("mapa","form-mapa",["wp_url","user","app_password","slug","paginas"],()=>({
+    <script src="/assets/fluid-particles.js?v=home68"></script>
+    <script type="module" src="/assets/shared.js?v=home68"></script>
+    <script type="module">
+import { whenReady } from "/assets/modules/core.js?v=home68";
+whenReady(() => {
+        const C = window.OptoAutomacoes;
+        C.injectNav("mapa");
+      C.pingApi();
+      C.bindRun("mapa","form-mapa",["wp_url","user","app_password","slug","paginas"],()=>({
         wp_url: document.getElementById("wp_url").value.trim(),
         user: document.getElementById("user").value.trim(),
         app_password: document.getElementById("app_password").value,

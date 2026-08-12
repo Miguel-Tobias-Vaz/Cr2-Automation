@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home64" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home68" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -120,13 +120,15 @@
       </section>
     </main>
 
-    <script src="/assets/shader-background.js?v=home57"></script>
-    <script type="module" src="/assets/shared.js?v=home64"></script>
-    <script>
-document.addEventListener("opto-ready", () => {
-CR2Centro.injectNav("pub_repasses");
-      CR2Centro.pingApi();
-      CR2Centro.bindFileUpload({
+    <script src="/assets/shader-background.js?v=home68"></script>
+    <script type="module" src="/assets/shared.js?v=home68"></script>
+    <script type="module">
+import { whenReady } from "/assets/modules/core.js?v=home68";
+whenReady(() => {
+        const C = window.OptoAutomacoes;
+        C.injectNav("pub_repasses");
+      C.pingApi();
+      C.bindFileUpload({
         zoneId: "upload-pasta",
         inputId: "file-pasta",
         targetFieldId: "pasta_base",
@@ -138,7 +140,7 @@ CR2Centro.injectNav("pub_repasses");
         "usuario", "senha", "url_portal_repasse", "pasta_base",
         "modo_teste", "auto_confirm", "headless",
       ];
-      CR2Centro.bindRun("pub_repasses", "form-pub-repasses", fields, () => ({
+      C.bindRun("pub_repasses", "form-pub-repasses", fields, () => ({
         usuario: document.getElementById("usuario").value.trim(),
         senha: document.getElementById("senha").value,
         url_portal_repasse: document.getElementById("url_portal_repasse").value.trim(),

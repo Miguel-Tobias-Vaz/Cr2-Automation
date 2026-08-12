@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home64" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home68" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -179,13 +179,15 @@
       </section>
     </main>
 
-    <script src="/assets/shader-background.js?v=home57"></script>
-    <script type="module" src="/assets/shared.js?v=home64"></script>
-    <script>
-document.addEventListener("opto-ready", () => {
-CR2Centro.injectNav("repasses");
-      CR2Centro.pingApi();
-      CR2Centro.bindFileUpload({
+    <script src="/assets/shader-background.js?v=home68"></script>
+    <script type="module" src="/assets/shared.js?v=home68"></script>
+    <script type="module">
+import { whenReady } from "/assets/modules/core.js?v=home68";
+whenReady(() => {
+        const C = window.OptoAutomacoes;
+        C.injectNav("repasses");
+      C.pingApi();
+      C.bindFileUpload({
         zoneId: "upload-planilha",
         inputId: "file-planilha",
         targetFieldId: "url_planilha",
@@ -210,7 +212,7 @@ CR2Centro.injectNav("repasses");
       }
 
       const fields = ["pasta_base", "anos", "url_planilha", "usar_ocr", "refinar_ia", "motor_ocr"];
-      CR2Centro.bindRun("repasses", "form-repasses", fields, () => ({
+      C.bindRun("repasses", "form-repasses", fields, () => ({
         pasta_base: document.getElementById("pasta_base").value.trim(),
         anos: document.getElementById("anos").value.trim(),
         url_planilha: document.getElementById("url_planilha").value.trim(),
