@@ -129,6 +129,7 @@ def test_milagre_status_requires_auth(api_client):
 
 
 def test_open_without_auth(monkeypatch):
+    monkeypatch.setenv("OPTO_AUTH", "off")
     monkeypatch.delenv("OPTO_SUPABASE_URL", raising=False)
     monkeypatch.delenv("OPTO_SUPABASE_ANON_KEY", raising=False)
     monkeypatch.delenv("OPTO_USERS", raising=False)

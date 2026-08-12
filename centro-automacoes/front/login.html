@@ -48,16 +48,23 @@ document.addEventListener("opto-ready", () => {
         let supabaseClient = null;
 
         async function loadAuthConfig() {
+          try {
+            const r = await fetch("/api/auth/config");
+            if (r.ok) {
+              const cfg = await r.json();
+              if (cfg.mode && cfg.mode !== "off") return cfg;
+              if (!cfg.auth_required) return cfg;
+            }
+          } catch (_) {}
           if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
             return {
               mode: "supabase",
+              auth_required: true,
               supabase_url: window.SUPABASE_URL,
               supabase_anon_key: window.SUPABASE_ANON_KEY,
             };
           }
-          const r = await fetch("/api/auth/config");
-          if (!r.ok) return { mode: "off" };
-          return r.json();
+          return { mode: "off", auth_required: false };
         }
 
         function applyMode(cfg) {

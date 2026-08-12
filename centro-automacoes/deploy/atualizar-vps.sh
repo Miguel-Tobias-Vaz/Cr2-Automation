@@ -45,12 +45,15 @@ ENV_FILE="$APP_DIR/centro-automacoes/deploy/opto.env"
   echo "==> validando opto.env"
   # shellcheck disable=SC1090
   source "$ENV_FILE"
-  if [[ "${OPTO_AUTH:-off}" =~ ^(0|off|false|no|disabled)$ ]]; then
+  if [[ "${OPTO_AUTH:-}" =~ ^(0|off|false|no|disabled)$ ]]; then
     echo "Auth: desligada (OPTO_AUTH=off) — painel aberto."
+    SUPABASE_JS="$APP_DIR/centro-automacoes/front/supabase-config.js"
+    rm -f "$SUPABASE_JS"
   elif [[ -n "${OPTO_SUPABASE_URL:-}" || -n "${OPTO_USERS:-}" ]]; then
     echo "Auth: ligada (Supabase ou OPTO_USERS)."
   fi
-  if [[ -n "${OPTO_SUPABASE_URL:-}" && -n "${OPTO_SUPABASE_ANON_KEY:-}" ]]; then
+  if [[ -n "${OPTO_SUPABASE_URL:-}" && -n "${OPTO_SUPABASE_ANON_KEY:-}" ]] && \
+     ! [[ "${OPTO_AUTH:-}" =~ ^(0|off|false|no|disabled)$ ]]; then
     echo "==> gerando front/supabase-config.js a partir de opto.env"
     SUPABASE_JS="$APP_DIR/centro-automacoes/front/supabase-config.js"
     cat > "$SUPABASE_JS" <<EOF

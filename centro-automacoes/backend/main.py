@@ -18,6 +18,10 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from backend.bootstrap_env import bootstrap_env  # noqa: E402
+
+bootstrap_env()
+
 from backend import auth  # noqa: E402
 from backend.config import JOB_TIMEOUT_S  # noqa: E402
 from backend.deps import get_optional_user, require_admin, require_user  # noqa: E402
@@ -333,6 +337,8 @@ def auth_config():
     """Modo de login para o front (Supabase ou local)."""
     from backend import supabase_auth
 
+    if not auth.is_enabled():
+        return {"mode": "off", "auth_required": False}
     if supabase_auth.is_configured():
         return {
             "mode": "supabase",
@@ -340,9 +346,7 @@ def auth_config():
             "supabase_url": supabase_auth.supabase_url(),
             "supabase_anon_key": supabase_auth.supabase_anon_key(),
         }
-    if auth.is_enabled():
-        return {"mode": "local", "auth_required": True}
-    return {"mode": "off", "auth_required": False}
+    return {"mode": "local", "auth_required": True}
 
 
 @app.get("/api/auth/me")

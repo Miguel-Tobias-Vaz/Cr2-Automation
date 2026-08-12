@@ -8,6 +8,10 @@ from typing import TYPE_CHECKING
 
 import requests
 
+from backend.bootstrap_env import bootstrap_env
+
+bootstrap_env()
+
 if TYPE_CHECKING:
     from backend.auth import Session
 

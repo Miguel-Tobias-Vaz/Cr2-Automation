@@ -39,6 +39,7 @@ APIS_OPEN = [
 
 @pytest.fixture
 def open_client(monkeypatch):
+    monkeypatch.setenv("OPTO_AUTH", "off")
     monkeypatch.delenv("OPTO_SUPABASE_URL", raising=False)
     monkeypatch.delenv("OPTO_SUPABASE_ANON_KEY", raising=False)
     monkeypatch.delenv("OPTO_USERS", raising=False)
