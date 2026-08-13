@@ -117,6 +117,7 @@ _REG_LOCK = threading.Lock()
 _TLS = threading.local()
 # Acumulador do relatório por categoria + auditoria (Extração Pro).
 REGISTROS_NORMAS: list[dict] = []
+REGISTROS_DIARIAS: list[dict] = []
 
 HEADERS = {
     "User-Agent": (
