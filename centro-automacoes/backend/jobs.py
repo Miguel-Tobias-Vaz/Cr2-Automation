@@ -366,6 +366,11 @@ class JobManager:
                 )
         job = self.create(service_id, config)
         job.owner = owner
+        from backend.user_storage import assign_job_output_dir
+
+        run_dir = assign_job_output_dir(job, owner=owner, service_id=service_id)
+        if run_dir:
+            job.emit("info", "Pasta deste job: {0}".format(run_dir))
         with self._lock:
             job.queue_rank = self._next_queue_rank_locked()
         self.save_config(job)

@@ -406,6 +406,101 @@ def test_build_download_zip_licitacoes_muitas_pastas(users_root, tmp_path):
     assert any(n.endswith("subirLicitacoes.xlsx") for n in names)
 
 
+def test_assign_job_output_dir_per_job(users_root):
+    from backend.jobs import Job
+    from backend.user_storage import assign_job_output_dir, is_local_mode
+
+    job = Job(id="abc123", service_id="licitacoes", config={"pasta_saida": "x"})
+    path = assign_job_output_dir(job, owner="ana", service_id="licitacoes")
+    assert path
+    assert job.config["pasta_saida"] == path
+    assert job.config["pasta_base"] == path
+    assert path.endswith("abc123") or "abc123" in path
+    assert Path(path).is_dir()
+
+
+def test_assign_job_output_dir_skips_local(users_root, monkeypatch):
+    from backend.jobs import Job
+    from backend.user_storage import assign_job_output_dir
+
+    monkeypatch.setenv("OPTO_LOCAL", "1")
+    job = Job(id="x1", service_id="licitacoes", config={})
+    assert assign_job_output_dir(job, owner="ana", service_id="licitacoes") is None
+
+
+def test_build_download_zip_isolates_subfolders_in_shared_service(tmp_path):
+    """Cada job ZIP só inclui result.pasta — não a pasta compartilhada do serviço."""
+    import time
+    import zipfile
+
+    output_root = tmp_path / "output"
+    svc = output_root / "licitacoes"
+    run_a = svc / "PM A 2023"
+    run_b = svc / "PM B 2023"
+    run_a.mkdir(parents=True)
+    run_b.mkdir(parents=True)
+    (run_a / "a.txt").write_text("a", encoding="utf-8")
+    (run_b / "b.txt").write_text("b", encoding="utf-8")
+
+    job = Job(
+        id="iso1",
+        service_id="licitacoes",
+        config={
+            "pasta_saida": str(svc),
+            "_workspace": {"output_dir": str(output_root)},
+        },
+    )
+    job.status = JobStatus.COMPLETED
+    job.started_at = time.time() - 60
+    job.finished_at = time.time()
+    job.result["pasta"] = str(run_a)
+
+    dest = build_download_zip(job)
+    assert dest and dest.is_file()
+    with zipfile.ZipFile(dest, "r") as zf:
+        names = zf.namelist()
+    assert any("a.txt" in n for n in names)
+    assert not any("b.txt" in n for n in names)
+
+
+def test_build_download_zip_service_folder_uses_job_time_window(tmp_path):
+    """Quando result.pasta é a pasta do serviço, filtra arquivos pela janela do job."""
+    import os
+    import time
+    import zipfile
+
+    output_root = tmp_path / "output"
+    svc = output_root / "licitacoes"
+    svc.mkdir(parents=True)
+
+    old = svc / "Licitacao_antiga"
+    old.mkdir()
+    velho = old / "velho.pdf"
+    velho.write_bytes(b"old")
+    old_mtime = time.time() - 3600
+    os.utime(velho, (old_mtime, old_mtime))
+
+    job = Job(
+        id="iso2",
+        service_id="licitacoes",
+        config={"_workspace": {"output_dir": str(output_root)}},
+    )
+    job.status = JobStatus.COMPLETED
+    job.started_at = time.time()
+    new = svc / "Licitacao_nova"
+    new.mkdir()
+    (new / "novo.pdf").write_bytes(b"new")
+    job.finished_at = time.time() + 1
+    job.result["pasta"] = str(svc)
+
+    dest = build_download_zip(job)
+    assert dest and dest.is_file()
+    with zipfile.ZipFile(dest, "r") as zf:
+        names = zf.namelist()
+    assert any("novo.pdf" in n for n in names)
+    assert not any("velho.pdf" in n for n in names)
+
+
 def test_find_job_zip_resultado(tmp_path):
     from backend.job_output import find_job_zip_file
 

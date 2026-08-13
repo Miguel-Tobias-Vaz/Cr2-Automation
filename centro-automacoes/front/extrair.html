@@ -35,7 +35,7 @@
             <p class="hub-kicker"><a href="/">Início</a> · Extração</p>
             <h1 id="hub-title">Extração</h1>
             <p class="lede hub-tagline" id="hub-lede">
-              Baixas do portal: documentos, categorias, Extração Pro, licitações CR2, TCM-PA e repasses.
+              Baixas do portal: documentos, categorias, Extração Pro, licitações CR2 e repasses.
             </p>
           </header>
           <div class="hub-grid" id="hub-grid"></div>
@@ -45,25 +45,5 @@
 
     <script src="/assets/fluid-particles.js?v=home71"></script>
     <script type="module" src="/assets/shared.js?v=home71"></script>
-    <script type="module">
-      import { whenReady } from "/assets/modules/core.js?v=home71";
-      whenReady(() => {
-        requestAnimationFrame(() => {
-          const grid = document.getElementById("hub-grid");
-          if (!grid || grid.querySelector('a[href="/tcm-licitacoes.html"]')) return;
-          grid.insertAdjacentHTML(
-            "beforeend",
-            `<a class="hub-card" href="/tcm-licitacoes.html" data-glow>
-              <span class="hub-card-glow" data-glow aria-hidden="true"></span>
-              <span class="hub-card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3z"/><path d="M3 10h18"/><path d="M3 15h18"/><path d="M9 5v14"/><path d="M15 5v14"/></svg></span>
-              <h3>Licitações TCM-PA</h3>
-              <p>Mural do TCM-PA: documentos, contratos e planilha Excel.</p>
-              <div class="hub-card-foot"><span>Abrir</span><span aria-hidden="true">→</span></div>
-            </a>`
-          );
-          window.OptoAutomacoes?.enableSpotlightCards?.();
-        });
-      });
-    </script>
   </body>
 </html>

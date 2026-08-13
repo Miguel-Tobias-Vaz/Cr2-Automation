@@ -192,6 +192,35 @@ def is_local_mode() -> bool:
     return os.getenv("OPTO_LOCAL", "").strip().lower() in ("1", "true", "yes", "on")
 
 
+# Extrações na VPS: cada job grava em output/{serviço}/{job_id}/ (evita misturar ZIP).
+JOB_SCOPED_OUTPUT_SERVICES = frozenset(
+    {
+        "documentos",
+        "categorias",
+        "normas",
+        "licitacoes",
+        "repasses",
+        "contratos",
+    }
+)
+JOB_OUTPUT_PASTA_KEYS = ("pasta_saida", "pasta_base")
+
+
+def assign_job_output_dir(job, *, owner: str | None, service_id: str | None) -> str | None:
+    """Isola a saída de cada job na VPS (todos os serviços de extração)."""
+    if is_local_mode() or not owner or not service_id:
+        return None
+    if service_id not in JOB_SCOPED_OUTPUT_SERVICES:
+        return None
+    run_dir = user_output_dir(owner, service_id) / job.id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    run_path = str(run_dir.resolve())
+    job.config["_job_run_dir"] = run_path
+    for key in JOB_OUTPUT_PASTA_KEYS:
+        job.config[key] = run_path
+    return run_path
+
+
 def apply_user_defaults(
     config: dict[str, Any] | None,
     owner: str | None,

@@ -17,7 +17,6 @@ PAGES = [
     "/categorias.html",
     "/normas.html",
     "/licitacoes.html",
-    "/tcm-licitacoes.html",
     "/repasses.html",
     "/publicacao.html",
     "/sessao.html",

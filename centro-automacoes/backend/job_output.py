@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -14,7 +15,7 @@ from backend.zip_fast import write_zip_file
 if TYPE_CHECKING:
     from backend.jobs import Job, JobManager, JobStatus
 
-ZIP_LOGIC_VERSION = 2
+ZIP_LOGIC_VERSION = 4
 
 ZIP_FILENAMES = ("resultado.zip", "download.zip")
 
@@ -150,14 +151,46 @@ def _is_shared_output_root(job: Job, folder: Path) -> bool:
         return False
 
 
-def _files_modified_since(folder: Path, since: float, *, margin: float = 3.0) -> list[Path]:
-    cutoff = since - margin
+def _is_service_output_folder(job: Job, folder: Path) -> bool:
+    svc = _service_output_folder(job)
+    if not svc:
+        return False
+    try:
+        return folder.resolve() == svc.resolve()
+    except OSError:
+        return False
+
+
+def _needs_job_time_filter(job: Job, folder: Path) -> bool:
+    if not job.started_at:
+        return False
+    if _is_shared_output_root(job, folder):
+        return True
+    return _is_service_output_folder(job, folder)
+
+
+def _job_specific_pasta(job: Job) -> Path | None:
+    raw = (job.result or {}).get("pasta")
+    if not raw:
+        return None
+    p = Path(str(raw))
+    if p.is_dir():
+        return p.resolve()
+    if p.is_file():
+        return p.parent.resolve()
+    return None
+
+
+def _files_modified_in_job_window(job: Job, folder: Path, *, margin: float = 5.0) -> list[Path]:
+    start = (job.started_at or 0) - margin
+    end = (job.finished_at or time.time()) + margin
     found: list[Path] = []
     for f in folder.rglob("*"):
         if not f.is_file():
             continue
         try:
-            if f.stat().st_mtime >= cutoff:
+            mtime = f.stat().st_mtime
+            if start <= mtime <= end:
                 found.append(f)
         except OSError:
             continue
@@ -173,16 +206,13 @@ def _arcname_for(base: Path, file_path: Path) -> str:
 
 
 def _iter_folder_files(job: Job, folder: Path) -> list[Path]:
-    if _is_shared_output_root(job, folder) and job.started_at:
-        files = _files_modified_since(folder, job.started_at)
-        if not files:
-            sub = _service_output_folder(job)
-            if sub and sub.is_dir() and sub != folder.resolve():
-                files = [f for f in sub.rglob("*") if f.is_file()]
-        return [f for f in files if f.is_file() and not _skip_zip_file(f)]
+    if _needs_job_time_filter(job, folder):
+        files = _files_modified_in_job_window(job, folder)
+    else:
+        files = list(folder.rglob("*"))
     return [
         f
-        for f in folder.rglob("*")
+        for f in files
         if f.is_file() and not _skip_zip_file(f)
     ]
 
@@ -300,6 +330,27 @@ def _zip_tree(dest: Path, folder: Path, arc_prefix: str) -> int:
     return n
 
 
+def _path_in_job_scope(job: Job, path: Path) -> bool:
+    run = (job.config or {}).get("_job_run_dir")
+    if run:
+        try:
+            path.resolve().relative_to(Path(str(run)).resolve())
+            return True
+        except ValueError:
+            return False
+    specific = _job_specific_pasta(job)
+    if specific:
+        try:
+            path.resolve().relative_to(specific)
+            return True
+        except ValueError:
+            try:
+                return path.resolve() == specific.resolve()
+            except OSError:
+                return False
+    return True
+
+
 def _collect_explicit_artifacts(job: Job) -> tuple[list[Path], list[Path]]:
     files: list[Path] = []
     dirs: list[Path] = []
@@ -309,42 +360,53 @@ def _collect_explicit_artifacts(job: Job) -> tuple[list[Path], list[Path]]:
         if not raw:
             continue
         p = Path(str(raw))
-        if p.is_file():
+        if p.is_file() and _path_in_job_scope(job, p):
             files.append(p.resolve())
     for key in _DIR_KEYS:
         raw = result.get(key)
         if not raw:
             continue
         p = Path(str(raw))
-        if p.is_dir():
+        if p.is_dir() and _path_in_job_scope(job, p):
             dirs.append(p.resolve())
     return files, dirs
 
 
 def _folder_candidates(job: Job) -> list[Path]:
+    """Pastas incluídas no ZIP — nunca mistura execuções diferentes."""
     out: list[Path] = []
     seen: set[str] = set()
+
+    def add_dir(p: Path) -> None:
+        if not p.is_dir():
+            return
+        try:
+            key = str(p.resolve())
+        except OSError:
+            return
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(p)
+
+    job_out = job.dir / "output"
+    if job_out.is_dir() and any(job_out.iterdir()):
+        add_dir(job_out)
+
+    specific = _job_specific_pasta(job)
+    if specific:
+        add_dir(specific)
+        return out
+
     for key in ("pasta", "pasta_saida", "pasta_base"):
         raw = (job.result or {}).get(key) or (job.config or {}).get(key)
         if not raw:
             continue
         p = Path(str(raw))
         if p.is_dir():
-            resolved = str(p.resolve())
+            add_dir(p)
         elif p.is_file():
-            resolved = str(p.parent.resolve())
-        else:
-            continue
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        out.append(Path(resolved))
-    job_out = job.dir / "output"
-    if job_out.is_dir() and any(job_out.iterdir()):
-        resolved = str(job_out.resolve())
-        if resolved not in seen:
-            seen.add(resolved)
-            out.append(job_out)
+            add_dir(p.parent)
     return out
 
 

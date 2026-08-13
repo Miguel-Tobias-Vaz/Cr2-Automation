@@ -108,13 +108,6 @@ SERVICES = {
         "pagina": "/licitacoes.html",
         "icone": "04",
     },
-    "tcm_licitacoes": {
-        "id": "tcm_licitacoes",
-        "nome": "Licitações TCM-PA",
-        "descricao": "Mural do TCM-PA: documentos, contratos e planilha Excel por município/órgão.",
-        "pagina": "/tcm-licitacoes.html",
-        "icone": "12",
-    },
     "repasses": {
         "id": "repasses",
         "nome": "Repasses",
@@ -200,7 +193,6 @@ SERVICE_LABELS = {
     "categorias": "Categorias",
     "normas": "Extração Pro",
     "licitacoes": "Licitações",
-    "tcm_licitacoes": "Licitações TCM-PA",
     "repasses": "Extração Repasses",
     "contratos": "Contratos",
     "publicacao": "Publicação",
@@ -899,11 +891,6 @@ def page_normas():
 @app.get("/licitacoes.html")
 def page_licitacoes():
     return _page("licitacoes.html")
-
-
-@app.get("/tcm-licitacoes.html")
-def page_tcm_licitacoes():
-    return _page("tcm-licitacoes.html")
 
 
 @app.get("/repasses.html")
