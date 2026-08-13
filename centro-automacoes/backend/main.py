@@ -760,6 +760,8 @@ def create_job(body: JobCreate, user=Depends(require_user)):
         job = jobs.enqueue(body.service_id, config, dispatch, owner=owner)
     except QueueFullError as exc:
         raise HTTPException(503, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     meta = jobs.queue_meta(job)
     audit_log.log(
         "job.create",

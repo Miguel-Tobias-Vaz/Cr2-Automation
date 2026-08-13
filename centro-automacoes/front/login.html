@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Login ó Opto AutomaÁıes</title>
+    <title>Login ‚Äî Opto Automa√ß√µes</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="stylesheet" href="/assets/styles.css?v=home70" />
   </head>
@@ -11,11 +11,11 @@
     <div class="noise" aria-hidden="true"></div>
     <main class="login-card">
       <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="48" height="48" />
-      <h1>Opto AutomaÁıes</h1>
+      <h1>Opto Automa√ß√µes</h1>
       <p class="login-lede" id="login-lede">Entre para usar o painel.</p>
       <form id="login-form" class="login-form">
         <label id="login-user-label">
-          <span id="login-user-caption">Usu·rio</span>
+          <span id="login-user-caption">Usu√°rio</span>
           <input type="text" id="login-user" autocomplete="username" required />
         </label>
         <label>
@@ -91,10 +91,10 @@
               );
             }
           } else if (authMode === "local") {
-            lede.textContent = "Entre com usu·rio e senha.";
-            hint.textContent = "Usu·rios definidos em OPTO_USERS (opto.env).";
+            lede.textContent = "Entre com usu√°rio e senha.";
+            hint.textContent = "Usu√°rios definidos em OPTO_USERS (opto.env).";
           } else {
-            hint.textContent = "Login n„o configurado ó o painel funciona sem autenticaÁ„o.";
+            hint.textContent = "Login n√£o configurado ‚Äî o painel funciona sem autentica√ß√£o.";
           }
         }
 
@@ -111,13 +111,13 @@
         }
 
         async function loginSupabase(email, password) {
-          if (!supabaseClient) throw new Error("Supabase n„o configurado.");
+          if (!supabaseClient) throw new Error("Supabase n√£o configurado.");
           const { data, error } = await supabaseClient.auth.signInWithPassword({
             email,
             password,
           });
           if (error) throw new Error(error.message || "Falha no login");
-          if (!data.session?.access_token) throw new Error("Sess„o inv·lida");
+          if (!data.session?.access_token) throw new Error("Sess√£o inv√°lida");
           saveSessionTokens(data.session);
           location.href = next;
         }
@@ -133,7 +133,7 @@
             throw new Error(
               (typeof data.detail === "string" && data.detail) ||
                 data.detail ||
-                "Usu·rio ou senha inv·lidos"
+                "Usu√°rio ou senha inv√°lidos"
             );
           }
           if (window.OptoAutomacoes && OptoAutomacoes.setAuthToken) {

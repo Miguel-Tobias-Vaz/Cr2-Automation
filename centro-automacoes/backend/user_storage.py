@@ -204,21 +204,81 @@ JOB_SCOPED_OUTPUT_SERVICES = frozenset(
     }
 )
 JOB_OUTPUT_PASTA_KEYS = ("pasta_saida", "pasta_base")
+_OUTPUT_FOLDER_FORBIDDEN = re.compile(r'[\\/:*?"<>|]')
+_OUTPUT_FOLDER_MAX_LEN = 64
+
+
+def sanitize_output_folder_name(raw: str | None) -> str | None:
+    """Nome legível da pasta de saída (ex.: CMBelém, CM BelBranco)."""
+    if raw is None:
+        return None
+    name = str(raw).strip()
+    if not name:
+        return None
+    if ".." in name or "/" in name or "\\" in name:
+        raise ValueError("Nome da pasta inválido — use apenas letras, números e espaços.")
+    name = _OUTPUT_FOLDER_FORBIDDEN.sub("_", name)
+    name = re.sub(r"\s+", " ", name).strip(" .")
+    if not name:
+        raise ValueError("Informe um nome para a pasta de saída.")
+    if len(name) > _OUTPUT_FOLDER_MAX_LEN:
+        name = name[:_OUTPUT_FOLDER_MAX_LEN].rstrip(" .")
+    return name or None
+
+
+def resolve_output_folder_label(config: dict[str, Any] | None, job_id: str) -> str:
+    cfg = config or {}
+    custom = sanitize_output_folder_name(cfg.get("nome_pasta"))
+    if custom:
+        return custom
+    return job_id
+
+
+def _apply_job_run_path(job, run_path: str) -> str:
+    job.config["_job_run_dir"] = run_path
+    for key in JOB_OUTPUT_PASTA_KEYS:
+        if key in job.config or job.service_id in JOB_SCOPED_OUTPUT_SERVICES:
+            job.config[key] = run_path
+    label = job.config.get("nome_pasta")
+    if label:
+        job.config["nome_pasta"] = str(label).strip()
+    return run_path
 
 
 def assign_job_output_dir(job, *, owner: str | None, service_id: str | None) -> str | None:
-    """Isola a saída de cada job na VPS (todos os serviços de extração)."""
-    if is_local_mode() or not owner or not service_id:
+    """Isola a saída de cada job — VPS: output/{serviço}/{nome}; local: subpasta opcional."""
+    if not service_id or service_id not in JOB_SCOPED_OUTPUT_SERVICES:
         return None
-    if service_id not in JOB_SCOPED_OUTPUT_SERVICES:
+    raw_name = (job.config or {}).get("nome_pasta")
+    if not is_local_mode() and not (raw_name and str(raw_name).strip()):
+        raise ValueError("Informe o nome da pasta (ex.: CMBelém).")
+    label = resolve_output_folder_label(job.config, job.id)
+    if raw_name and str(raw_name).strip():
+        job.config["nome_pasta"] = label
+    elif "nome_pasta" in job.config:
+        job.config.pop("nome_pasta", None)
+
+    if is_local_mode():
+        if label == job.id:
+            return None
+        base_raw = None
+        for key in JOB_OUTPUT_PASTA_KEYS:
+            val = (job.config or {}).get(key)
+            if val and str(val).strip() and not _is_blank_or_win_default(val):
+                base_raw = str(val).strip()
+                break
+        if not base_raw:
+            return None
+        run_dir = Path(base_raw).resolve() / label
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return _apply_job_run_path(job, str(run_dir))
+
+    if not owner:
         return None
-    run_dir = user_output_dir(owner, service_id) / job.id
+    run_dir = user_output_dir(owner, service_id) / label
     run_dir.mkdir(parents=True, exist_ok=True)
     run_path = str(run_dir.resolve())
-    job.config["_job_run_dir"] = run_path
-    for key in JOB_OUTPUT_PASTA_KEYS:
-        job.config[key] = run_path
-    return run_path
+    return _apply_job_run_path(job, run_path)
 
 
 def apply_user_defaults(

@@ -1470,6 +1470,15 @@ import { injectFooter } from "./modules/nav.js";
     "pasta_saida",
   ]);
 
+  const JOB_SCOPED_SERVICES = new Set([
+    "documentos",
+    "categorias",
+    "normas",
+    "licitacoes",
+    "repasses",
+    "contratos",
+  ]);
+
   const _SKIP_WORKSPACE_FILL = new Set([
     "pasta_rgf",
     "pasta_rreo",
@@ -1503,6 +1512,48 @@ import { injectFooter } from "./modules/nav.js";
     return hint;
   }
 
+  function ensureNomePastaField(form) {
+    if (!form || el("nome_pasta")) return el("nome_pasta");
+    const anchor =
+      form.querySelector("#pasta_saida, #pasta_base") ||
+      form.querySelector("fieldset .field");
+    if (!anchor) return null;
+    const wrap = anchor.closest(".field") || anchor;
+    const label = document.createElement("label");
+    label.className = "field field--nome-pasta";
+    label.id = "wrap-nome-pasta";
+    label.innerHTML =
+      '<span class="field-label"><em>Nome da pasta</em></span>' +
+      '<input type="text" id="nome_pasta" placeholder="Ex.: CMBelém, CM BelBranco" autocomplete="off" />' +
+      '<span class="field-hint" id="hint-nome-pasta"></span>';
+    wrap.insertAdjacentElement("afterend", label);
+    return el("nome_pasta");
+  }
+
+  function _refreshNomePastaUi(ws) {
+    const input = el("nome_pasta");
+    const wrap = el("wrap-nome-pasta");
+    const hint = el("hint-nome-pasta");
+    if (!input || !wrap) return;
+    if (!ws || ws.local_mode) {
+      wrap.hidden = false;
+      input.placeholder = "Ex.: CMBelém (opcional — subpasta dentro da pasta base)";
+      if (hint) {
+        hint.textContent =
+          "Opcional no PC: cria uma subpasta com esse nome dentro da pasta base.";
+      }
+      return;
+    }
+    wrap.hidden = false;
+    input.placeholder = "Ex.: CMBelém, CM BelBranco";
+    if (hint) {
+      hint.textContent =
+        "Obrigatório na VPS — cada execução grava em output/{ferramenta}/{nome}/. " +
+        "Use nomes diferentes para não misturar.";
+    }
+    input.required = true;
+  }
+
   async function loadWorkspace(fieldIds) {
     try {
       const r = await authFetch(`${API}/api/workspace`);
@@ -1519,11 +1570,12 @@ import { injectFooter } from "./modules/nav.js";
           const node = el(id);
           if (node) _setPathFieldVisible(node, true);
         });
+        _refreshNomePastaUi(ws);
         return ws;
       }
 
       const serverHint =
-        "Os arquivos ficam na sua pasta no servidor (por usuário). Ao terminar, baixe o ZIP no seu PC.";
+        "Escolha um nome para a pasta (ex.: CMBelém). Ao terminar, baixe o ZIP no seu PC.";
 
       ids.forEach((id) => {
         const node = el(id);
@@ -1532,6 +1584,8 @@ import { injectFooter } from "./modules/nav.js";
         if (!node.placeholder) node.placeholder = ws.output_dir;
         if (_PATH_FIELD_IDS.has(id)) _setPathFieldVisible(node, false);
       });
+
+      _refreshNomePastaUi(ws);
 
       const anchor = ids.map((id) => el(id)).find(Boolean);
       const hint = el("workspace-hint") || _ensureWorkspaceHint(anchor);
@@ -2402,11 +2456,24 @@ import { injectFooter } from "./modules/nav.js";
   async function startJob(serviceId, config) {
     const btn = el("btn-run");
     if (btn) btn.disabled = true;
+    const payload = { ...(config || {}) };
+    const nomeNode = el("nome_pasta");
+    if (nomeNode) payload.nome_pasta = nomeNode.value.trim();
+    if (
+      JOB_SCOPED_SERVICES.has(serviceId) &&
+      workspaceCache &&
+      !workspaceCache.local_mode &&
+      !payload.nome_pasta
+    ) {
+      if (btn) btn.disabled = false;
+      showNotice("Informe o nome da pasta (ex.: CMBelém).", "error");
+      return;
+    }
     try {
       const r = await authFetch(`${API}/api/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service_id: serviceId, config }),
+        body: JSON.stringify({ service_id: serviceId, config: payload }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -2440,6 +2507,10 @@ import { injectFooter } from "./modules/nav.js";
     ensureCancelButton();
     ensureDownloadButton();
     ensureLogToolbar();
+    if (JOB_SCOPED_SERVICES.has(serviceId)) {
+      ensureNomePastaField(form);
+      if (!fieldIds.includes("nome_pasta")) fieldIds = fieldIds.concat(["nome_pasta"]);
+    }
     loadForm(serviceId, fieldIds);
     loadWorkspace(fieldIds.filter((f) => f.startsWith("pasta")))
       .then(() => initJobDownloadButton())

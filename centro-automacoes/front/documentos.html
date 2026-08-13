@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Baixar Documentos — Opto Automações</title>
+    <title>Baixar Documentos â€” Opto AutomaÃ§Ãµes</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,10 +21,10 @@
     <header class="top">
       <a class="brand-mark" href="/">
         <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
-        <span>Opto Automações</span>
+        <span>Opto AutomaÃ§Ãµes</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">Servidor …</span>
+      <span class="api-pill" id="api-pill">Servidor â€¦</span>
     </header>
 
     <main class="page-shell">
@@ -36,18 +36,18 @@
           <header class="hero-copy">
             <h1>Baixar Documentos</h1>
             <p class="lede">
-              Baixa PDFs (e anexos em /uploads/) de páginas de transparência.
-              Organiza em pastas por tipo e ano. Nenhum arquivo perdido — nomes
-              únicos por URL.
+              Baixa PDFs (e anexos em /uploads/) de pÃ¡ginas de transparÃªncia.
+              Organiza em pastas por tipo e ano. Nenhum arquivo perdido â€” nomes
+              Ãºnicos por URL.
             </p>
           </header>
           <article class="stream is-in">
             <span class="stream-index">01</span>
-            <h3>O que você precisa</h3>
+            <h3>O que vocÃª precisa</h3>
             <ul>
-              <li>URLs das páginas (uma por linha)</li>
+              <li>URLs das pÃ¡ginas (uma por linha)</li>
               <li>Pasta de destino no Windows</li>
-              <li>Tipo opcional (senão usa o título h1)</li>
+              <li>Tipo opcional (senÃ£o usa o tÃ­tulo h1)</li>
             </ul>
           </article>
         </div>
@@ -56,11 +56,11 @@
       <section class="painel" id="painel">
         <header class="section-head">
           <h2>Configurar e executar</h2>
-          <p>Os PDFs vão para <code>PASTA_BASE\Tipo\Ano\</code></p>
+          <p>Os PDFs vÃ£o para <code>PASTA_BASE\Tipo\Ano\</code></p>
         </header>
         <form class="painel-form" id="form-documentos">
           <fieldset class="bloco">
-            <legend>Parâmetros</legend>
+            <legend>ParÃ¢metros</legend>
             <div class="grid-2">
               <label class="field">
                 <span class="field-label"><em>Pasta base</em></span>
@@ -68,18 +68,18 @@
               </label>
               <label class="field">
                 <span class="field-label"><em>Tipo (opcional)</em></span>
-                <input type="text" id="tipo_documento" placeholder="Vazio = título da página" />
+                <input type="text" id="tipo_documento" placeholder="Vazio = tÃ­tulo da pÃ¡gina" />
               </label>
             </div>
             <label class="field">
               <span class="field-label"><em>Anos a baixar</em></span>
-              <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
+              <input type="text" id="anos" placeholder="Ex.: 2023  Â·  2023,2024  Â·  vazio = todos" />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
-                Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
+                Um ano (<code>2023</code>), vÃ¡rios (<code>2022,2023,2024</code>) ou vazio para todos.
               </small>
             </label>
             <label class="field">
-              <span class="field-label"><em>URLs das páginas *</em></span>
+              <span class="field-label"><em>URLs das pÃ¡ginas *</em></span>
               <textarea id="urls" rows="8" placeholder="https://site.gov.br/portal/folha-de-pagamento/&#10;https://site.gov.br/portal/rgf/"></textarea>
             </label>
           </fieldset>
@@ -100,9 +100,9 @@
               <span class="btn-download-text">Baixar ZIP</span>
             </button>
           </div>
-          <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
+          <p>SituaÃ§Ã£o: <strong id="log-state">Parado</strong> Â· Processo: <span id="job-status">â€”</span></p>
         </header>
-        <div class="log-console" id="log-console"><p class="log-empty">Aguardando execução…</p></div>
+        <div class="log-console" id="log-console"><p class="log-empty">Aguardando execuÃ§Ã£oâ€¦</p></div>
       </section>
     </main>
 

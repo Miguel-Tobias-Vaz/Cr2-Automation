@@ -310,6 +310,21 @@ class JobManager:
             return None
         return max(running, key=lambda j: j.started_at or j.created_at)
 
+    def _job_output_dir_conflict(self, run_path: str, *, exclude_id: str) -> Job | None:
+        target = str(run_path or "").strip()
+        if not target:
+            return None
+        with self._lock:
+            for job in self._jobs.values():
+                if job.id == exclude_id:
+                    continue
+                if job.status not in (JobStatus.PENDING, JobStatus.RUNNING):
+                    continue
+                other = str((job.config or {}).get("_job_run_dir") or "").strip()
+                if other and other == target:
+                    return job
+        return None
+
     def running_jobs(self) -> list[Job]:
         with self._lock:
             items = [j for j in self._jobs.values() if j.status == JobStatus.RUNNING]
@@ -368,9 +383,27 @@ class JobManager:
         job.owner = owner
         from backend.user_storage import assign_job_output_dir
 
-        run_dir = assign_job_output_dir(job, owner=owner, service_id=service_id)
+        try:
+            run_dir = assign_job_output_dir(job, owner=owner, service_id=service_id)
+        except ValueError:
+            with self._lock:
+                self._jobs.pop(job.id, None)
+            raise
         if run_dir:
-            job.emit("info", "Pasta deste job: {0}".format(run_dir))
+            conflict = self._job_output_dir_conflict(run_dir, exclude_id=job.id)
+            if conflict:
+                with self._lock:
+                    self._jobs.pop(job.id, None)
+                nome = (job.config or {}).get("nome_pasta") or run_dir
+                raise ValueError(
+                    'Já existe um job na fila usando a pasta "{0}". '
+                    "Aguarde terminar ou escolha outro nome.".format(nome)
+                )
+            label = (job.config or {}).get("nome_pasta")
+            if label and label != job.id:
+                job.emit("info", "Pasta deste job: {0}".format(label))
+            else:
+                job.emit("info", "Pasta deste job: {0}".format(run_dir))
         with self._lock:
             job.queue_rank = self._next_queue_rank_locked()
         self.save_config(job)

@@ -408,15 +408,35 @@ def test_build_download_zip_licitacoes_muitas_pastas(users_root, tmp_path):
 
 def test_assign_job_output_dir_per_job(users_root):
     from backend.jobs import Job
-    from backend.user_storage import assign_job_output_dir, is_local_mode
+    from backend.user_storage import assign_job_output_dir
 
-    job = Job(id="abc123", service_id="licitacoes", config={"pasta_saida": "x"})
+    job = Job(id="abc123", service_id="licitacoes", config={"nome_pasta": "CMBelém"})
     path = assign_job_output_dir(job, owner="ana", service_id="licitacoes")
     assert path
     assert job.config["pasta_saida"] == path
     assert job.config["pasta_base"] == path
-    assert path.endswith("abc123") or "abc123" in path
+    assert path.endswith("CMBelém") or "CMBelém" in path
     assert Path(path).is_dir()
+
+
+def test_assign_job_output_dir_fallback_job_id(users_root):
+    from backend.jobs import Job
+    from backend.user_storage import assign_job_output_dir
+
+    job = Job(id="abc123", service_id="licitacoes", config={})
+    with pytest.raises(ValueError, match="nome da pasta"):
+        assign_job_output_dir(job, owner="ana", service_id="licitacoes")
+
+
+def test_sanitize_output_folder_name():
+    from backend.user_storage import sanitize_output_folder_name
+
+    assert sanitize_output_folder_name("CM BelBranco") == "CM BelBranco"
+    assert sanitize_output_folder_name("  CMBelém  ") == "CMBelém"
+    with pytest.raises(ValueError):
+        sanitize_output_folder_name("pasta/sub")
+    assert sanitize_output_folder_name("") is None
+    assert sanitize_output_folder_name("   ") is None
 
 
 def test_assign_job_output_dir_skips_local(users_root, monkeypatch):

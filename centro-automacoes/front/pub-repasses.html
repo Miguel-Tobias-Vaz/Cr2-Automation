@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Publicação Repasses — Opto Automações</title>
+    <title>PublicaÃ§Ã£o Repasses â€” Opto AutomaÃ§Ãµes</title>
     <link rel="icon" type="image/png" href="/assets/brand-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,10 +21,10 @@
     <header class="top">
       <a class="brand-mark" href="/">
         <img class="brand-icon" src="/assets/brand-icon.png" alt="" width="28" height="28" />
-        <span>Opto Automações</span>
+        <span>Opto AutomaÃ§Ãµes</span>
       </a>
       <nav class="nav" id="site-nav"></nav>
-      <span class="api-pill" id="api-pill">Servidor …</span>
+      <span class="api-pill" id="api-pill">Servidor â€¦</span>
     </header>
 
     <main class="page-shell">
@@ -32,20 +32,20 @@
         <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
         <div class="hero-main">
           <header class="hero-copy">
-            <h1>Publicação de Repasses</h1>
+            <h1>PublicaÃ§Ã£o de Repasses</h1>
             <p class="lede">
-              Mesmo ritmo da Sessão: <em>Criar Publicação</em> ? modal
-              <em>Cadastrar Repasse</em> (Mês/Ano, Data, valores, descrição, arquivo) ? Publicar.
-              Usa a planilha <code>Repasses.xlsx</code> gerada na Extração.
+              Mesmo ritmo da SessÃ£o: <em>Criar PublicaÃ§Ã£o</em> ? modal
+              <em>Cadastrar Repasse</em> (MÃªs/Ano, Data, valores, descriÃ§Ã£o, arquivo) ? Publicar.
+              Usa a planilha <code>Repasses.xlsx</code> gerada na ExtraÃ§Ã£o.
             </p>
           </header>
           <article class="stream is-in">
             <span class="stream-index">01</span>
             <h3>Campos do portal</h3>
             <ul>
-              <li>Mês e Ano · Data (último dia do mês)</li>
+              <li>MÃªs e Ano Â· Data (Ãºltimo dia do mÃªs)</li>
               <li>Valor previsto / realizado</li>
-              <li>Descrição · Arquivo (PDF) · Link opcional</li>
+              <li>DescriÃ§Ã£o Â· Arquivo (PDF) Â· Link opcional</li>
             </ul>
           </article>
         </div>
@@ -58,7 +58,7 @@
             <legend>Portal CR2</legend>
             <div class="grid-2">
               <label class="field">
-                <span class="field-label"><em>Usuário *</em></span>
+                <span class="field-label"><em>UsuÃ¡rio *</em></span>
                 <input type="email" id="usuario" autocomplete="username" required />
               </label>
               <label class="field">
@@ -78,7 +78,7 @@
           </fieldset>
 
           <fieldset class="bloco">
-            <legend>Pasta da extração *</legend>
+            <legend>Pasta da extraÃ§Ã£o *</legend>
             <p class="field-hint workspace-hint" id="workspace-hint" hidden></p>
             <div class="upload-zone" id="upload-pasta">
               <input type="file" id="file-pasta" hidden />
@@ -91,16 +91,16 @@
               <span class="field-label"><em>Pasta base</em></span>
               <input type="text" id="pasta_base" value="" placeholder="Preenchida automaticamente" required />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
-                Caminho no servidor onde estão os arquivos da extração.
+                Caminho no servidor onde estÃ£o os arquivos da extraÃ§Ã£o.
               </small>
             </label>
           </fieldset>
 
           <fieldset class="bloco">
-            <legend>Opções</legend>
+            <legend>OpÃ§Ãµes</legend>
             <label class="check-row"><input type="checkbox" id="modo_teste" checked /> Modo teste (1 repasse)</label>
             <label class="check-row"><input type="checkbox" id="auto_confirm" checked /> Confirmar login automaticamente</label>
-            <label class="check-row"><input type="checkbox" id="headless" /> Navegador invisível</label>
+            <label class="check-row"><input type="checkbox" id="headless" /> Navegador invisÃ­vel</label>
           </fieldset>
 
           <div class="acao-row">
@@ -114,7 +114,7 @@
       <section class="log-wrap" id="log">
         <header class="section-head">
           <h2>Log</h2>
-          <p>Situação: <strong id="log-state">Parado</strong> · Processo: <span id="job-status">—</span></p>
+          <p>SituaÃ§Ã£o: <strong id="log-state">Parado</strong> Â· Processo: <span id="job-status">â€”</span></p>
         </header>
         <div class="log-console" id="log-console"></div>
       </section>
