@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home70" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home72" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -72,28 +72,25 @@
               <span class="field-label"><em>Pasta de saída</em></span>
               <input type="text" id="pasta_saida" value="C:\Downloads\Licitacoes" />
             </label>
+            <label class="field field--nome-pasta" id="wrap-nome-pasta">
+              <span class="field-label"><em>Nome da pasta *</em></span>
+              <input
+                type="text"
+                id="nome_pasta"
+                placeholder="Ex.: CMBelém, CM BelBranco"
+                autocomplete="off"
+                required
+              />
+              <span class="field-hint" id="hint-nome-pasta">
+                No servidor, os arquivos ficam em output/licitações/{nome}/. Use um nome diferente para cada município.
+              </span>
+            </label>
             <label class="field">
               <span class="field-label"><em>Anos a extrair</em></span>
               <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
                 Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
                         O filtro vale antes da baixa — só processa licitações desses anos.
-              </small>
-            </label>
-            <label class="field">
-              <span class="field-label"><em>Planilha modelo (opcional)</em></span>
-              <input type="text" id="planilha_modelo" placeholder="C:\caminho\Front.xlsx" />
-            </label>
-            <label class="field">
-              <span class="field-label"><em>Link base das pastas (opcional)</em></span>
-              <input
-                type="url"
-                id="link_pasta_base"
-                placeholder="https://drive.google.com/... ou SharePoint"
-              />
-              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
-                Se preenchido, a coluna <code>LinkDaPasta</code> usa
-                <code>{base}/{nome_da_pasta}</code>. Vazio = caminho local absoluto.
               </small>
             </label>
           </fieldset>
@@ -193,10 +190,10 @@
       </section>
     </main>
 
-        <script src="/assets/fluid-particles.js?v=home70"></script>
-    <script type="module" src="/assets/shared.js?v=home70"></script>
+        <script src="/assets/fluid-particles.js?v=home72"></script>
+    <script type="module" src="/assets/shared.js?v=home72"></script>
     <script type="module">
-import { whenReady } from "/assets/modules/core.js?v=home70";
+import { whenReady } from "/assets/modules/core.js?v=home72";
 whenReady(() => {
         const C = window.OptoAutomacoes;
         C.injectNav("licitacoes");
@@ -206,9 +203,8 @@ whenReady(() => {
       const extraFields = [
         "listagem",
         "pasta_saida",
+        "nome_pasta",
         "anos",
-        "planilha_modelo",
-        "link_pasta_base",
         "ocr",
         "incluir_subcategorias",
         "so_html",
@@ -258,9 +254,8 @@ whenReady(() => {
         return {
           listagem: document.getElementById("listagem").value.trim(),
           pasta_saida: document.getElementById("pasta_saida").value.trim(),
+          nome_pasta: document.getElementById("nome_pasta").value.trim(),
           anos: document.getElementById("anos").value.trim(),
-          planilha_modelo: document.getElementById("planilha_modelo").value.trim(),
-          link_pasta_base: document.getElementById("link_pasta_base").value.trim(),
           modo,
           ocr: document.getElementById("ocr").checked,
           incluir_subcategorias: document.getElementById("incluir_subcategorias").checked,

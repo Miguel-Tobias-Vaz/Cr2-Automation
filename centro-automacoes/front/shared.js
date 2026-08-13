@@ -228,7 +228,7 @@ import { injectFooter } from "./modules/nav.js";
     document.body.classList.add("has-subnav");
     const back = `<a class="hub-subnav-back" href="${hub.href}">← ${hub.label}</a>`;
     const links = hub.tools
-      .filter((tid) => !TOOLS_OCULTOS.has(tid))
+      .filter((tid) => !TOOLS_OCULTOS.has(tid) && tid !== "tcm_licitacoes")
       .map((tid) => {
         const t = TOOLS[tid];
         if (!t) return "";
@@ -374,7 +374,7 @@ import { injectFooter } from "./modules/nav.js";
     renderHubCards(
       "hub-grid",
       hub.tools
-        .filter((tid) => !TOOLS_OCULTOS.has(tid))
+        .filter((tid) => !TOOLS_OCULTOS.has(tid) && tid !== "tcm_licitacoes")
         .map((tid) => TOOLS[tid])
         .filter(Boolean)
     );
@@ -1538,6 +1538,7 @@ import { injectFooter } from "./modules/nav.js";
     if (!ws || ws.local_mode) {
       wrap.hidden = false;
       input.placeholder = "Ex.: CMBelém (opcional — subpasta dentro da pasta base)";
+      input.required = false;
       if (hint) {
         hint.textContent =
           "Opcional no PC: cria uma subpasta com esse nome dentro da pasta base.";
@@ -1546,12 +1547,12 @@ import { injectFooter } from "./modules/nav.js";
     }
     wrap.hidden = false;
     input.placeholder = "Ex.: CMBelém, CM BelBranco";
+    input.required = true;
     if (hint) {
       hint.textContent =
         "Obrigatório na VPS — cada execução grava em output/{ferramenta}/{nome}/. " +
         "Use nomes diferentes para não misturar.";
     }
-    input.required = true;
   }
 
   async function loadWorkspace(fieldIds) {
@@ -1593,6 +1594,7 @@ import { injectFooter } from "./modules/nav.js";
         hint.textContent = serverHint;
         hint.hidden = false;
       }
+      _refreshNomePastaUi(ws);
       return ws;
     } catch (_) {
       return null;

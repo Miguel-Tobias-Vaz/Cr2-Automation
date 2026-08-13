@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home70" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home72" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -71,6 +71,11 @@
                 <input type="text" id="tipo_documento" placeholder="Vazio = título da página" />
               </label>
             </div>
+            <label class="field field--nome-pasta" id="wrap-nome-pasta">
+              <span class="field-label"><em>Nome da pasta *</em></span>
+              <input type="text" id="nome_pasta" placeholder="Ex.: CMBelém, CM BelBranco" autocomplete="off" required />
+              <span class="field-hint" id="hint-nome-pasta"></span>
+            </label>
             <label class="field">
               <span class="field-label"><em>Anos a baixar</em></span>
               <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
@@ -106,10 +111,10 @@
       </section>
     </main>
 
-        <script src="/assets/fluid-particles.js?v=home70"></script>
-    <script type="module" src="/assets/shared.js?v=home70"></script>
+        <script src="/assets/fluid-particles.js?v=home72"></script>
+    <script type="module" src="/assets/shared.js?v=home72"></script>
     <script type="module">
-import { whenReady } from "/assets/modules/core.js?v=home70";
+import { whenReady } from "/assets/modules/core.js?v=home72";
 whenReady(() => {
         const C = window.OptoAutomacoes;
         C.injectNav("documentos");
