@@ -61,3 +61,53 @@ def test_organizar_destino_sessao_respeita_link():
     )
     assert org_ok is not None
     assert org_ok["meta"]["doc_tipo"] == "ata"
+
+
+def test_extrair_periodo_legislativo_qualquer_numero():
+    mod = _load_mod()
+    assert mod._extrair_periodo_legislativo("PAUTA 13ª SESSÃO - 4º PERÍODO") == "4º Período"
+    assert mod._extrair_periodo_legislativo("quarto período legislativo") == "4º Período"
+    assert mod._extrair_periodo_legislativo("IV período legislativo") == "4º Período"
+    assert mod._extrair_periodo_legislativo("5º período") == "5º Período"
+
+
+def test_nome_pasta_sessao_separa_periodos():
+    mod = _load_mod()
+    base = {
+        "numero": 13,
+        "tipo": "Ordinária",
+        "evento": "",
+        "data": "03-11-2023",
+        "doc_tipo": "pauta",
+        "doc_nome": "Pauta",
+    }
+    p1 = dict(base, periodo="1º Período")
+    p2 = dict(base, periodo="2º Período")
+    n1 = mod.nome_pasta_sessao(p1)
+    n2 = mod.nome_pasta_sessao(p2)
+    assert n1 != n2
+    assert "1" in n1 and "2" in n2
+
+
+def test_resolver_dir_sessao_nao_mistura_periodos(tmp_path):
+    mod = _load_mod()
+    ano = tmp_path / "2023"
+    ano.mkdir()
+    meta1 = {
+        "numero": 13,
+        "tipo": "Ordinária",
+        "evento": "",
+        "data": "03-11-2023",
+        "periodo": "1º Período",
+        "doc_tipo": "pauta",
+        "doc_nome": "Pauta",
+    }
+    meta2 = dict(meta1, periodo="2º Período")
+    meta4 = dict(meta1, periodo="4º Período")
+    p1 = mod.resolver_dir_sessao(ano, meta1)
+    p2 = mod.resolver_dir_sessao(ano, meta2)
+    p4 = mod.resolver_dir_sessao(ano, meta4)
+    assert p1 != p2 != p4
+    assert mod._periodo_na_pasta(p1.name) == "1º Período"
+    assert mod._periodo_na_pasta(p2.name) == "2º Período"
+    assert mod._periodo_na_pasta(p4.name) == "4º Período"

@@ -1421,15 +1421,23 @@ def baixar_e_salvar(
                     print(
                         "    [SESSAO]   Declarações → {0}".format(meta.get("doc_nome"))
                     )
+                elif org.get("verificar"):
+                    print(
+                        "    [SESSAO]   Período incerto → Verificar/ ({0})".format(
+                            meta.get("doc_nome")
+                        )
+                    )
                 else:
                     rotulo = mod_sess.prefixo_pasta_sessao(
                         meta.get("numero"),
                         meta.get("tipo") or "",
                         meta.get("evento") or "",
                     )
+                    extra = meta.get("periodo") or ""
                     print(
-                        "    [SESSAO]   {0} ({1}) → {2}".format(
+                        "    [SESSAO]   {0}{1} ({2}) → {3}".format(
                             rotulo,
+                            (" · " + extra) if extra else "",
                             meta.get("data") or "s/data",
                             meta.get("doc_nome"),
                         )
@@ -1448,10 +1456,6 @@ def baixar_e_salvar(
                     (texto_pdf or "")[:3500],
                 ],
             )
-
-        criar_pasta(pasta_destino)
-        arquivo = nome_arquivo_final(nome)
-        caminho = os.path.join(pasta_destino, arquivo)
 
         def _propagar_se_mensal(caminho_pdf: str) -> None:
             if not (org and org.get("mensal") and mod_sess):
@@ -1487,7 +1491,15 @@ def baixar_e_salvar(
             ano_fallback=ano_fallback,
         )
 
-        # colisão: mesmo nome/conteúdo → pula; conteúdo diferente → sufixo
+        criar_pasta(pasta_destino)
+        if org and org.get("arquivo"):
+            arquivo = org["arquivo"]
+            nome = org.get("nome_logico") or nome
+        else:
+            arquivo = nome_arquivo_final(nome)
+        caminho = os.path.join(pasta_destino, arquivo)
+
+        # colisão: mesmo conteúdo → pula; diferente → sufixo (2)
         if os.path.exists(caminho):
             if _arquivo_mesmo_conteudo(caminho, data):
                 print(f"    [PULADO]  {arquivo} (já existe)")

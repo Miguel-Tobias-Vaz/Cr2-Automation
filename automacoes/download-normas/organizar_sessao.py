@@ -106,6 +106,7 @@ _RE_COMISSAO = re.compile(
 PASTA_DECLARACOES = "Declarações"
 PASTA_COMISSOES = "Comissões"
 PASTA_MENSAIS = "_Mensais"
+PASTA_VERIFICAR = "Verificar"
 
 # ATA Nº 018 DA SESSÃO ORDINÁRIA, DE 16 DE NOVEMBRO DE 2023
 _RE_DOC_SESSAO = re.compile(
@@ -143,6 +144,50 @@ _DOC_ARQUIVO = {
     "votacoes": "Votações Nominais",
     "certidao": "Certidão",
 }
+
+_TIPOS_UNICO_POR_SESSAO = frozenset({"pauta", "ata", "presenca", "votacoes"})
+
+# Período legislativo: Nº Período (qualquer N), por extenso ou romano.
+_RE_PERIODO_NUM = re.compile(
+    r"(?:\b|\s)(\d{1,2})\s*[º°o]\s*per[ií]odo(?:\s+legislativo)?",
+    re.I,
+)
+_RE_PERIODO_ROMANO = re.compile(
+    r"\b([ivxlcdm]{1,6})\s+per[ií]odo(?:\s+legislativo)?",
+    re.I,
+)
+
+# Chaves já normalizadas (_norm); ordem decrescente de tamanho.
+_ORDINAIS_PERIODO: tuple[tuple[str, int], ...] = (
+    ("decimo terceiro", 13),
+    ("decima terceira", 13),
+    ("decimo segundo", 12),
+    ("decima segunda", 12),
+    ("decimo primeiro", 11),
+    ("decima primeira", 11),
+    ("decimo", 10),
+    ("decima", 10),
+    ("nono", 9),
+    ("nona", 9),
+    ("oitavo", 8),
+    ("oitava", 8),
+    ("setimo", 7),
+    ("setima", 7),
+    ("sexto", 6),
+    ("sexta", 6),
+    ("quinto", 5),
+    ("quinta", 5),
+    ("quarto", 4),
+    ("quarta", 4),
+    ("terceiro", 3),
+    ("terceira", 3),
+    ("segundo", 2),
+    ("segunda", 2),
+    ("primeiro", 1),
+    ("primeira", 1),
+)
+
+_ROMANOS = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
 
 _MESES_NOME = {
     1: "Janeiro",
@@ -342,6 +387,120 @@ def _tipo_documento(texto: str) -> str | None:
     if re.search(r"\bata\b", n):
         return "ata"
     return None
+
+
+def _rotulo_periodo(numero: int) -> str:
+    """Rótulo canônico: 1º Período, 4º Período, etc."""
+    return "{0}º Período".format(numero)
+
+
+def _romano_para_int(s: str) -> int | None:
+    s = (s or "").strip().lower()
+    if not s or not re.fullmatch(r"[ivxlcdm]+", s):
+        return None
+    total = 0
+    prev = 0
+    for ch in reversed(s):
+        val = _ROMANOS.get(ch)
+        if val is None:
+            return None
+        if val < prev:
+            total -= val
+        else:
+            total += val
+            prev = val
+    return total if total > 0 else None
+
+
+def _numero_periodo_de_texto(texto: str) -> int | None:
+    """Extrai o número do período legislativo (1, 2, 3, 4…)."""
+    if not texto:
+        return None
+    bruto = texto
+    n = _norm(texto)
+    m = _RE_PERIODO_NUM.search(bruto) or _RE_PERIODO_NUM.search(n)
+    if m:
+        num = int(m.group(1))
+        return num if num > 0 else None
+    m = _RE_PERIODO_ROMANO.search(bruto) or _RE_PERIODO_ROMANO.search(n)
+    if m:
+        return _romano_para_int(m.group(1))
+    for palavra, num in _ORDINAIS_PERIODO:
+        if re.search(r"\b" + re.escape(palavra) + r"\s+per[ií]odo", n):
+            return num
+    return None
+
+
+def _extrair_periodo_legislativo(*textos: str) -> str | None:
+    """Nº Período quando o PDF/título menciona período legislativo (qualquer N)."""
+    for texto in textos:
+        num = _numero_periodo_de_texto(texto)
+        if num is not None:
+            return _rotulo_periodo(num)
+    return None
+
+
+def _periodo_na_pasta(nome_pasta: str) -> str | None:
+    num = _numero_periodo_de_texto(nome_pasta)
+    if num is not None:
+        return _rotulo_periodo(num)
+    return None
+
+
+def _periodo_compativel(nome_pasta: str, periodo: str | None) -> bool:
+    """
+    Separa sessões do 1º vs 2º período legislativo.
+    Com período no doc → só pasta com o mesmo período.
+    Sem período no doc → só pasta sem período no nome.
+    """
+    na_pasta = _periodo_na_pasta(nome_pasta)
+    if periodo:
+        return na_pasta == periodo
+    return na_pasta is None
+
+
+def _pasta_verificar(pasta_ano: str | Path) -> Path:
+    p = Path(pasta_ano) / PASTA_VERIFICAR
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _destino_arquivo_sessao(
+    pasta: str | Path,
+    meta: dict[str, Any],
+    *,
+    pasta_ano: str | Path | None = None,
+) -> tuple[Path, str]:
+    """
+    Pasta e nome do PDF. Se já há Pauta/Ata e o período não foi lido → Verificar/.
+    Nunca apaga o que já existe.
+    """
+    pasta = Path(pasta)
+    doc_tipo = meta.get("doc_tipo")
+    doc_nome = meta.get("doc_nome") or "Documento"
+    arquivo_canon = "{0}.pdf".format(doc_nome)
+
+    if doc_tipo in _TIPOS_UNICO_POR_SESSAO and (pasta / arquivo_canon).is_file():
+        periodo_doc = meta.get("periodo")
+        periodo_pasta = _periodo_na_pasta(pasta.name)
+        if periodo_doc and periodo_pasta and periodo_doc != periodo_pasta:
+            nova = Path(pasta_ano or pasta.parent) / nome_pasta_sessao(meta)
+            nova.mkdir(parents=True, exist_ok=True)
+            pasta = nova
+        elif not periodo_doc:
+            ver = _pasta_verificar(pasta_ano or pasta.parent)
+            rotulo = prefixo_pasta_sessao(
+                meta.get("numero"),
+                meta.get("tipo") or "Ordinária",
+                meta.get("evento") or "",
+            )
+            desc = rotulo
+            if meta.get("data"):
+                desc = "{0} - {1}".format(desc, meta["data"])
+            desc = "{0} - {1}".format(desc, doc_nome)
+            return ver, nome_arquivo_sessao({"doc_nome": desc}, ver)
+
+    return pasta, nome_arquivo_sessao(meta, pasta)
 
 
 def _pasta_compativel_tipo(nome_pasta: str, tipo: str, evento: str = "") -> bool:
@@ -597,28 +756,35 @@ def parse_sessao(*textos: str) -> dict[str, Any] | None:
         else:
             doc_tipo = "pauta"
 
+    periodo = _extrair_periodo_legislativo(*textos)
+
     return {
         "numero": numero,
         "tipo": tipo_sessao,
         "evento": evento,
         "data": data,
         "ano": ano,
+        "periodo": periodo,
         "doc_tipo": doc_tipo,
         "doc_nome": _DOC_ARQUIVO.get(doc_tipo, "Documento"),
     }
 
 
 def nome_pasta_sessao(meta: dict[str, Any]) -> str:
-    """Ex.: Sessão Especial - Dia dos Pais - 12-08-2023"""
+    """Ex.: 13ª Sessão Ordinária - 1º Período - 03-11-2023"""
     base = prefixo_pasta_sessao(
         meta.get("numero"),
         meta.get("tipo") or "Ordinária",
         meta.get("evento") or "",
     )
+    partes = [base]
+    periodo = (meta.get("periodo") or "").strip()
+    if periodo and _norm(periodo) not in _norm(base):
+        partes.append(periodo)
     data = (meta.get("data") or "").strip()
     if data and data not in base:
-        return "{0} - {1}".format(base, data)
-    return base
+        partes.append(data)
+    return " - ".join(partes)
 
 
 def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
@@ -634,6 +800,7 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
     tipo = meta.get("tipo") or "Ordinária"
     evento = (meta.get("evento") or "").strip()
     data = (meta.get("data") or "").strip()
+    periodo = (meta.get("periodo") or "").strip() or None
 
     try:
         dirs = [p for p in root.iterdir() if p.is_dir()]
@@ -656,6 +823,8 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
                 continue
             data_pasta = "{0}-{1}-{2}".format(m.group(1), m.group(2), m.group(3))
             if data_pasta != data:
+                continue
+            if not _periodo_compativel(p.name, periodo):
                 continue
             if _pasta_compativel_tipo(p.name, tipo, evento):
                 mesmos.append(p)
@@ -681,7 +850,11 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
     if numero is not None:
         prefix = prefixo_pasta_sessao(numero, tipo, "")
         existentes = sorted(
-            p for p in dirs if _eh_pasta_sessao(p) and p.name.startswith(prefix)
+            p
+            for p in dirs
+            if _eh_pasta_sessao(p)
+            and p.name.startswith(prefix)
+            and _periodo_compativel(p.name, periodo)
         )
         if existentes:
             return existentes[0]
@@ -694,10 +867,19 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
     if numero is None:
         prefix = prefixo_pasta_sessao(None, tipo, evento)
         candidatos = [
-            p for p in dirs if _eh_pasta_sessao(p) and p.name.startswith(prefix)
+            p
+            for p in dirs
+            if _eh_pasta_sessao(p)
+            and p.name.startswith(prefix)
+            and _periodo_compativel(p.name, periodo)
         ]
         if data:
-            com_data = [p for p in candidatos if p.name.endswith(data) or data in p.name]
+            com_data = [
+                p
+                for p in candidatos
+                if (p.name.endswith(data) or data in p.name)
+                and _periodo_compativel(p.name, periodo)
+            ]
             if com_data:
                 return sorted(com_data, key=lambda p: p.name)[0]
         elif evento and candidatos:
@@ -707,7 +889,7 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
 
 
 def nome_arquivo_sessao(meta: dict[str, Any], pasta: str | Path) -> str:
-    """Pauta.pdf, Ata.pdf… — evita colisão com sufixo."""
+    """Pauta.pdf, Ata.pdf… — sufixo (2) só se ainda couber na mesma pasta."""
     base = meta.get("doc_nome") or "Documento"
     pasta = Path(pasta)
     candidato = "{0}.pdf".format(base)
@@ -753,13 +935,16 @@ def organizar_destino_sessao(
         ano = meta.get("ano") or ano_fallback or "sem_ano"
         pasta_ano = os.path.join(pasta_base, pasta_hint, str(ano))
         pasta = resolver_dir_sessao(pasta_ano, meta)
-        arquivo = nome_arquivo_sessao(meta, pasta)
-        return {
+        pasta, arquivo = _destino_arquivo_sessao(pasta, meta, pasta_ano=pasta_ano)
+        out = {
             "pasta": str(pasta),
             "arquivo": arquivo,
             "nome_logico": arquivo[:-4] if arquivo.lower().endswith(".pdf") else arquivo,
             "meta": meta,
         }
+        if PASTA_VERIFICAR in Path(pasta).parts:
+            out["verificar"] = True
+        return out
 
     # Reuniões / sessões de comissões → uma pasta só: {ano}/Comissões/
     meta_c = parse_comissao(*textos, ano_fallback=ano_fallback)
