@@ -229,6 +229,32 @@ _RE_DATA_PASTA_SESSAO = re.compile(
     r"-\s*(\d{2})-(\d{2})-(\d{4})\s*$"
 )
 
+
+def _data_na_pasta(nome_pasta: str) -> str | None:
+    """Data DD-MM-YYYY no fim do nome da pasta, se houver."""
+    m = _RE_DATA_PASTA_SESSAO.search(nome_pasta or "")
+    if m:
+        return "{0}-{1}-{2}".format(m.group(1), m.group(2), m.group(3))
+    return None
+
+
+def _pastas_mesma_data(
+    pastas: list[Path],
+    data: str,
+    periodo: str | None,
+) -> list[Path]:
+    """Pastas da mesma sessão (mesma data), respeitando período legislativo."""
+    if not data:
+        return []
+    out: list[Path] = []
+    for p in pastas:
+        if not _periodo_compativel(p.name, periodo):
+            continue
+        dp = _data_na_pasta(p.name)
+        if dp == data or p.name.endswith(data) or data in p.name:
+            out.append(p)
+    return sorted(out, key=lambda p: p.name)
+
 _RE_ANO_NO_TEXTO = re.compile(r"\b(20\d{2})\b")
 
 
@@ -483,11 +509,20 @@ def _destino_arquivo_sessao(
     if doc_tipo in _TIPOS_UNICO_POR_SESSAO and (pasta / arquivo_canon).is_file():
         periodo_doc = meta.get("periodo")
         periodo_pasta = _periodo_na_pasta(pasta.name)
-        if periodo_doc and periodo_pasta and periodo_doc != periodo_pasta:
+        data_doc = (meta.get("data") or "").strip()
+        data_pasta = _data_na_pasta(pasta.name)
+
+        if data_doc and data_pasta and data_doc != data_pasta:
             nova = Path(pasta_ano or pasta.parent) / nome_pasta_sessao(meta)
             nova.mkdir(parents=True, exist_ok=True)
             pasta = nova
-        elif not periodo_doc:
+        elif periodo_doc and periodo_pasta and periodo_doc != periodo_pasta:
+            nova = Path(pasta_ano or pasta.parent) / nome_pasta_sessao(meta)
+            nova.mkdir(parents=True, exist_ok=True)
+            pasta = nova
+        elif not periodo_doc and (
+            not data_doc or not data_pasta or data_doc == data_pasta
+        ):
             ver = _pasta_verificar(pasta_ano or pasta.parent)
             rotulo = prefixo_pasta_sessao(
                 meta.get("numero"),
@@ -499,6 +534,10 @@ def _destino_arquivo_sessao(
                 desc = "{0} - {1}".format(desc, meta["data"])
             desc = "{0} - {1}".format(desc, doc_nome)
             return ver, nome_arquivo_sessao({"doc_nome": desc}, ver)
+        elif data_doc and not data_pasta:
+            nova = Path(pasta_ano or pasta.parent) / nome_pasta_sessao(meta)
+            nova.mkdir(parents=True, exist_ok=True)
+            pasta = nova
 
     return pasta, nome_arquivo_sessao(meta, pasta)
 
@@ -846,7 +885,7 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
                         pass
             return escolhida
 
-    # 2) Mesmo número + tipo
+    # 2) Mesmo número + tipo (+ mesma data quando houver)
     if numero is not None:
         prefix = prefixo_pasta_sessao(numero, tipo, "")
         existentes = sorted(
@@ -856,6 +895,11 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
             and p.name.startswith(prefix)
             and _periodo_compativel(p.name, periodo)
         )
+        if data:
+            mesmos = _pastas_mesma_data(existentes, data, periodo)
+            if mesmos:
+                return mesmos[0]
+            return root / nome_pasta_sessao(meta)
         if existentes:
             return existentes[0]
 

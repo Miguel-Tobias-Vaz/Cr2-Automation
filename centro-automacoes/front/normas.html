@@ -11,44 +11,9 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home72" />
-    <style>
-      .entidade-grid {
-        display: grid;
-        gap: 0.65rem;
-        margin-top: 0.5rem;
-      }
-      .catalogo-ref {
-        margin: 0.75rem 0 0;
-      }
-      .catalogo-ref h4 {
-        margin: 0 0 0.45rem;
-        font-size: 0.78rem;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--mist, #9aa3b2);
-      }
-      .catalogo-chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem;
-      }
-      .catalogo-chips span {
-        font-size: 0.72rem;
-        line-height: 1.3;
-        padding: 0.22rem 0.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 2px;
-        color: rgba(220, 230, 235, 0.75);
-        background: rgba(255, 255, 255, 0.03);
-      }
-      .painel-secao[hidden] {
-        display: none !important;
-      }
-    </style>
+    <link rel="stylesheet" href="/assets/styles.css?v=home73" />
   </head>
-  <body>
+  <body class="page-normas">
     <div class="noise" aria-hidden="true"></div>
     <div class="orb orb-a" aria-hidden="true"></div>
     <div class="orb orb-b" aria-hidden="true"></div>
@@ -62,192 +27,196 @@
       <span class="api-pill" id="api-pill">Servidor …</span>
     </header>
 
-    <main class="page-shell">
-      <section class="hero page-hero">
-        <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
-        <div class="hero-main">
-          <header class="hero-copy">
-            <h1>Extração Pro</h1>
-            <p class="lede">
-              Cole as URLs nos modos abaixo. Pasta e nome saem do título da
-              página. <strong>Diárias</strong> geram planilha;
-              <strong>Pautas/Atas</strong> organizam por sessão
-              (ex. 17ª Sessão Ordinária).
-            </p>
-          </header>
-          <article class="stream is-in">
-            <span class="stream-index">03</span>
-            <h3>Modos</h3>
-            <ul>
-              <li><strong>Categoria</strong> — lista de posts WordPress</li>
-              <li><strong>Hub de anos</strong> — índice com links por ano</li>
-              <li><strong>Página</strong> — PDFs direto na URL</li>
-            </ul>
-          </article>
+    <main class="page-shell page-shell--split">
+      <header class="split-intro">
+        <div class="split-intro-copy">
+          <p class="split-kicker">Extração · Pro</p>
+          <h1>Extração Pro</h1>
+          <p class="lede">
+            Cole as URLs à esquerda e acompanhe o log à direita. Pasta e nome saem
+            do título da página. <strong>Diárias</strong> geram planilha;
+            <strong>Pautas/Atas</strong> organizam por sessão e período
+            (ex. 13ª Ordinária · 1º Período).
+          </p>
         </div>
-      </section>
+        <aside class="split-intro-modes" aria-label="Modos de fonte">
+          <h3>Modos</h3>
+          <ul>
+            <li><strong>Categoria</strong> — lista de posts WordPress</li>
+            <li><strong>Hub de anos</strong> — índice com links por ano</li>
+            <li><strong>Página</strong> — PDFs direto na URL</li>
+          </ul>
+        </aside>
+      </header>
 
-      <section class="painel">
-        <header class="section-head"><h2>Painel</h2></header>
-        <form class="painel-form" id="form-normas">
-          <fieldset class="bloco">
-            <legend>Entidade</legend>
-            <div class="entidade-grid opcoes-modo">
-              <label class="check-row" for="entidade_prefeitura">
-                <input type="radio" name="entidade" id="entidade_prefeitura" value="prefeitura" checked />
+      <div class="workspace-split">
+        <section class="painel painel--workspace">
+          <header class="section-head">
+            <h2>Configurar e executar</h2>
+            <p>Uma URL por linha. Opcional: <code>url | NomeManual</code></p>
+          </header>
+          <form class="painel-form" id="form-normas">
+            <fieldset class="bloco">
+              <legend>Entidade</legend>
+              <div class="entidade-grid opcoes-modo">
+                <label class="check-row" for="entidade_prefeitura">
+                  <input type="radio" name="entidade" id="entidade_prefeitura" value="prefeitura" checked />
+                  <span class="check-copy">
+                    <strong>Prefeitura</strong>
+                    <small>Leis e Atos</small>
+                  </span>
+                </label>
+                <label class="check-row" for="entidade_camara">
+                  <input type="radio" name="entidade" id="entidade_camara" value="camara" />
+                  <span class="check-copy">
+                    <strong>Câmara</strong>
+                    <small>Matérias, Normas Jurídicas e Documentos Administrativos</small>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="bloco">
+              <legend>Site e destino</legend>
+              <div class="grid-2">
+                <label class="field">
+                  <span class="field-label"><em>Site (domínio)</em></span>
+                  <input type="url" id="site" placeholder="https://exemplo.pa.gov.br" />
+                </label>
+                <label class="field">
+                  <span class="field-label"><em>Anos a baixar</em></span>
+                  <input type="text" id="anos" placeholder="2023  ·  2023,2024  ·  vazio = todos" />
+                </label>
+              </div>
+              <div class="grid-2">
+                <label class="field">
+                  <span class="field-label"><em>Pasta base *</em></span>
+                  <input type="text" id="pasta_base" value="C:\Downloads\Prefeitura" required />
+                </label>
+                <label class="field field--nome-pasta" id="wrap-nome-pasta">
+                  <span class="field-label"><em>Nome da pasta *</em></span>
+                  <input type="text" id="nome_pasta" placeholder="Ex.: CMBelém, CM BelBranco" autocomplete="off" required />
+                  <span class="field-hint" id="hint-nome-pasta"></span>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="bloco">
+              <legend>Fontes</legend>
+              <div class="fontes-grid">
+                <label class="field field--full">
+                  <span class="field-label"><em>Categoria (lista de posts)</em></span>
+                  <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
+                    Varre a categoria, abre cada post e baixa os PDFs.
+                  </small>
+                  <textarea
+                    id="fontes_categoria"
+                    rows="5"
+                    spellcheck="false"
+                    placeholder="https://site.gov.br/c/publicacoes/leis/&#10;https://site.gov.br/c/publicacoes/portarias/"
+                  ></textarea>
+                </label>
+
+                <label class="field">
+                  <span class="field-label"><em>Hub de anos</em></span>
+                  <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
+                    Página índice com links para cada ano.
+                  </small>
+                  <textarea
+                    id="fontes_hub_anos"
+                    rows="5"
+                    spellcheck="false"
+                    placeholder="https://site.gov.br/decretos/"
+                  ></textarea>
+                </label>
+
+                <label class="field">
+                  <span class="field-label"><em>Página (só documentos)</em></span>
+                  <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
+                    PDFs já listados na própria URL.
+                  </small>
+                  <textarea
+                    id="fontes_pagina"
+                    rows="5"
+                    spellcheck="false"
+                    placeholder="https://site.gov.br/portal/balancete/"
+                  ></textarea>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="bloco bloco-opcoes">
+              <legend>Extras</legend>
+              <label class="check-row" for="ler_pdf">
+                <input type="checkbox" id="ler_pdf" checked />
                 <span class="check-copy">
-                  <strong>Prefeitura</strong>
-                  <small>Leis e Atos</small>
+                  <strong>Ler texto do PDF para nomear</strong>
+                  <small>Recomendado — extrai número/título do documento</small>
                 </span>
               </label>
-              <label class="check-row" for="entidade_camara">
-                <input type="radio" name="entidade" id="entidade_camara" value="camara" />
+              <label class="check-row" for="refinar_ia">
+                <input type="checkbox" id="refinar_ia" checked />
                 <span class="check-copy">
-                  <strong>Câmara</strong>
-                  <small>Matérias, Normas Jurídicas e Documentos Administrativos</small>
+                  <strong>Confirmar com IA local (Ollama)</strong>
+                  <small>Relê o PDF: corrige nome do arquivo e valida campos de Diárias quando a fonte for de diárias.</small>
                 </span>
               </label>
+              <div class="grid-2">
+                <label class="field">
+                  <span class="field-label"><em>Modelo Ollama (opcional)</em></span>
+                  <input
+                    type="text"
+                    id="modelo_ia"
+                    value="llama3.2:3b"
+                    placeholder="llama3.2:3b"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label"><em>Limite de posts/páginas (0 = todos)</em></span>
+                  <input type="number" id="limite_posts" value="0" min="0" />
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="acao-row">
+              <button type="submit" class="btn btn-primary" id="btn-run">Iniciar baixa</button>
+              <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
+              <a class="btn btn-ghost" href="#log">Ver log</a>
             </div>
+          </form>
+        </section>
 
-            <div id="ref-prefeitura" class="catalogo-ref">
-              <h4>Tipos reconhecidos (referência)</h4>
-              <div class="catalogo-chips" id="chips-prefeitura"></div>
-            </div>
-            <div id="ref-camara" class="catalogo-ref" hidden>
-              <h4>Tipos reconhecidos (referência)</h4>
-              <div class="catalogo-chips" id="chips-camara"></div>
-            </div>
-          </fieldset>
-
-          <fieldset class="bloco">
-            <legend>Site e destino</legend>
-            <label class="field">
-              <span class="field-label"><em>Site (domínio)</em></span>
-              <input type="url" id="site" placeholder="https://exemplo.pa.gov.br" />
-            </label>
-            <label class="field">
-              <span class="field-label"><em>Pasta base *</em></span>
-              <input type="text" id="pasta_base" value="C:\Downloads\Prefeitura" required />
-            </label>
-            <label class="field field--nome-pasta" id="wrap-nome-pasta">
-              <span class="field-label"><em>Nome da pasta *</em></span>
-              <input type="text" id="nome_pasta" placeholder="Ex.: CMBelém, CM BelBranco" autocomplete="off" required />
-              <span class="field-hint" id="hint-nome-pasta"></span>
-            </label>
-            <label class="field">
-              <span class="field-label"><em>Anos a baixar</em></span>
-              <input type="text" id="anos" placeholder="Ex.: 2023  ·  2023,2024  ·  vazio = todos" />
-              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
-                Um ano (<code>2023</code>), vários (<code>2022,2023,2024</code>) ou vazio para todos.
-              </small>
-            </label>
-          </fieldset>
-
-          <fieldset class="bloco">
-            <legend>Fontes</legend>
-            <p class="opcoes-intro" style="margin-bottom:1rem">
-              Uma URL por linha. A pasta usa o <strong>título da página</strong>
-              (ou o final da URL). Opcional: <code>url | NomeManual</code>.
-            </p>
-
-            <label class="field">
-              <span class="field-label"><em>Categoria (lista de posts)</em></span>
-              <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
-                Varre a categoria, abre cada post e baixa os PDFs.
-              </small>
-              <textarea
-                id="fontes_categoria"
-                rows="6"
-                spellcheck="false"
-                placeholder="https://site.gov.br/c/publicacoes/leis/&#10;https://site.gov.br/c/publicacoes/portarias/"
-              ></textarea>
-            </label>
-
-            <label class="field">
-              <span class="field-label"><em>Hub de anos</em></span>
-              <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
-                Página índice com links para cada ano.
-              </small>
-              <textarea
-                id="fontes_hub_anos"
-                rows="3"
-                spellcheck="false"
-                placeholder="https://site.gov.br/decretos/"
-              ></textarea>
-            </label>
-
-            <label class="field">
-              <span class="field-label"><em>Página (só documentos)</em></span>
-              <small class="field-hint" style="display:block;margin:0 0 0.35rem;color:var(--mist)">
-                PDFs já listados na própria URL.
-              </small>
-              <textarea
-                id="fontes_pagina"
-                rows="4"
-                spellcheck="false"
-                placeholder="https://site.gov.br/portal/balancete/"
-              ></textarea>
-            </label>
-          </fieldset>
-
-          <fieldset class="bloco bloco-opcoes">
-            <legend>Extras</legend>
-            <label class="check-row" for="ler_pdf">
-              <input type="checkbox" id="ler_pdf" checked />
-              <span class="check-copy">
-                <strong>Ler texto do PDF para nomear</strong>
-                <small>Recomendado — extrai número/título do documento</small>
-              </span>
-            </label>
-            <label class="check-row" for="refinar_ia">
-              <input type="checkbox" id="refinar_ia" checked />
-              <span class="check-copy">
-                <strong>Confirmar com IA local (Ollama)</strong>
-                <small>Relê o PDF: corrige nome do arquivo e valida campos de Diárias quando a fonte for de diárias.</small>
-              </span>
-            </label>
-            <label class="field">
-              <span class="field-label"><em>Modelo Ollama (opcional)</em></span>
-              <input
-                type="text"
-                id="modelo_ia"
-                value="llama3.2:3b"
-                placeholder="llama3.2:3b"
-              />
-            </label>
-            <label class="field">
-              <span class="field-label"><em>Limite de posts/páginas (0 = todos)</em></span>
-              <input type="number" id="limite_posts" value="0" min="0" />
-            </label>
-          </fieldset>
-
-          <div class="acao-row">
-            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar baixa</button>
-            <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
-            <a class="btn btn-ghost" href="#log">Ver log</a>
+        <aside class="workspace-aside">
+          <div class="aside-ref" id="ref-prefeitura">
+            <h4>Tipos reconhecidos — Prefeitura</h4>
+            <div class="catalogo-chips" id="chips-prefeitura"></div>
           </div>
-        </form>
-      </section>
-
-      <section class="log-wrap" id="log">
-        <header class="section-head">
-          <div class="log-title-row">
-            <h2>Log</h2>
-            <button type="button" class="btn btn-download btn-download-idle btn-sm" id="btn-download" disabled aria-disabled="true">
-              <span class="btn-download-icon" aria-hidden="true">?</span>
-              <span class="btn-download-text">Baixar ZIP</span>
-            </button>
+          <div class="aside-ref" id="ref-camara" hidden>
+            <h4>Tipos reconhecidos — Câmara</h4>
+            <div class="catalogo-chips" id="chips-camara"></div>
           </div>
-          <p>Situação: <strong id="log-state">Parado</strong></p>
-        </header>
-        <div class="log-console" id="log-console"></div>
-      </section>
+
+          <section class="log-wrap log-wrap--dock" id="log">
+            <header class="section-head">
+              <div class="log-title-row">
+                <h2>Log ao vivo</h2>
+                <button type="button" class="btn btn-download btn-download-idle btn-sm" id="btn-download" disabled aria-disabled="true">
+                  <span class="btn-download-icon" aria-hidden="true">↓</span>
+                  <span class="btn-download-text">Baixar ZIP</span>
+                </button>
+              </div>
+              <p>Situação: <strong id="log-state">Parado</strong></p>
+            </header>
+            <div class="log-console" id="log-console"><p class="log-empty">Aguardando execução…</p></div>
+          </section>
+        </aside>
+      </div>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home72"></script>
-    <script type="module" src="/assets/shared.js?v=home72"></script>
+    <script src="/assets/fluid-particles.js?v=home73"></script>
+    <script type="module" src="/assets/shared.js?v=home73"></script>
     <script type="module">
-import { whenReady } from "/assets/modules/core.js?v=home72";
+import { whenReady } from "/assets/modules/core.js?v=home73";
 whenReady(() => {
         const C = window.OptoAutomacoes;
         C.injectNav("normas");

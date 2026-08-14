@@ -89,6 +89,33 @@ def test_nome_pasta_sessao_separa_periodos():
     assert "1" in n1 and "2" in n2
 
 
+def test_resolver_dir_sessao_mesmo_numero_datas_diferentes(tmp_path):
+    """Jacareacanga: 1ª Ordinária de fev ≠ 1ª Ordinária de jun."""
+    mod = _load_mod()
+    ano = tmp_path / "2023"
+    ano.mkdir()
+    meta_fev = {
+        "numero": 1,
+        "tipo": "Ordinária",
+        "evento": "",
+        "data": "17-02-2023",
+        "doc_tipo": "pauta",
+        "doc_nome": "Pauta",
+    }
+    meta_jun = dict(meta_fev, data="02-06-2023", doc_tipo="ata", doc_nome="Ata")
+    p_fev = mod.resolver_dir_sessao(ano, meta_fev)
+    p_fev.mkdir(parents=True, exist_ok=True)
+    (p_fev / "Pauta.pdf").write_bytes(b"x")
+    p_jun = mod.resolver_dir_sessao(ano, meta_jun)
+    assert p_fev != p_jun
+    assert "17-02-2023" in p_fev.name
+    assert "02-06-2023" in p_jun.name
+    dest, arq = mod._destino_arquivo_sessao(p_jun, meta_jun, pasta_ano=ano)
+    assert dest == p_jun
+    assert arq == "Ata.pdf"
+    assert "Verificar" not in str(dest)
+
+
 def test_resolver_dir_sessao_nao_mistura_periodos(tmp_path):
     mod = _load_mod()
     ano = tmp_path / "2023"

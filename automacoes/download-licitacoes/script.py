@@ -955,6 +955,66 @@ def raiz_categoria(url_listagem):
     return u if u.endswith("/") else u + "/"
 
 
+def slug_categoria_da_listagem(url_listagem):
+    """Slug WordPress da categoria a partir da URL de listagem.
+    Ex.: …/c/licitacoes/ → licitacoes"""
+    raiz = raiz_categoria(url_listagem)
+    seg = [s for s in urlparse(raiz).path.split("/") if s]
+    if len(seg) >= 2 and seg[0] == "c":
+        return seg[1]
+    if len(seg) == 1 and seg[0] not in (
+        "c",
+        "author",
+        "tag",
+        "category",
+        "wp-content",
+        "wp-json",
+    ):
+        return seg[0]
+    return None
+
+
+def _html_tem_carregar_mais(soup):
+    """Portais CR2 com botão Carregar Mais (paginação AJAX — /page/2/ repete)."""
+    if soup.find(class_=re.compile(r"load-button", re.I)):
+        return True
+    for a in soup.find_all("a", href=True):
+        if re.search(r"carregar\s+mais", a.get_text(" ", strip=True), re.I):
+            return True
+    return False
+
+
+def _complementar_posts_via_api(sessao, posts, raiz, anos_filtro=None):
+    """Quando o HTML para cedo, busca o restante na API REST do WordPress."""
+    slug = slug_categoria_da_listagem(raiz)
+    if not slug:
+        return posts
+    base = f"{urlparse(raiz).scheme}://{urlparse(raiz).netloc}"
+    try:
+        cid = descobrir_categoria_id(sessao, base, slug)
+        if not cid:
+            return posts
+        lote = coletar_posts_api(sessao, base, cid, anos_filtro=anos_filtro)
+    except Exception as e:
+        print(f"    ! API complementar indisponível: {e}")
+        return posts
+    antes = len(posts)
+    for p in lote:
+        href = p["link"]
+        if href in posts:
+            continue
+        titulo = p["titulo"]
+        ano_p = ano_de_data_pub(p.get("date") or "")
+        posts[href] = (titulo, ano_p)
+    extra = len(posts) - antes
+    if extra:
+        print(
+            "    · API complementou +{0} licitação(ões) "
+            "(HTML/Carregar Mais parou cedo)".format(extra)
+        )
+    return posts
+
+
 def _ano_pub_perto_do_link(a_tag):
     """Tenta achar ano de publicação perto do link (time/datetime ou cabeçalho)."""
     nos = []
@@ -1026,6 +1086,8 @@ def coletar_posts_html(sessao, url_listagem, anos_filtro=None):
     dominio = urlparse(raiz).netloc
     posts = {}  # href -> (titulo, ano_pub_hint)
     n = 1
+    paginacao_quebrada = False
+    tem_load_more = False
     while n <= MAX_PAGINAS:
         url = raiz if n == 1 else f"{raiz}page/{n}/"
         try:
@@ -1035,6 +1097,8 @@ def coletar_posts_html(sessao, url_listagem, anos_filtro=None):
             r.raise_for_status()
             r.encoding = r.apparent_encoding or "utf-8"
             soup = BeautifulSoup(r.text, "html.parser")
+            if n == 1:
+                tem_load_more = _html_tem_carregar_mais(soup)
         except Exception as e:
             host = urlparse(url).netloc
             if _erro_rede_temporario(e):
@@ -1049,7 +1113,8 @@ def coletar_posts_html(sessao, url_listagem, anos_filtro=None):
         novos = filtra_posts_da_pagina(soup, url, dominio)
         inedito = {k: v for k, v in novos.items() if k not in posts}
         if n > 1 and not inedito:
-            break            # página repetida/vazia => acabou
+            paginacao_quebrada = True
+            break            # página repetida/vazia (comum com Carregar Mais)
 
         if anos_set and ano_min is not None:
             manter = {}
@@ -1081,6 +1146,20 @@ def coletar_posts_html(sessao, url_listagem, anos_filtro=None):
 
         n += 1
         time.sleep(PAUSA)
+
+    if paginacao_quebrada or tem_load_more:
+        if paginacao_quebrada:
+            print(
+                "    · listagem HTML repetiu posts em /page/{0}/ "
+                "(portal usa Carregar Mais)".format(n)
+            )
+        elif tem_load_more:
+            print(
+                "    · portal com botão Carregar Mais — "
+                "complementando via API REST…"
+            )
+        posts = _complementar_posts_via_api(sessao, posts, raiz, anos_filtro)
+
     # Compat com callers: lista de (href, titulo)
     return [(h, t) for h, (t, _ano) in posts.items()]
 
