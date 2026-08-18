@@ -126,6 +126,23 @@ _RE_SESSAO_NUM_TIPO = re.compile(
     re.I,
 )
 
+# Salvaterra / similares: sem "sessão ordinária" no título
+# PAUTA DE Nº 20 DO SEGUNDO PERÍODO DA 15ª LEGISLATURA, DE 22 DE AGOSTO DE 2023
+# ATA DE ABERTURA Nº 18 DO SEGUNDO PERÍODO...
+# PAUTA DO DIA 25 DE ABRIL DE 2023
+_RE_NUM_DOC_LEGISLATURA = re.compile(
+    r"(?:pauta|ata(?:\s+de\s+abertura)?)"
+    r"(?!\s+do\s+dia)"
+    r"\s*(?:de\s+)?(?:n[º°o\.º]*\s*)?(\d{1,4})\b",
+    re.I,
+)
+_RE_SESSAO_LEGISLATURA = re.compile(
+    r"\b(?:pauta|ata)\b.{0,160}?(?:per[ií]odo|legislatura)|"
+    r"(?:pauta|ata)\s+do\s+dia\b|"
+    r"ata\s+de\s+abertura\b",
+    re.I,
+)
+
 _RE_DATA_EXT = re.compile(
     r"(?:de\s+)?(\d{1,2})\s+de\s+"
     r"(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|"
@@ -225,17 +242,35 @@ _RE_MES_NO_TEXTO = re.compile(
     re.I,
 )
 
-_RE_DATA_PASTA_SESSAO = re.compile(
-    r"-\s*(\d{2})-(\d{2})-(\d{4})\s*$"
-)
+# Data no início (preferido) ou no fim do nome da pasta
+_RE_DATA_PASTA_INI = re.compile(r"^(\d{2})-(\d{2})-(\d{4})\s*-\s*")
+_RE_DATA_PASTA_FIM = re.compile(r"-\s*(\d{2})-(\d{2})-(\d{4})\s*$")
 
 
 def _data_na_pasta(nome_pasta: str) -> str | None:
-    """Data DD-MM-YYYY no fim do nome da pasta, se houver."""
-    m = _RE_DATA_PASTA_SESSAO.search(nome_pasta or "")
+    """Data DD-MM-YYYY no início ou no fim do nome da pasta."""
+    n = nome_pasta or ""
+    m = _RE_DATA_PASTA_INI.match(n)
+    if m:
+        return "{0}-{1}-{2}".format(m.group(1), m.group(2), m.group(3))
+    m = _RE_DATA_PASTA_FIM.search(n)
     if m:
         return "{0}-{1}-{2}".format(m.group(1), m.group(2), m.group(3))
     return None
+
+
+def _nome_sem_data_pasta(nome_pasta: str) -> str:
+    """Remove data DD-MM-YYYY do início/fim para comparar prefixo da sessão."""
+    n = (nome_pasta or "").strip()
+    n = _RE_DATA_PASTA_INI.sub("", n, count=1)
+    n = _RE_DATA_PASTA_FIM.sub("", n)
+    return n.strip(" -–—")
+
+
+def _pasta_comeca_com_prefixo(nome_pasta: str, prefix: str) -> bool:
+    if not prefix:
+        return False
+    return _nome_sem_data_pasta(nome_pasta).startswith(prefix)
 
 
 def _pastas_mesma_data(
@@ -279,8 +314,9 @@ def parece_fonte_sessoes(
 
 def link_indica_sessao(*urls: str) -> bool:
     """
-    True se alguma URL contém pauta, ata ou sessão no caminho/link.
-    Portarias e demais publicações não entram como sessão só pelo título do PDF.
+    True se alguma URL contém pauta, ata, sessão, lista de presença ou votações
+    no caminho/link. Portarias e demais publicações não entram como sessão só
+    pelo título do PDF.
     """
     from urllib.parse import unquote
 
@@ -297,6 +333,10 @@ def link_indica_sessao(*urls: str) -> bool:
         if re.search(r"(?:^|[/_.\-])atas?(?:[/_.\-]|$)", u):
             return True
         if re.search(r"\batas?\b", u):
+            return True
+        if re.search(r"lista[\-_ ]de[\-_ ]presen", u):
+            return True
+        if re.search(r"vota[cç][oõ]es?[\-_ ]nomin", u):
             return True
     return False
 
@@ -361,8 +401,10 @@ def _extrair_evento(texto: str, tipo: str) -> str:
     resto = re.split(
         r",\s*de\s+\d|"
         r"\bde\s+\d{1,2}\s+de\s+\w+\s+de\s+\d{4}\b|"
+        r"\brealizad[ao]s?\s+em\b|"
         r"\b\d{1,2}\s*[/\-.]\s*\d{1,2}\s*[/\-.]\s*\d{4}\b|"
-        r"\bn[º°o\.]",
+        r"\bn[º°o\.]|"
+        r"\d{1,2}\s*[º°o]?\s*per[ií]odo",
         resto,
         maxsplit=1,
         flags=re.I,
@@ -374,6 +416,9 @@ def _extrair_evento(texto: str, tipo: str) -> str:
         resto,
         flags=re.I,
     ).strip()
+    rn = _norm(resto)
+    if rn.startswith("realizad") or re.search(r"\bper[ií]odo\b", rn):
+        return ""
     if len(resto) < 3 or re.fullmatch(r"\d{1,4}", resto):
         return ""
     # Title case (DIA DOS PAIS → Dia dos Pais); mantém preposições em minúsculo
@@ -393,6 +438,9 @@ def _tipo_documento(texto: str) -> str | None:
     n = _norm(texto)
     if not n:
         return None
+    # "(SEM PAUTA)" no fim de atas não pode virar tipo=pauta
+    n = re.sub(r"\(\s*sem\s+pauta[s]?\s*\)", " ", n)
+    n = re.sub(r"\s+", " ", n).strip()
     if re.search(
         r"certid[aã]o\s+de\s+publica|"
         r"certid[aã]o\s+d[aeo]\s+|"
@@ -408,10 +456,35 @@ def _tipo_documento(texto: str) -> str | None:
         return "votacoes"
     if re.search(r"lista\s*de\s*presen|presen[cç]a|frequ[eê]ncia", n):
         return "presenca"
+    # Prefere o tipo no início do título (ATA … vs menção a pauta no meio)
+    m = re.match(
+        r"^(?:ata(?:\s+de\s+abertura)?|pauta)\b",
+        n,
+    )
+    if m:
+        return "ata" if m.group(0).startswith("ata") else "pauta"
     if re.search(r"\bpauta\b", n):
         return "pauta"
     if re.search(r"\bata\b", n):
         return "ata"
+    return None
+
+
+def _parece_sessao_formato_legislatura(*textos: str) -> bool:
+    """Pauta/ata numerada por período/legislatura (ex.: Salvaterra), sem 'sessão ordinária'."""
+    blob = "\n".join(t for t in textos if t)
+    if not blob.strip():
+        return False
+    return bool(_RE_SESSAO_LEGISLATURA.search(blob))
+
+
+def _extrair_numero_doc_legislatura(*textos: str) -> int | None:
+    for texto in textos:
+        if not texto:
+            continue
+        m = _RE_NUM_DOC_LEGISLATURA.search(texto)
+        if m:
+            return int(m.group(1))
     return None
 
 
@@ -609,6 +682,9 @@ def parece_declaracao(*textos: str) -> bool:
     # Se for pauta/ata de sessão numerada, não é só declaração
     if _RE_DOC_SESSAO.search(blob):
         return False
+    # Ata/pauta com período/legislatura (mesmo com "(SEM PAUTA)" no título)
+    if _parece_sessao_formato_legislatura(*textos):
+        return False
     return bool(_RE_DECLARACAO.search(blob))
 
 
@@ -751,6 +827,12 @@ def parse_sessao(*textos: str) -> dict[str, Any] | None:
                 tipo_sessao = tipo_nome
                 break
 
+    # Formato sem "sessão ordinária": PAUTA/ATA Nº N DO Nº PERÍODO DA LEGISLATURA
+    if not tipo_sessao and _parece_sessao_formato_legislatura(*textos):
+        tipo_sessao = "Ordinária"
+        if numero is None:
+            numero = _extrair_numero_doc_legislatura(*textos)
+
     if not tipo_sessao:
         return None
 
@@ -763,6 +845,8 @@ def parse_sessao(*textos: str) -> dict[str, Any] | None:
             continue
         cn = _norm(cand)
         if cn in ("dia", "de", "da", "do", "em", "no", "na") or re.fullmatch(r"dia\s+\d+", cn):
+            continue
+        if cn.startswith("realizad") or re.search(r"\b\d{1,2}\s+de\s+\w+\s+de\s+\d{4}\b", cn):
             continue
         evento = cand
         break
@@ -810,19 +894,20 @@ def parse_sessao(*textos: str) -> dict[str, Any] | None:
 
 
 def nome_pasta_sessao(meta: dict[str, Any]) -> str:
-    """Ex.: 13ª Sessão Ordinária - 1º Período - 03-11-2023"""
+    """Ex.: 03-11-2023 - 13ª Sessão Ordinária - 1º Período (data primeiro = ordem cronológica)."""
     base = prefixo_pasta_sessao(
         meta.get("numero"),
         meta.get("tipo") or "Ordinária",
         meta.get("evento") or "",
     )
-    partes = [base]
-    periodo = (meta.get("periodo") or "").strip()
-    if periodo and _norm(periodo) not in _norm(base):
-        partes.append(periodo)
+    partes: list[str] = []
     data = (meta.get("data") or "").strip()
     if data and data not in base:
         partes.append(data)
+    partes.append(base)
+    periodo = (meta.get("periodo") or "").strip()
+    if periodo and _norm(periodo) not in _norm(base):
+        partes.append(periodo)
     return " - ".join(partes)
 
 
@@ -857,10 +942,7 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
         for p in dirs:
             if not _eh_pasta_sessao(p):
                 continue
-            m = _RE_DATA_PASTA_SESSAO.search(p.name)
-            if not m:
-                continue
-            data_pasta = "{0}-{1}-{2}".format(m.group(1), m.group(2), m.group(3))
+            data_pasta = _data_na_pasta(p.name)
             if data_pasta != data:
                 continue
             if not _periodo_compativel(p.name, periodo):
@@ -892,7 +974,7 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
             p
             for p in dirs
             if _eh_pasta_sessao(p)
-            and p.name.startswith(prefix)
+            and _pasta_comeca_com_prefixo(p.name, prefix)
             and _periodo_compativel(p.name, periodo)
         )
         if data:
@@ -903,7 +985,7 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
         if existentes:
             return existentes[0]
 
-    # 3) Sem número: tipo + evento (e data no nome final)
+    # 3) Sem número: tipo + evento (e data no nome)
     alvo = nome_pasta_sessao(meta)
     if (root / alvo).is_dir():
         return root / alvo
@@ -914,14 +996,14 @@ def resolver_dir_sessao(pasta_ano: str | Path, meta: dict[str, Any]) -> Path:
             p
             for p in dirs
             if _eh_pasta_sessao(p)
-            and p.name.startswith(prefix)
+            and _pasta_comeca_com_prefixo(p.name, prefix)
             and _periodo_compativel(p.name, periodo)
         ]
         if data:
             com_data = [
                 p
                 for p in candidatos
-                if (p.name.endswith(data) or data in p.name)
+                if (_data_na_pasta(p.name) == data or data in p.name)
                 and _periodo_compativel(p.name, periodo)
             ]
             if com_data:
@@ -1168,9 +1250,14 @@ def pastas_sessao_do_mes(pasta_ano: str | Path, mes: int) -> list[Path]:
             continue
         if p.name in (PASTA_MENSAIS, PASTA_DECLARACOES) or p.name.startswith("_"):
             continue
-        m = _RE_DATA_PASTA_SESSAO.search(p.name)
-        if m and int(m.group(2)) == int(mes):
-            out.append(p)
+        data_p = _data_na_pasta(p.name)
+        if not data_p:
+            continue
+        try:
+            if int(data_p.split("-")[1]) == int(mes):
+                out.append(p)
+        except (IndexError, ValueError):
+            continue
     return out
 
 
@@ -1586,7 +1673,7 @@ def fundir_certidoes_em_sessoes(pasta_base: str | Path) -> int:
                         )
                     )
                 continue
-            if not _RE_DATA_PASTA_SESSAO.search(p.name):
+            if not _data_na_pasta(p.name):
                 continue
             if not any(f.lower().endswith(".pdf") for f in filenames):
                 continue

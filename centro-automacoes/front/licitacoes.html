@@ -60,12 +60,23 @@
           <fieldset class="bloco">
             <legend>Fonte e destino</legend>
             <label class="field">
-              <span class="field-label"><em>URL da listagem *</em></span>
+              <span class="field-label"><em>Planilha Google (opcional)</em></span>
+              <input
+                type="url"
+                id="planilha_fonte"
+                placeholder="https://docs.google.com/spreadsheets/d/…/edit"
+              />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Use quando a tabela já está preenchida e a coluna <strong>Documentos</strong>
+                tem links do site — baixa os PDFs de cada página. Pode usar no lugar da listagem.
+              </small>
+            </label>
+            <label class="field">
+              <span class="field-label"><em>URL da listagem</em></span>
               <input
                 type="url"
                 id="listagem"
                 value="https://cmbrasilnovo.pa.gov.br/c/licitacoes"
-                required
               />
             </label>
             <label class="field">
@@ -125,6 +136,27 @@
 
           <fieldset class="bloco bloco-opcoes">
             <legend>Extras (opcional)</legend>
+            <div class="opcoes-grid">
+              <label class="check-row" for="amostra_mensal">
+                <input type="checkbox" id="amostra_mensal" />
+                <span class="check-copy">
+                  <strong>Amostra mensal</strong>
+                  <small>Limita quantas por mês (modalidades diversificadas). As demais vão para Nao_migradas_links.xlsx (só links)</small>
+                </span>
+              </label>
+            </div>
+            <label class="field" id="campo-amostra-por-mes" style="margin-top:0.75rem">
+              <span class="field-label"><em>Quantas por mês (amostra)</em></span>
+              <input
+                type="number"
+                id="amostra_por_mes"
+                min="1"
+                max="999"
+                step="1"
+                value="5"
+                placeholder="5"
+              />
+            </label>
             <div class="opcoes-grid">
               <label class="check-row" for="ocr">
                 <input type="checkbox" id="ocr" checked />
@@ -202,9 +234,12 @@ whenReady(() => {
       const STORAGE_KEY = "cr2-centro-licitacoes";
       const extraFields = [
         "listagem",
+        "planilha_fonte",
         "pasta_saida",
         "nome_pasta",
         "anos",
+        "amostra_mensal",
+        "amostra_por_mes",
         "ocr",
         "incluir_subcategorias",
         "so_html",
@@ -249,14 +284,35 @@ whenReady(() => {
         }
       }
 
+      function lerAmostraPorMes() {
+        const el = document.getElementById("amostra_por_mes");
+        let n = parseInt((el && el.value) || "5", 10);
+        if (!Number.isFinite(n) || n < 1) n = 5;
+        if (n > 999) n = 999;
+        if (el) el.value = String(n);
+        return n;
+      }
+
+      function syncAmostraPorMes() {
+        const on = document.getElementById("amostra_mensal");
+        const campo = document.getElementById("campo-amostra-por-mes");
+        const input = document.getElementById("amostra_por_mes");
+        const ativo = !!(on && on.checked);
+        if (campo) campo.style.opacity = ativo ? "1" : "0.55";
+        if (input) input.disabled = !ativo;
+      }
+
       C.bindRun("licitacoes", "form-licitacoes", extraFields, () => {
         const modo = getModo();
         return {
           listagem: document.getElementById("listagem").value.trim(),
+          planilha_fonte: document.getElementById("planilha_fonte").value.trim(),
           pasta_saida: document.getElementById("pasta_saida").value.trim(),
           nome_pasta: document.getElementById("nome_pasta").value.trim(),
           anos: document.getElementById("anos").value.trim(),
           modo,
+          amostra_mensal: document.getElementById("amostra_mensal").checked,
+          amostra_por_mes: lerAmostraPorMes(),
           ocr: document.getElementById("ocr").checked,
           incluir_subcategorias: document.getElementById("incluir_subcategorias").checked,
           so_html: document.getElementById("so_html").checked,
@@ -269,19 +325,22 @@ whenReady(() => {
       }, false);
 
       migrarOpcoesSalvas();
+      syncAmostraPorMes();
 
       // Persiste o modo junto com o restante do formulário
       document.getElementById("form-licitacoes").addEventListener("change", () => {
+        syncAmostraPorMes();
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
           const data = raw ? JSON.parse(raw) : {};
           data.modo = getModo();
-          ["ocr", "incluir_subcategorias", "so_html", "ignorar_ssl", "refinar_ia"].forEach((id) => {
+          ["ocr", "incluir_subcategorias", "so_html", "ignorar_ssl", "refinar_ia", "amostra_mensal"].forEach((id) => {
             const n = document.getElementById(id);
             if (n) data[id] = n.checked;
           });
           const mi = document.getElementById("modelo_ia");
           if (mi) data.modelo_ia = mi.value.trim();
+          data.amostra_por_mes = lerAmostraPorMes();
           localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } catch (_) {}
       });

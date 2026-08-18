@@ -111,6 +111,7 @@ def separar_contratos_da_pasta(
     Move arquivos de contrato e portaria de fiscal de pasta_licitacao para:
         <pasta_saida>/Contratos/<003-2025-RPPE>/
 
+    Só cria Contratos/<licitação>/ se houver ao menos um arquivo a mover.
     Retorna lista de caminhos de destino (vazia se nada movido).
     """
     pasta_licitacao = os.path.abspath(pasta_licitacao) if pasta_licitacao else ""
@@ -119,7 +120,6 @@ def separar_contratos_da_pasta(
 
     sub = nome_pasta_contrato(lf)
     dest_dir = os.path.join(os.path.abspath(pasta_saida), "Contratos", sub)
-    os.makedirs(dest_dir, exist_ok=True)
 
     movidos: list[str] = []
     try:
@@ -133,6 +133,10 @@ def separar_contratos_da_pasta(
             continue
         if not eh_arquivo_relevante_contrato(nome):
             continue
+        try:
+            os.makedirs(dest_dir, exist_ok=True)
+        except OSError:
+            return movidos
         destino = _destino_livre(dest_dir, nome)
         try:
             shutil.move(origem, destino)

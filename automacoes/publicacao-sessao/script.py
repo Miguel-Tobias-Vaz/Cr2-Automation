@@ -346,6 +346,10 @@ _RE_DATA_FIM = re.compile(
     r"^(.*?)\s*[-–—]\s*(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\s*$",
     re.I,
 )
+_RE_DATA_INI = re.compile(
+    r"^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\s*[-–—]\s*(.+)$",
+    re.I,
+)
 
 # Tipos exatos do select "Tipo" no modal Cadastrar Sessão (portal CR2)
 _TIPOS_PORTAL_SELECT = (
@@ -674,6 +678,9 @@ def parse_nome_pasta_sessao(nome_pasta: str) -> dict:
       '18ª Sessão Ordinária - 16-11-2023'
         → Tipo=Ordinária  Data=16/11/2023  Número=18ª Sessão Ordinária
 
+      '16-11-2023 - 18ª Sessão Ordinária - 1º Período'
+        → Tipo=Ordinária  Data=16/11/2023  Número=18ª Sessão Ordinária
+
       'Sessão Especial - Dia dos Pais - 12-08-2023'
         → Tipo=Especial   Data=12/08/2023  Número=Sessão Especial - Dia dos Pais
     """
@@ -681,11 +688,17 @@ def parse_nome_pasta_sessao(nome_pasta: str) -> dict:
     item = _registro_vazio()
 
     resto = nome
-    m_data = _RE_DATA_FIM.match(nome)
-    if m_data:
-        resto = (m_data.group(1) or "").strip()
-        d, mo, y = m_data.group(2), m_data.group(3), m_data.group(4)
+    m_ini = _RE_DATA_INI.match(nome)
+    if m_ini:
+        d, mo, y = m_ini.group(1), m_ini.group(2), m_ini.group(3)
+        resto = (m_ini.group(4) or "").strip()
         item["data"] = "{:02d}/{:02d}/{}".format(int(d), int(mo), y)
+    else:
+        m_data = _RE_DATA_FIM.match(nome)
+        if m_data:
+            resto = (m_data.group(1) or "").strip()
+            d, mo, y = m_data.group(2), m_data.group(3), m_data.group(4)
+            item["data"] = "{:02d}/{:02d}/{}".format(int(d), int(mo), y)
 
     num_raw = ""
     m_num = re.match(r"^(\d+\s*[ªºa°]?)\s+(.+)$", resto, re.I)

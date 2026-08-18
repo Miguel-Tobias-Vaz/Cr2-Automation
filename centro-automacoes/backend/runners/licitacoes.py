@@ -32,8 +32,11 @@ def run(job) -> None:
     modo, so_planilha, sem_extracao = _resolver_modo(cfg)
 
     listagem = (cfg.get("listagem") or "").strip()
-    if not listagem:
-        raise ValueError("Informe a URL da listagem de licitações.")
+    planilha_fonte = (cfg.get("planilha_fonte") or "").strip()
+    if not listagem and not planilha_fonte:
+        raise ValueError(
+            "Informe a URL da listagem ou o link da planilha Google (Documentos)."
+        )
 
     saida = (cfg.get("pasta_saida") or r"C:\Downloads\Licitacoes").strip()
 
@@ -60,6 +63,14 @@ def run(job) -> None:
         limite = int(limite) if limite not in (None, "") else 0
     except (TypeError, ValueError):
         limite = 0
+    amostra_mensal = bool(cfg.get("amostra_mensal", False))
+    amostra_por_mes = cfg.get("amostra_por_mes", 5)
+    try:
+        amostra_por_mes = int(amostra_por_mes) if amostra_por_mes not in (None, "") else 5
+    except (TypeError, ValueError):
+        amostra_por_mes = 5
+    if amostra_por_mes < 1:
+        amostra_por_mes = 5
 
     labels = {
         "completo": "Completo (baixar + extrair + planilha)",
@@ -67,6 +78,12 @@ def run(job) -> None:
         "so_planilha": "Só planilha (sem rebaixar anexos)",
     }
     job.emit("info", "Modo: {0}".format(labels.get(modo, modo)))
+    if amostra_mensal:
+        job.emit(
+            "info",
+            "Amostra mensal: até {0} por mês (modalidades diversificadas); "
+            "demais → Nao_migradas_links.xlsx".format(amostra_por_mes),
+        )
     if ocr:
         job.emit("info", "OCR: ligado ({0})".format(motor_ocr))
     else:
@@ -89,9 +106,11 @@ def run(job) -> None:
         "download_licitacoes",
         "--saida",
         saida,
-        "--listagem",
-        listagem,
     ]
+    if planilha_fonte:
+        argv += ["--planilha-fonte", planilha_fonte]
+    if listagem:
+        argv += ["--listagem", listagem]
     if planilha_modelo:
         argv += ["--planilha-modelo", planilha_modelo]
     else:
@@ -116,6 +135,9 @@ def run(job) -> None:
         argv += ["--link-pasta-base", link_pasta_base]
     if limite and limite > 0:
         argv += ["--limite", str(limite)]
+    if amostra_mensal:
+        argv.append("--amostra-mensal")
+        argv += ["--amostra-por-mes", str(amostra_por_mes)]
     if ocr:
         argv.append("--ocr")
         argv += ["--motor-ocr", motor_ocr or "tesseract"]
@@ -170,6 +192,15 @@ def run(job) -> None:
             "info",
             "Auditoria (origem dos dados): aba 'Auditoria' em {0}".format(
                 upload["planilha_preenchida"]
+            ),
+        )
+    if upload.get("planilha_nao_migradas"):
+        job.result["planilha_nao_migradas"] = upload["planilha_nao_migradas"]
+        job.emit(
+            "info",
+            "Não migradas (controle de links): {0} → {1}".format(
+                upload.get("nao_migradas", "?"),
+                upload["planilha_nao_migradas"],
             ),
         )
     if upload.get("pendentes_relatorio"):

@@ -43,6 +43,7 @@ import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from urllib.parse import urljoin, urlparse, unquote
 
 import requests
@@ -661,6 +662,143 @@ def ano_de_data_pub(data_pub):
     return m.group(1) if m else ""
 
 
+def mes_de_data_pub(data_pub):
+    """Mês (1–12) a partir da data de publicação, ou 0 se desconhecido."""
+    if data_pub is None or data_pub == "":
+        return 0
+    if isinstance(data_pub, datetime):
+        return int(data_pub.month)
+    s = str(data_pub).strip()
+    m = re.match(r"(\d{1,2})/(\d{1,2})/((?:19|20)\d{2})$", s)
+    if m:
+        try:
+            mes = int(m.group(2))
+            return mes if 1 <= mes <= 12 else 0
+        except ValueError:
+            return 0
+    m = re.match(r"((?:19|20)\d{2})-(\d{2})-\d{2}", s)
+    if m:
+        try:
+            mes = int(m.group(2))
+            return mes if 1 <= mes <= 12 else 0
+        except ValueError:
+            return 0
+    return 0
+
+
+def chave_ano_mes_licitacao(lic):
+    """
+    Chave (ano, mês) para amostragem mensal.
+    Prefere data de publicação; senão ano do título e mês 0 (sem mês).
+    """
+    data_pub = (lic or {}).get("data_pub")
+    ano = ano_de_data_pub(data_pub)
+    mes = mes_de_data_pub(data_pub)
+    if not ano:
+        ano = ano_do_titulo((lic or {}).get("titulo") or "") or "0000"
+    try:
+        ano_i = int(ano)
+    except (TypeError, ValueError):
+        ano_i = 0
+    return (ano_i, int(mes or 0))
+
+
+def amostrar_mensal_diversificada(licitacoes, por_mes=5):
+    """
+    Mantém até `por_mes` licitações por (ano, mês), priorizando modalidades
+    diferentes (round-robin entre modalidades do mês).
+
+    Retorna (selecionadas, restantes).
+    Sem data/mês conhecido → bucket (ano, 0), ainda limitado a `por_mes`.
+    """
+    from collections import defaultdict, deque
+
+    por_mes = int(por_mes) if por_mes else 5
+    if por_mes < 1:
+        por_mes = 5
+    if not licitacoes:
+        return [], []
+
+    buckets = defaultdict(list)
+    for lic in licitacoes:
+        buckets[chave_ano_mes_licitacao(lic)].append(lic)
+
+    selecionadas = []
+    restantes = []
+    for chave in sorted(buckets.keys()):
+        itens = buckets[chave]
+        por_mod = defaultdict(deque)
+        for lic in itens:
+            mod = modalidade_padrao((lic or {}).get("titulo") or "") or "Outros"
+            por_mod[mod].append(lic)
+        # Modalidades com mais itens primeiro; empate alfabético
+        mods = sorted(por_mod.keys(), key=lambda m: (-len(por_mod[m]), m))
+        escolhidas = []
+        while len(escolhidas) < por_mes and any(por_mod[m] for m in mods):
+            progrediu = False
+            for m in mods:
+                if len(escolhidas) >= por_mes:
+                    break
+                if por_mod[m]:
+                    escolhidas.append(por_mod[m].popleft())
+                    progrediu = True
+            if not progrediu:
+                break
+        sobra = []
+        for m in mods:
+            sobra.extend(list(por_mod[m]))
+        selecionadas.extend(escolhidas)
+        restantes.extend(sobra)
+    return selecionadas, restantes
+
+
+def salvar_planilha_nao_migradas(pasta_saida, licitacoes, nome_arquivo=""):
+    """
+    Planilha de controle das licitações NÃO processadas na amostra.
+    Colunas focadas em link para migração posterior.
+    """
+    import openpyxl
+    from openpyxl.styles import Font
+
+    pasta_saida = pasta_saida or "."
+    os.makedirs(pasta_saida, exist_ok=True)
+    nome = (nome_arquivo or "").strip() or "Nao_migradas_links.xlsx"
+    if not nome.lower().endswith(".xlsx"):
+        nome += ".xlsx"
+    caminho = os.path.join(pasta_saida, nome)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Não migradas"
+    headers = ("Link", "Título", "Data publicação", "Modalidade", "Status")
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True)
+
+    for i, lic in enumerate(licitacoes or [], 2):
+        titulo = (lic or {}).get("titulo") or ""
+        link = (lic or {}).get("link") or ""
+        data_pub = (lic or {}).get("data_pub") or ""
+        if hasattr(data_pub, "strftime"):
+            try:
+                data_pub = data_pub.strftime("%d/%m/%Y")
+            except Exception:
+                data_pub = str(data_pub)
+        modalidade = modalidade_padrao(titulo) if titulo else ""
+        ws.cell(row=i, column=1, value=link)
+        ws.cell(row=i, column=2, value=titulo)
+        ws.cell(row=i, column=3, value=str(data_pub))
+        ws.cell(row=i, column=4, value=modalidade)
+        ws.cell(row=i, column=5, value="Não migrada")
+
+    ws.column_dimensions["A"].width = 60
+    ws.column_dimensions["B"].width = 55
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 28
+    ws.column_dimensions["E"].width = 14
+    wb.save(caminho)
+    return os.path.abspath(caminho)
+
 def _anos_filtro_set(anos_filtro):
     return {str(a).strip() for a in (anos_filtro or []) if str(a).strip()}
 
@@ -1222,6 +1360,181 @@ def coletar_via_html(sessao, listagens, anos_filtro=None):
                         "data_pub": data_pub, "anexos": anexos})
     return res
 
+
+# ---------------------------------------------------------------------------
+# Planilha Google / Excel como fonte (links na coluna Documentos)
+# ---------------------------------------------------------------------------
+
+_RE_DRIVE_SHEET_ID = re.compile(r"/spreadsheets/d/([a-zA-Z0-9_-]+)")
+
+
+def _extrair_id_google_sheets(url: str) -> str | None:
+    m = _RE_DRIVE_SHEET_ID.search(url or "")
+    return m.group(1) if m else None
+
+
+def baixar_planilha_google(url_ou_path: str, destino: Path) -> Path | None:
+    """Baixa Google Sheets (export xlsx) ou usa arquivo local."""
+    url_ou_path = (url_ou_path or "").strip().strip('"')
+    if not url_ou_path:
+        return None
+    local = Path(url_ou_path)
+    if local.is_file() and local.suffix.lower() in (".xlsx", ".xlsm", ".xls", ".csv"):
+        return local.resolve()
+    file_id = _extrair_id_google_sheets(url_ou_path)
+    if not file_id:
+        print("  ! ID da planilha Google não encontrado no link.")
+        return None
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    export_url = (
+        "https://docs.google.com/spreadsheets/d/{0}/export?format=xlsx".format(
+            file_id
+        )
+    )
+    try:
+        r = requests.get(export_url, headers=HEADERS, timeout=120)
+        r.raise_for_status()
+        if r.content[:2] != b"PK":
+            print(
+                "  ! Planilha não baixou como Excel. "
+                "Compartilhe como «Qualquer pessoa com o link pode ver»."
+            )
+            return None
+        destino.write_bytes(r.content)
+        print("  · Planilha baixada: {0}".format(destino))
+        return destino.resolve()
+    except Exception as e:
+        print("  ! Falha ao baixar planilha Google: {0}".format(e))
+        return None
+
+
+def _norm_col_planilha(txt: str) -> str:
+    return normaliza(txt or "").replace(" ", "")
+
+
+def _indice_colunas_planilha(linha_cab: list) -> dict[str, int]:
+    """Mapeia cabeçalhos → índice de coluna."""
+    idx: dict[str, int] = {}
+    for i, raw in enumerate(linha_cab):
+        n = _norm_col_planilha(str(raw or ""))
+        if not n:
+            continue
+        if "modalidade" in n:
+            idx.setdefault("modalidade", i)
+        elif n in ("numero", "n", "no") or "numero" in n or n.startswith("n"):
+            if "ordem" not in n and "cronolog" not in n:
+                idx.setdefault("numero", i)
+        elif "objeto" in n:
+            idx.setdefault("objeto", i)
+        elif "public" in n:
+            idx.setdefault("publicacao", i)
+        elif "abertura" in n:
+            idx.setdefault("abertura", i)
+        elif "situ" in n:
+            idx.setdefault("situacao", i)
+        elif "homolog" in n or "valor" in n:
+            idx.setdefault("valor_homologado", i)
+        elif "document" in n or n in ("link", "url", "site"):
+            idx.setdefault("documentos", i)
+    return idx
+
+
+def _cel(row: list, idx: dict, chave: str) -> str:
+    i = idx.get(chave)
+    if i is None or i >= len(row):
+        return ""
+    return str(row[i] or "").strip()
+
+
+def _parse_data_planilha(valor: str):
+    v = (valor or "").strip()
+    if not v:
+        return ""
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(v, fmt)
+        except ValueError:
+            continue
+    return v
+
+
+def ler_linhas_planilha_fonte(caminho: Path) -> list[dict[str, Any]]:
+    """Lê linhas da planilha-fonte (Google Sheets exportado ou xlsx local)."""
+    from openpyxl import load_workbook
+
+    wb = load_workbook(caminho, read_only=True, data_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+    if not rows:
+        return []
+    idx = _indice_colunas_planilha([str(c or "") for c in rows[0]])
+    if "documentos" not in idx:
+        print("  ! Coluna «Documentos» (ou Link/URL) não encontrada na planilha.")
+        return []
+    out: list[dict[str, Any]] = []
+    for row in rows[1:]:
+        if not row:
+            continue
+        cells = [str(c) if c is not None else "" for c in row]
+        url_doc = _cel(cells, idx, "documentos")
+        if not url_doc.startswith("http"):
+            continue
+        mod = _cel(cells, idx, "modalidade")
+        num = _cel(cells, idx, "numero")
+        obj = _cel(cells, idx, "objeto")
+        titulo = " ".join(
+            x for x in (mod, num, ("({0})".format(obj) if obj else "")) if x
+        ).strip() or url_doc
+        out.append(
+            {
+                "titulo": titulo,
+                "link": url_doc,
+                "data_pub": _cel(cells, idx, "publicacao"),
+                "anexos": [],
+                "dados_planilha": {
+                    "modalidade": mod,
+                    "numero": num,
+                    "objeto": obj,
+                    "publicacao": _cel(cells, idx, "publicacao"),
+                    "abertura": _cel(cells, idx, "abertura"),
+                    "situacao": _cel(cells, idx, "situacao"),
+                    "valor_homologado": _cel(cells, idx, "valor_homologado"),
+                    "documentos": url_doc,
+                },
+            }
+        )
+    return out
+
+
+def coletar_via_planilha_fonte(sessao, url_ou_path: str, pasta_cache: Path) -> list:
+    """Usa planilha (Google ou local): coluna Documentos → página → anexos."""
+    path = baixar_planilha_google(
+        url_ou_path, pasta_cache / "_planilha_fonte.xlsx"
+    )
+    if not path:
+        return []
+    linhas = ler_linhas_planilha_fonte(path)
+    print("  · {0} linha(s) com link na planilha-fonte".format(len(linhas)))
+    res = []
+    for i, lic in enumerate(linhas, 1):
+        url_post = lic["link"]
+        if i == 1 or i % 10 == 0 or i == len(linhas):
+            print("    · anexos planilha {0}/{1}…".format(i, len(linhas)))
+        time.sleep(PAUSA)
+        try:
+            r = sessao.get(url_post, timeout=TIMEOUT)
+            r.raise_for_status()
+            r.encoding = r.apparent_encoding or "utf-8"
+            anexos = extrair_anexos(r.text, url_post)
+            if not lic.get("data_pub"):
+                lic["data_pub"] = data_pub_do_html(r.text)
+        except Exception as e:
+            print("    ! Erro em {0}: {1}".format(url_post, e))
+            anexos = []
+        lic["anexos"] = anexos
+        res.append(lic)
+    return res
 
 # ============================================================================
 # PARTE 4 — OCR + LEITURA DE TEXTO
@@ -2317,8 +2630,15 @@ def _refinar_com_ollama(titulo, linha, cabecalhos, modalidade,
 def main():
     ap = argparse.ArgumentParser(
         description="Baixa licitações de portais CR2 e preenche planilha.")
+    ap.add_argument(
+        "--planilha-fonte",
+        default="",
+        help="URL Google Sheets ou caminho .xlsx já preenchido. "
+             "Usa coluna Documentos (links) para baixar PDFs; "
+             "demais colunas viram dados da planilha de saída.",
+    )
     ap.add_argument("--listagem", default=LISTAGEM_PADRAO,
-                    help="URL da listagem de licitações (obrigatória).")
+                    help="URL da listagem de licitações.")
     ap.add_argument("--saida", default=SAIDA_PADRAO, help="Pasta dos downloads.")
     ap.add_argument("--planilha-modelo", default="Front.xlsx",
                     help="Planilha-modelo com os cabeçalhos (padrão: Front.xlsx).")
@@ -2373,6 +2693,15 @@ def main():
         "--limite", type=int, default=0,
         help="Processa no máximo N licitações (0 = todas). Útil para testes.",
     )
+    ap.add_argument(
+        "--amostra-mensal", action="store_true",
+        help="Após coletar, mantém só N licitações por mês "
+             "(diversificando modalidades). Ver --amostra-por-mes.",
+    )
+    ap.add_argument(
+        "--amostra-por-mes", type=int, default=5,
+        help="Com --amostra-mensal: quantas licitações por mês (padrão: 5).",
+    )
     args = ap.parse_args()
     # Garante dict mutável (runner antigo do painel às vezes setava None).
     _ur = globals().get("ULTIMO_RESULTADO_UPLOAD")
@@ -2381,11 +2710,11 @@ def main():
     else:
         _ur.clear()
 
-    if not (args.listagem or "").strip():
-        ap.error("Informe --listagem com a URL da página de licitações.")
+    if not (args.planilha_fonte or "").strip() and not (args.listagem or "").strip():
+        ap.error("Informe --listagem ou --planilha-fonte (Google Sheets / xlsx).")
 
-    p = urlparse(args.listagem)
-    base = f"{p.scheme}://{p.netloc}"
+    p = urlparse(args.listagem) if (args.listagem or "").strip() else None
+    base = "{0}://{1}".format(p.scheme, p.netloc) if p and p.scheme and p.netloc else ""
 
     # Filtro de anos efetivo: linha de comando > configuração do topo
     anos_filtro = ([a.strip() for a in args.anos.split(",") if a.strip()]
@@ -2425,12 +2754,21 @@ def main():
         motor_ocr = args.motor_ocr or MOTOR_OCR
 
     print("=" * 66)
-    print(f"Entidade : {p.netloc}")
-    print(f"Listagem : {raiz_categoria(args.listagem)}")
+    if (args.planilha_fonte or "").strip():
+        print("Fonte   : planilha ({0})".format(args.planilha_fonte[:72]))
+    else:
+        print("Entidade : {0}".format(p.netloc if p else "?"))
+        print("Listagem : {0}".format(raiz_categoria(args.listagem)))
     print(f"Downloads: {args.saida}")
     print(f"Planilha : {args.planilha_saida}  (modelo: {args.planilha_modelo})")
     print(f"Anos     : {', '.join(anos_filtro) if anos_filtro else 'todos'}")
     print(f"Renomear : {'pelo título interno dos documentos' if renomear else 'não'}")
+    if getattr(args, "amostra_mensal", False):
+        print(
+            "Amostra  : até {0} por mês (modalidades diversificadas)".format(
+                getattr(args, "amostra_por_mes", 5) or 5
+            )
+        )
     if args.limite and args.limite > 0:
         print(f"Limite   : {args.limite} licitação(ões)")
     if args.refinar_ia:
@@ -2444,11 +2782,17 @@ def main():
     print("=" * 66 + "\n")
 
     licitacoes = None
-    if not args.so_html:
+    if (args.planilha_fonte or "").strip():
+        print("► Coletando via planilha-fonte (links Documentos)...")
+        cache_dir = Path(args.saida) / "_cache"
+        licitacoes = coletar_via_planilha_fonte(
+            sessao, args.planilha_fonte.strip(), cache_dir
+        )
+    elif not args.so_html:
         print("► Coletando via API REST...")
         slugs = ["licitacoes"] + (SUBCATEGORIAS if args.incluir_subcategorias else [])
         licitacoes = coletar_via_api(sessao, base, slugs, anos_filtro=anos_filtro)
-    if licitacoes is None:
+    if licitacoes is None and not (args.planilha_fonte or "").strip():
         print("► Coletando via HTML (varredura de páginas)...")
         listagens = [args.listagem] + (
             [f"{base}/c/licitacoes/{s}/" for s in SUBCATEGORIAS]
@@ -2456,6 +2800,32 @@ def main():
         licitacoes = coletar_via_html(
             sessao, listagens, anos_filtro=anos_filtro
         )
+    if getattr(args, "amostra_mensal", False):
+        antes = len(licitacoes or [])
+        por_mes = getattr(args, "amostra_por_mes", 5) or 5
+        selecionadas, restantes = amostrar_mensal_diversificada(
+            licitacoes or [], por_mes=por_mes
+        )
+        licitacoes = selecionadas
+        print(
+            "\n► Amostra mensal: {0} → {1} licitação(ões) "
+            "(até {2}/mês, modalidades diversificadas).".format(
+                antes, len(licitacoes), por_mes
+            )
+        )
+        if restantes:
+            planilha_nao = salvar_planilha_nao_migradas(args.saida, restantes)
+            print(
+                "  · Não migradas (só links): {0} → {1}".format(
+                    len(restantes), planilha_nao
+                )
+            )
+            ULTIMO_RESULTADO_UPLOAD.update({
+                "planilha_nao_migradas": planilha_nao,
+                "nao_migradas": len(restantes),
+            })
+        else:
+            print("  · Nenhuma licitação restante para controle de não migradas.")
     if args.limite and args.limite > 0:
         licitacoes = licitacoes[: args.limite]
     print(f"\n► {len(licitacoes)} licitação(ões) a processar.\n")
@@ -2569,12 +2939,44 @@ def main():
                 except Exception:
                     pass
 
-            linha = {"Modalidade": modalidade, "Número": numero, "Ano": ano,
-                     "Objeto": objeto or titulo, "Data de Publicação": data_pub,
-                     "Data de Abertura": "", "Valor Estimado": "",
-                     "Situação da Licitação": "", "Valor Homologado": ""}
+            dp = lic.get("dados_planilha") or {}
+            usar_dados_planilha = bool(dp)
 
-            if not args.sem_extracao:
+            if usar_dados_planilha:
+                modalidade = modalidade_padrao(
+                    dp.get("modalidade") or modalidade
+                ) or (dp.get("modalidade") or modalidade)
+                numero = dp.get("numero") or numero
+                ano = extrai_ano(numero) or ano
+                objeto = dp.get("objeto") or objeto or titulo
+                pub_dp = _parse_data_planilha(dp.get("publicacao"))
+                if pub_dp:
+                    data_pub = pub_dp
+                linha = {
+                    "Modalidade": modalidade,
+                    "Número": numero,
+                    "Ano": ano,
+                    "Objeto": objeto,
+                    "Data de Publicação": data_pub,
+                    "Data de Abertura": _parse_data_planilha(dp.get("abertura")),
+                    "Valor Estimado": "",
+                    "Situação da Licitação": dp.get("situacao") or "",
+                    "Valor Homologado": dp.get("valor_homologado") or "",
+                }
+            else:
+                linha = {
+                    "Modalidade": modalidade,
+                    "Número": numero,
+                    "Ano": ano,
+                    "Objeto": objeto or titulo,
+                    "Data de Publicação": data_pub,
+                    "Data de Abertura": "",
+                    "Valor Estimado": "",
+                    "Situação da Licitação": "",
+                    "Valor Homologado": "",
+                }
+
+            if not args.sem_extracao and not usar_dados_planilha:
                 _log("    etapa: ler documentos prioritários...")
                 arquivos_texto, cabecalhos, nomes_docs = _ler_docs_priorizados(
                     arquivos_locais, args.ocr, args.idioma_ocr, motor_ocr,
@@ -2676,6 +3078,20 @@ def main():
                         "licitacao": titulo,
                     })
                     modalidade = linha.get("Modalidade") or modalidade
+
+            elif not args.sem_extracao and usar_dados_planilha:
+                num_final = numero_com_sigla_front(
+                    linha.get("Número") or numero, modalidade
+                )
+                linha["Número"] = num_final
+                padronizar_linha_para_todas_planilhas(linha)
+                modalidade = linha.get("Modalidade") or modalidade
+                _log(
+                    "    planilha-fonte: nº {0} | sit. {1} | hom. {2}",
+                    linha.get("Número") or "—",
+                    linha.get("Situação da Licitação") or "—",
+                    linha.get("Valor Homologado") or "—",
+                )
 
             linhas_planilha.append(linha)
             itens_upload.append({

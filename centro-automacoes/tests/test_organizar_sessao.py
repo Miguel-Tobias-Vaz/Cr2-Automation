@@ -87,7 +87,24 @@ def test_nome_pasta_sessao_separa_periodos():
     n2 = mod.nome_pasta_sessao(p2)
     assert n1 != n2
     assert "1" in n1 and "2" in n2
+    assert n1.startswith("03-11-2023")
+    assert n2.startswith("03-11-2023")
 
+
+def test_parse_sessao_realizada_em_organiza_por_data():
+    mod = _load_mod()
+    t = "16ª Sessão Ordinária - Realizada em 11 de Outubro de 2023 - 6º Período"
+    meta = mod.parse_sessao(t)
+    assert meta is not None
+    assert meta["numero"] == 16
+    assert meta["data"] == "11-10-2023"
+    assert meta["periodo"] == "6º Período"
+    assert not (meta.get("evento") or "").strip()
+    pasta = mod.nome_pasta_sessao(meta)
+    assert pasta.startswith("11-10-2023")
+    assert "Realizada" not in pasta
+    assert "16ª Sessão Ordinária" in pasta
+    assert "6º Período" in pasta
 
 def test_resolver_dir_sessao_mesmo_numero_datas_diferentes(tmp_path):
     """Jacareacanga: 1ª Ordinária de fev ≠ 1ª Ordinária de jun."""
