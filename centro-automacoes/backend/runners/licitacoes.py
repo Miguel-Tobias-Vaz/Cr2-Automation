@@ -89,8 +89,8 @@ def run(job) -> None:
     if priorizar_docs_leves:
         job.emit(
             "info",
-            "Filtro docs leves: pula se houver contrato/aditivo; exige DFD; "
-            "menos anexos primeiro → Nao_migradas_links.xlsx",
+            "Filtro docs leves: pula só contrato/aditivo puro; prioriza docs úteis "
+            "e menos anexos → Nao_migradas_links.xlsx",
         )
     if DOWNLOAD_WORKERS > 1:
         job.emit(

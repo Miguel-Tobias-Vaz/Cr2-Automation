@@ -71,14 +71,27 @@ _TIPOS = [
         r"ata de registro", r"ata de sessao", r"ata de julgamento",
         r"\bata\b",
     ]),
-    # Aditivo antes de contrato (evita classificar "termo aditivo" como contrato)
+    # Aditivo / contrato firmado — NÃO confundir com minuta do edital nem contrato social
     ("aditivo", "Termo aditivo / Apostilamento", 10, [
         r"termo aditivo", r"\baditivo\b", r"apostilamento",
         r"extrato de termo aditivo",
     ]),
-    ("contrato", "Contrato", 10, [
-        r"contrato administrativo", r"termo de contrato",
-        r"extrato de contrato", r"\bcontrato\b",
+    ("minuta_contrato", "Minuta de contrato (anexo do edital)", 6, [
+        r"minuta d[eo] contrato", r"minuta contrato",
+        r"minuta do instrumento", r"anexo.*minuta",
+    ]),
+    ("contrato_social", "Contrato social (habilitação)", 12, [
+        r"contrato social",
+    ]),
+    ("contrato", "Contrato firmado", 10, [
+        r"contrato administrativo",
+        r"termo de contrato",
+        r"extrato de contrato",
+        r"contrato\s+n[º°o\.]\s*\d",
+        r"contrato\s+n[uú]mero",
+        r"contrato\s+\d{4,}",
+        # "Contrato - Nome.pdf" / "Contrato.pdf" no início (firmado), não "minuta"
+        r"(^|[/\\_\s])contrato(\s*[-–—.]|\s*$|\.pdf)",
     ]),
     ("parecer", "Parecer jurídico / técnico", 8, [
         r"parecer juridico", r"parecer tecnico", r"\bparecer\b",
@@ -92,11 +105,18 @@ _TIPOS = [
     ]),
 ]
 
-# Bloqueiam o filtro "docs leves" se aparecerem em qualquer anexo
+# Bloqueiam o filtro "docs leves" (contrato firmado / aditivo — não minuta)
 TIPOS_EXCLUSAO_DOCS_LEVES = frozenset({"contrato", "aditivo"})
 
-# Pontuação extra ao priorizar processos com poucos anexos (DFD já é obrigatório)
+# Precisa de pelo menos um destes para valer a pena extrair (DFD é bônus, não obrigatório)
+TIPOS_UTEIS_DOCS_LEVES = frozenset({
+    "dfd", "etp", "termo_referencia", "edital", "homologacao",
+    "aviso", "orcamento", "dispensa_inexig",
+})
+
+# Pontuação ao priorizar processos com poucos anexos
 TIPOS_SCORE_DOCS_LEVES = (
+    "dfd",
     "termo_referencia",
     "homologacao",
     "etp",
@@ -108,6 +128,7 @@ TIPOS_SCORE_DOCS_LEVES = (
     "autorizacao",
     "ata",
     "dispensa_inexig",
+    "minuta_contrato",
 )
 
 # Tipos preferidos para a IA (fonte boa de número/objeto/situação/valores)

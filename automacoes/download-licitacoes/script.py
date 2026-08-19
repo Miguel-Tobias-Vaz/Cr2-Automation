@@ -787,16 +787,17 @@ def _anexos_como_pares(lic):
 def filtrar_licitacoes_docs_leves(licitacoes):
     """
     Prioriza processos rápidos de extrair:
-      1) rejeita se houver QUALQUER anexo de contrato ou aditivo;
-      2) exige DFD/DOD no nome dos anexos;
-      3) ordena por menos anexos e, em empate, mais docs-chave (TR, homologação…).
+      1) rejeita se TODOS os anexos forem só contrato firmado e/ou aditivo;
+         (minuta de contrato / contrato social NÃO contam como exclusão)
+      2) exige ao menos um doc útil (DFD, TR, edital, homologação…);
+      3) ordena por menos anexos e, em empate, mais docs-chave (DFD dá bônus).
 
-    Retorna (selecionadas, rejeitadas). Cada rejeitada pode ter
-    `_filtro_motivo` e `_qtd_anexos`.
+    Retorna (selecionadas, rejeitadas).
     """
     from ia_local.classificar_docs import (
         TIPOS_EXCLUSAO_DOCS_LEVES,
         TIPOS_SCORE_DOCS_LEVES,
+        TIPOS_UTEIS_DOCS_LEVES,
         classificar,
     )
 
@@ -817,16 +818,22 @@ def filtrar_licitacoes_docs_leves(licitacoes):
         lic_out["_qtd_anexos"] = qtd
         lic_out["_tipos_anexos"] = sorted(tipos)
 
-        if tipos & TIPOS_EXCLUSAO_DOCS_LEVES:
-            lic_out["_filtro_motivo"] = "tem contrato/aditivo"
+        # Pula pastas que são só contrato/aditivo (sem edital/TR/etc.)
+        if qtd > 0 and tipos and tipos.issubset(TIPOS_EXCLUSAO_DOCS_LEVES):
+            lic_out["_filtro_motivo"] = "só contrato/aditivo"
             rejeitadas.append(lic_out)
             continue
-        if "dfd" not in tipos:
-            lic_out["_filtro_motivo"] = "sem DFD"
+        if not (tipos & TIPOS_UTEIS_DOCS_LEVES):
+            lic_out["_filtro_motivo"] = "sem doc útil (TR/edital/homologação/DFD)"
             rejeitadas.append(lic_out)
             continue
 
         score = sum(score_peso.get(t, 0) for t in tipos)
+        if "dfd" in tipos:
+            score += 20
+        # Penaliza um pouco se já tiver contrato firmado (ainda processa, mas depois)
+        if "contrato" in tipos or "aditivo" in tipos:
+            score -= 5
         lic_out["_score_docs"] = score
         selecionadas.append(lic_out)
 
@@ -3194,8 +3201,8 @@ def main():
     )
     ap.add_argument(
         "--priorizar-docs-leves", action="store_true",
-        help="Pula se houver qualquer contrato/aditivo; exige DFD; "
-             "ordena pelos que têm menos anexos (mais rápidos).",
+        help="Pula pastas só de contrato/aditivo; prioriza docs úteis "
+             "(TR/edital/homologação/DFD) e menos anexos.",
     )
     ap.add_argument(
         "--download-workers", type=int, default=0,
@@ -3277,8 +3284,8 @@ def main():
         )
     if getattr(args, "priorizar_docs_leves", False):
         print(
-            "Filtro   : docs leves (pula se tiver contrato/aditivo; "
-            "exige DFD; menos anexos primeiro)"
+            "Filtro   : docs leves (pula só contrato/aditivo puro; "
+            "prioriza TR/edital/homologação/DFD; menos anexos)"
         )
     if args.limite and args.limite > 0:
         print(f"Limite   : {args.limite} licitação(ões)")
@@ -3318,13 +3325,22 @@ def main():
         licitacoes = selecionadas
         print(
             "\n► Filtro docs leves: {0} → {1} licitação(ões) "
-            "(sem contrato/aditivo; com DFD; menos anexos primeiro).".format(
+            "(pula só contrato/aditivo puro; prioriza docs úteis; menos anexos).".format(
                 antes, len(licitacoes)
             )
         )
         if rejeitadas:
+            from collections import Counter
+            motivos = Counter(
+                (r.get("_filtro_motivo") or "?") for r in rejeitadas
+            )
+            print(
+                "  · Rejeitadas no filtro: {0} ({1})".format(
+                    len(rejeitadas),
+                    ", ".join("{0}={1}".format(k, v) for k, v in motivos.most_common()),
+                )
+            )
             nao_migradas_acum.extend(rejeitadas)
-            print("  · Rejeitadas no filtro: {0}".format(len(rejeitadas)))
         else:
             print("  · Nenhuma licitação rejeitada pelo filtro de docs.")
     if getattr(args, "amostra_mensal", False):
