@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 
+from backend.config import DOWNLOAD_WORKERS
 from backend.runners.base import SCRIPTS, apply_globals, load_module, run_main_with_logs
 
 
@@ -71,6 +72,7 @@ def run(job) -> None:
         amostra_por_mes = 5
     if amostra_por_mes < 1:
         amostra_por_mes = 5
+    priorizar_docs_leves = bool(cfg.get("priorizar_docs_leves", False))
 
     labels = {
         "completo": "Completo (baixar + extrair + planilha)",
@@ -83,6 +85,17 @@ def run(job) -> None:
             "info",
             "Amostra mensal: até {0} por mês (modalidades diversificadas); "
             "demais → Nao_migradas_links.xlsx".format(amostra_por_mes),
+        )
+    if priorizar_docs_leves:
+        job.emit(
+            "info",
+            "Filtro docs leves: pula se houver contrato/aditivo; exige DFD; "
+            "menos anexos primeiro → Nao_migradas_links.xlsx",
+        )
+    if DOWNLOAD_WORKERS > 1:
+        job.emit(
+            "info",
+            "Downloads paralelos: {0} conexões por licitação".format(DOWNLOAD_WORKERS),
         )
     if ocr:
         job.emit("info", "OCR: ligado ({0})".format(motor_ocr))
@@ -138,6 +151,8 @@ def run(job) -> None:
     if amostra_mensal:
         argv.append("--amostra-mensal")
         argv += ["--amostra-por-mes", str(amostra_por_mes)]
+    if priorizar_docs_leves:
+        argv.append("--priorizar-docs-leves")
     if ocr:
         argv.append("--ocr")
         argv += ["--motor-ocr", motor_ocr or "tesseract"]
@@ -164,7 +179,9 @@ def run(job) -> None:
             sys.modules.pop(key, None)
 
     mod = load_module("download_licitacoes", SCRIPTS["licitacoes"])
-    mapping = {}
+    mapping = {
+        "DOWNLOAD_WORKERS": DOWNLOAD_WORKERS,
+    }
     # Painel: anos vazio = todos (não usa o ANOS_FILTRO hardcoded do script)
     if not anos:
         mapping["ANOS_FILTRO"] = []

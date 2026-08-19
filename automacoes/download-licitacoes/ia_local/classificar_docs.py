@@ -28,10 +28,9 @@ def _norm(txt: str) -> str:
 _TIPOS = [
     ("dfd", "DFD / Formalização de demanda", 1, [
         r"\bdfd\b", r"\bdod\b",
-        r"documento de formalizacao de demanda",
+        r"documento de formalizacao d[ae] demanda",
         r"documento de formalizacao",
-        r"formalizacao de demanda",
-        r"formalizacao da demanda",
+        r"formalizacao d[ae] demanda",
         r"doc\.?\s*de formalizacao",
         r"pedido de formalizacao",
     ]),
@@ -40,7 +39,8 @@ _TIPOS = [
     ]),
     ("termo_referencia", "Termo de Referência", 3, [
         r"termo de referencia", r"termo_referencia",
-        r"\bt\.?\s*r\.?\b", r"\btr\b", r"projeto basico",
+        r"\bt\.?\s*r\.?\b", r"\btr\b",
+        r"projeto basico", r"projeto executivo",
     ]),
     # Orçamento / pesquisa: fonte forte de Valor Estimado (antes do edital genérico)
     ("orcamento", "Orçamento / Pesquisa de preços", 3, [
@@ -71,8 +71,17 @@ _TIPOS = [
         r"ata de registro", r"ata de sessao", r"ata de julgamento",
         r"\bata\b",
     ]),
+    # Aditivo antes de contrato (evita classificar "termo aditivo" como contrato)
+    ("aditivo", "Termo aditivo / Apostilamento", 10, [
+        r"termo aditivo", r"\baditivo\b", r"apostilamento",
+        r"extrato de termo aditivo",
+    ]),
     ("contrato", "Contrato", 10, [
-        r"contrato administrativo", r"termo de contrato", r"\bcontrato\b",
+        r"contrato administrativo", r"termo de contrato",
+        r"extrato de contrato", r"\bcontrato\b",
+    ]),
+    ("parecer", "Parecer jurídico / técnico", 8, [
+        r"parecer juridico", r"parecer tecnico", r"\bparecer\b",
     ]),
     ("dispensa_inexig", "Dispensa / Inexigibilidade", 5, [
         r"termo de dispensa", r"dispensa de licitacao", r"\bdispensa\b",
@@ -83,10 +92,29 @@ _TIPOS = [
     ]),
 ]
 
+# Bloqueiam o filtro "docs leves" se aparecerem em qualquer anexo
+TIPOS_EXCLUSAO_DOCS_LEVES = frozenset({"contrato", "aditivo"})
+
+# Pontuação extra ao priorizar processos com poucos anexos (DFD já é obrigatório)
+TIPOS_SCORE_DOCS_LEVES = (
+    "termo_referencia",
+    "homologacao",
+    "etp",
+    "edital",
+    "aviso",
+    "orcamento",
+    "adjudicacao",
+    "parecer",
+    "autorizacao",
+    "ata",
+    "dispensa_inexig",
+)
+
 # Tipos preferidos para a IA (fonte boa de número/objeto/situação/valores)
 TIPOS_PRIORITARIOS = {
     "dfd", "etp", "termo_referencia", "orcamento", "edital", "aviso",
     "autorizacao", "homologacao", "adjudicacao", "ata", "dispensa_inexig",
+    "parecer",
 }
 
 # Sempre entram na leitura para valores (estimado/homologado), se existirem
@@ -95,7 +123,7 @@ TIPOS_OBRIGATORIOS_VALORES = (
 )
 
 # Só entram se faltar vaga ou para situação
-TIPOS_COMPLEMENTARES = {"contrato", "aceite_adesao"}
+TIPOS_COMPLEMENTARES = {"contrato", "aditivo", "aceite_adesao"}
 
 # Páginas / caracteres por tipo (0 páginas = documento INTEIRO)
 # Edital + DFD + TR + Termo de Homologação: leitura integral
@@ -110,8 +138,10 @@ PAGINAS_POR_TIPO = {
     "autorizacao": 6,
     "homologacao": 0,
     "adjudicacao": 6,
+    "parecer": 8,
     "ata": 14,
     "contrato": 12,
+    "aditivo": 8,
     "aceite_adesao": 4,
     "outro": 3,
 }
@@ -127,8 +157,10 @@ CHARS_POR_TIPO = {
     "autorizacao": 8_000,
     "homologacao": 80_000,
     "adjudicacao": 8_000,
+    "parecer": 12_000,
     "ata": 28_000,
     "contrato": 20_000,
+    "aditivo": 12_000,
     "aceite_adesao": 5_000,
     "outro": 4_000,
 }

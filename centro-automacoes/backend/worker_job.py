@@ -18,11 +18,13 @@ class WorkerJob:
         service_id: str,
         config: dict[str, Any],
         work_dir: Path,
+        owner: str | None = None,
     ) -> None:
         self.id = job_id
         self.service_id = service_id
         self.config = config
         self.dir = work_dir
+        self.owner = (owner or "").strip() or None
         self.status = "running"
         self._cancel_requested = False
         self.error: str | None = None

@@ -2750,7 +2750,11 @@ def _ano_filtro_linha_comando():
     return None
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    """Entrada do painel Opto / CLI."""
+    if argv is not None:
+        sys.argv = [sys.argv[0]] + list(argv)
+
     # Antes da fila: corrige Python do IDE (ex. 3.13 Store) sem playwright.
     if sync_playwright is None and "--help" not in sys.argv and "-h" not in sys.argv:
         garantir_playwright_pronto()
@@ -2773,14 +2777,14 @@ if __name__ == "__main__":
             "  PASTA_BALANCETE (Mes-Ano); "
             "PASTA_BALANCO_REL_ANUAIS: '<Tipo>-<AAAA>' ou '<Tipo>/<AAAA>/' (PDF dentro)."
         )
-        sys.exit(0)
+        return 0
 
     if "--analise" in sys.argv or "--scan" in sys.argv:
         print("=" * 50)
         print("  Modo ANALISE — escaneamento do popup RGF")
         print("=" * 50)
         rodar_analise_popup()
-        sys.exit(0)
+        return 0
 
     modo_teste = (
         MODO_TESTE
@@ -2959,7 +2963,7 @@ if __name__ == "__main__":
             "\n[INFO] Nenhuma fila para processar "
             "(URLs desligadas, pastas sem PDF, ou filtros).\n"
         )
-        sys.exit(0)
+        return 0
 
     total_items = len(pdfs_rgf) + len(pdfs_rreo) + len(pdfs_bal) + len(pdfs_bra)
     print("\n{} item(ns) na fila total:\n".format(total_items))
@@ -2998,24 +3002,24 @@ if __name__ == "__main__":
                 "Rode com --yes ou use o terminal do Cursor.\n"
                 "Encerrando."
             )
-            sys.exit(0)
+            return 0
     if resposta != "s":
-        sys.exit(0)
+        return 0
 
     verificar_playwright_instalado()
 
     if pdfs_rgf and not url_portal_ativa(URL_PORTAL_RGF):
         print("[ERRO] Inconsistencia: PDFs RGF mas URL_PORTAL_RGF vazio.")
-        sys.exit(1)
+        return 1
     if pdfs_rreo and not url_portal_ativa(URL_PORTAL_RREO):
         print("[ERRO] Inconsistencia: PDFs RREO mas URL_PORTAL_RREO vazio.")
-        sys.exit(1)
+        return 1
     if pdfs_bal and not url_portal_ativa(URL_PORTAL_BALANCETE):
         print("[ERRO] Inconsistencia: PDFs Balancete mas URL_PORTAL_BALANCETE vazio.")
-        sys.exit(1)
+        return 1
     if pdfs_bra and not url_portal_ativa(URL_PORTAL_BALANCO_REL_ANUAIS):
         print("[ERRO] Inconsistencia: PDFs Balanco/Rel. Anuais mas URL vazio.")
-        sys.exit(1)
+        return 1
 
     publicar_filas_combinadas(
         pdfs_rgf,
@@ -3024,3 +3028,8 @@ if __name__ == "__main__":
         pdfs_rreo=pdfs_rreo,
         pular_enter_pos_login=confirmar_automatico,
     )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

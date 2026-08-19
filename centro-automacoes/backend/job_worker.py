@@ -44,7 +44,17 @@ def main() -> int:
     with open(runtime_path, encoding="utf-8") as fh:
         config = json.load(fh)
 
-    job = WorkerJob(job_id, service_id, config, work_dir)
+    owner = None
+    meta_path = work_dir / "meta.json"
+    if meta_path.is_file():
+        try:
+            with open(meta_path, encoding="utf-8") as fh:
+                meta = json.load(fh)
+            owner = (meta.get("owner") or "").strip() or None
+        except (OSError, json.JSONDecodeError, TypeError, AttributeError):
+            owner = None
+
+    job = WorkerJob(job_id, service_id, config, work_dir, owner=owner)
     exit_code = 0
     try:
         runner = _load_runner(service_id)

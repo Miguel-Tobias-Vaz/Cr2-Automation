@@ -41,7 +41,7 @@ def run(job) -> None:
     if not usuario or not senha:
         raise ValueError("Usuário e senha do portal CR2 são obrigatórios.")
 
-    _validate_pastas(cfg, job.owner)
+    _validate_pastas(cfg, getattr(job, "owner", None))
 
     mod = load_module("publicador_cr2", SCRIPT)
     patch = {

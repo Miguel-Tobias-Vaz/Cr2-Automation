@@ -41,6 +41,7 @@ import subprocess
 import sys
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -118,6 +119,8 @@ HEADERS = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                           "AppleWebKit/537.36 (KHTML, like Gecko) "
                           "Chrome/124.0 Safari/537.36")}
 PAUSA, TENTATIVAS, TIMEOUT = 0.5, 3, 90
+# Conexões paralelas ao baixar anexos da mesma licitação (painel: OPTO_DOWNLOAD_WORKERS).
+DOWNLOAD_WORKERS = 4
 
 
 def _erro_rede_temporario(exc: BaseException) -> bool:
@@ -614,9 +617,22 @@ def limpa_nome(texto, maxlen=180):
 def split_modalidade_numero(titulo):
     base = titulo.split("(")[0].strip()
     m = MARCADOR_N.search(base)
-    if not m:
-        return base.strip(), ""
-    return base[:m.start()].strip(" -–—"), base[m.end():].strip(" -–—")
+    if m:
+        return base[:m.start()].strip(" -–—"), base[m.end():].strip(" -–—")
+    # Sem "Nº": "PREGÃO ELETRÔNICO 9/2023-029" / "CONVITE 1/2023-006"
+    m2 = re.search(
+        r"(?<!\d)(\d{1,4}\s*/\s*(?:19|20)\d{2}(?:\s*[-–—]\s*[\w.]+)?)\s*$",
+        base,
+    )
+    if m2:
+        return base[: m2.start()].strip(" -–—"), m2.group(1).strip()
+    m3 = re.search(
+        r"(?<!\d)(\d{1,4}\s*/\s*(?:19|20)\d{2}(?:\s*[-–—]\s*[\w.]+)?)",
+        base,
+    )
+    if m3:
+        return base[: m3.start()].strip(" -–—"), m3.group(1).strip()
+    return base.strip(), ""
 
 
 def extrai_ano(numero):
@@ -642,7 +658,7 @@ def extrai_ano(numero):
 def ano_do_titulo(titulo):
     """Ano extraído do título da licitação (número), ou '' se não houver."""
     _mod, numero = split_modalidade_numero(titulo or "")
-    return extrai_ano(numero)
+    return extrai_ano(numero) or extrai_ano(titulo or "")
 
 
 def ano_de_data_pub(data_pub):
@@ -752,6 +768,78 @@ def amostrar_mensal_diversificada(licitacoes, por_mes=5):
     return selecionadas, restantes
 
 
+def _anexos_como_pares(lic):
+    """Normaliza lic['anexos'] para lista de (nome, url)."""
+    pares = []
+    for item in (lic or {}).get("anexos") or []:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            pares.append((str(item[0] or ""), str(item[1] or "")))
+        elif isinstance(item, dict):
+            pares.append((
+                str(item.get("nome") or item.get("texto") or ""),
+                str(item.get("url") or item.get("link") or ""),
+            ))
+        elif isinstance(item, str):
+            pares.append(("", item))
+    return pares
+
+
+def filtrar_licitacoes_docs_leves(licitacoes):
+    """
+    Prioriza processos rápidos de extrair:
+      1) rejeita se houver QUALQUER anexo de contrato ou aditivo;
+      2) exige DFD/DOD no nome dos anexos;
+      3) ordena por menos anexos e, em empate, mais docs-chave (TR, homologação…).
+
+    Retorna (selecionadas, rejeitadas). Cada rejeitada pode ter
+    `_filtro_motivo` e `_qtd_anexos`.
+    """
+    from ia_local.classificar_docs import (
+        TIPOS_EXCLUSAO_DOCS_LEVES,
+        TIPOS_SCORE_DOCS_LEVES,
+        classificar,
+    )
+
+    selecionadas = []
+    rejeitadas = []
+    score_peso = {t: len(TIPOS_SCORE_DOCS_LEVES) - i
+                  for i, t in enumerate(TIPOS_SCORE_DOCS_LEVES)}
+
+    for lic in licitacoes or []:
+        pares = _anexos_como_pares(lic)
+        qtd = len(pares)
+        tipos = set()
+        for nome, url in pares:
+            meta = classificar(nome, url)
+            tipos.add(meta.get("tipo") or "outro")
+
+        lic_out = dict(lic)
+        lic_out["_qtd_anexos"] = qtd
+        lic_out["_tipos_anexos"] = sorted(tipos)
+
+        if tipos & TIPOS_EXCLUSAO_DOCS_LEVES:
+            lic_out["_filtro_motivo"] = "tem contrato/aditivo"
+            rejeitadas.append(lic_out)
+            continue
+        if "dfd" not in tipos:
+            lic_out["_filtro_motivo"] = "sem DFD"
+            rejeitadas.append(lic_out)
+            continue
+
+        score = sum(score_peso.get(t, 0) for t in tipos)
+        lic_out["_score_docs"] = score
+        selecionadas.append(lic_out)
+
+    selecionadas.sort(
+        key=lambda x: (
+            int(x.get("_qtd_anexos") or 0),
+            -int(x.get("_score_docs") or 0),
+            str(x.get("titulo") or ""),
+        )
+    )
+    return selecionadas, rejeitadas
+
+
 def salvar_planilha_nao_migradas(pasta_saida, licitacoes, nome_arquivo=""):
     """
     Planilha de controle das licitações NÃO processadas na amostra.
@@ -770,7 +858,10 @@ def salvar_planilha_nao_migradas(pasta_saida, licitacoes, nome_arquivo=""):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Não migradas"
-    headers = ("Link", "Título", "Data publicação", "Modalidade", "Status")
+    headers = (
+        "Link", "Título", "Data publicação", "Modalidade", "Status",
+        "Motivo", "Qtd anexos",
+    )
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.font = Font(bold=True)
@@ -785,19 +876,28 @@ def salvar_planilha_nao_migradas(pasta_saida, licitacoes, nome_arquivo=""):
             except Exception:
                 data_pub = str(data_pub)
         modalidade = modalidade_padrao(titulo) if titulo else ""
+        motivo = (lic or {}).get("_filtro_motivo") or "Não migrada"
+        qtd = (lic or {}).get("_qtd_anexos")
+        if qtd is None:
+            qtd = len(_anexos_como_pares(lic))
         ws.cell(row=i, column=1, value=link)
         ws.cell(row=i, column=2, value=titulo)
         ws.cell(row=i, column=3, value=str(data_pub))
         ws.cell(row=i, column=4, value=modalidade)
         ws.cell(row=i, column=5, value="Não migrada")
+        ws.cell(row=i, column=6, value=motivo)
+        ws.cell(row=i, column=7, value=qtd)
 
     ws.column_dimensions["A"].width = 60
     ws.column_dimensions["B"].width = 55
     ws.column_dimensions["C"].width = 16
     ws.column_dimensions["D"].width = 28
     ws.column_dimensions["E"].width = 14
+    ws.column_dimensions["F"].width = 18
+    ws.column_dimensions["G"].width = 12
     wb.save(caminho)
     return os.path.abspath(caminho)
+
 
 def _anos_filtro_set(anos_filtro):
     return {str(a).strip() for a in (anos_filtro or []) if str(a).strip()}
@@ -1366,11 +1466,217 @@ def coletar_via_html(sessao, listagens, anos_filtro=None):
 # ---------------------------------------------------------------------------
 
 _RE_DRIVE_SHEET_ID = re.compile(r"/spreadsheets/d/([a-zA-Z0-9_-]+)")
+_RE_DRIVE_FOLDER_ID = re.compile(
+    r"drive\.google\.com/(?:drive/)?folders/([a-zA-Z0-9_-]+)",
+    re.I,
+)
+_RE_DRIVE_FILE_ID = re.compile(
+    r"drive\.google\.com/(?:file/d/|open\?id=|uc\?(?:[^#]*&)?id=)([a-zA-Z0-9_-]+)",
+    re.I,
+)
+_RE_DRIVE_URL_ANY = re.compile(
+    r"https?://(?:drive|docs)\.google\.com/[^\s\"'<>]+",
+    re.I,
+)
+_EXT_DOC_OK = (
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".odt", ".ods", ".zip", ".rar", ".7z",
+)
 
 
 def _extrair_id_google_sheets(url: str) -> str | None:
     m = _RE_DRIVE_SHEET_ID.search(url or "")
     return m.group(1) if m else None
+
+
+def eh_url_google_drive(url: str) -> bool:
+    u = (url or "").lower()
+    return "drive.google.com" in u or (
+        "docs.google.com" in u and "/document" not in u and "/spreadsheets" not in u
+    )
+
+
+def _id_pasta_drive(url: str) -> str | None:
+    m = _RE_DRIVE_FOLDER_ID.search(url or "")
+    return m.group(1) if m else None
+
+
+def _id_arquivo_drive(url: str) -> str | None:
+    if _id_pasta_drive(url):
+        return None
+    m = _RE_DRIVE_FILE_ID.search(url or "")
+    return m.group(1) if m else None
+
+
+def url_download_drive(file_id: str) -> str:
+    return "https://drive.google.com/uc?export=download&id={0}".format(file_id)
+
+
+def _listar_pasta_drive_embedded(sessao, folder_id: str) -> list[tuple[str, str]]:
+    """
+    Lista arquivos públicos de uma pasta Drive via embeddedfolderview.
+    Retorna [(nome, url_download), ...].
+    """
+    folder_id = (folder_id or "").strip()
+    if not folder_id:
+        return []
+    url = "https://drive.google.com/embeddedfolderview?id={0}#list".format(folder_id)
+    try:
+        r = sessao.get(url, timeout=TIMEOUT)
+        r.raise_for_status()
+        r.encoding = r.apparent_encoding or "utf-8"
+        html = r.text or ""
+    except Exception as e:
+        print("    ! Drive pasta {0}: {1}".format(folder_id[:12], e))
+        return []
+
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    out: list[tuple[str, str]] = []
+    vistos: set[str] = set()
+    for a in soup.find_all("a", href=True):
+        href = a.get("href") or ""
+        m = re.search(r"/file/d/([a-zA-Z0-9_-]+)", href)
+        if not m:
+            continue
+        fid = m.group(1)
+        if fid in vistos:
+            continue
+        vistos.add(fid)
+        nome = (a.get_text(strip=True) or "").strip() or "documento.pdf"
+        # Ignora pastas (sem extensão típica e sem mime no nome) — só arquivos
+        low = nome.lower()
+        if not any(low.endswith(ext) for ext in _EXT_DOC_OK):
+            # Ainda assim aceita se Drive listou como arquivo; força .pdf só se sem ponto
+            if "." not in nome:
+                nome = nome + ".pdf"
+        out.append((nome, url_download_drive(fid)))
+
+    # Subpastas: links /folders/ no embedded (raro) — 1 nível
+    for a in soup.find_all("a", href=True):
+        href = a.get("href") or ""
+        m = re.search(r"/folders/([a-zA-Z0-9_-]+)", href)
+        if not m:
+            continue
+        sub = m.group(1)
+        if sub == folder_id or sub in vistos:
+            continue
+        vistos.add(sub)
+        for nome, dl in _listar_pasta_drive_embedded(sessao, sub):
+            out.append((nome, dl))
+    return out
+
+
+def _listar_pasta_drive_data_id(sessao, folder_id: str) -> list[tuple[str, str]]:
+    """Fallback: página normal da pasta (data-id=…)."""
+    url = "https://drive.google.com/drive/folders/{0}".format(folder_id)
+    try:
+        r = sessao.get(url, timeout=TIMEOUT)
+        r.raise_for_status()
+        html = r.text or ""
+    except Exception:
+        return []
+    ids = sorted(set(re.findall(r'data-id="([a-zA-Z0-9_-]{20,})"', html)))
+    # O primeiro data-id costuma ser a própria pasta — filtramos depois via download
+    out = []
+    for fid in ids:
+        if fid == folder_id:
+            continue
+        out.append(("documento-{0}.pdf".format(fid[:8]), url_download_drive(fid)))
+    return out
+
+
+def anexos_google_drive(sessao, url: str) -> list[tuple[str, str]]:
+    """
+    Converte link Drive (pasta ou arquivo) em lista de anexos
+    no formato [(nome, url_download), ...] usado pelo baixador.
+    """
+    url = (url or "").strip()
+    if not url:
+        return []
+
+    folder_id = _id_pasta_drive(url)
+    if folder_id:
+        anexos = _listar_pasta_drive_embedded(sessao, folder_id)
+        if not anexos:
+            anexos = _listar_pasta_drive_data_id(sessao, folder_id)
+        return anexos
+
+    file_id = _id_arquivo_drive(url)
+    if not file_id:
+        # open?id= sem /file/d/ — tenta pasta, senão arquivo
+        m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", url)
+        if m:
+            cand = m.group(1)
+            anexos = _listar_pasta_drive_embedded(sessao, cand)
+            if anexos:
+                return anexos
+            file_id = cand
+
+    if file_id:
+        nome = "documento.pdf"
+        # tenta obter nome pela página view
+        try:
+            r = sessao.get(
+                "https://drive.google.com/file/d/{0}/view".format(file_id),
+                timeout=TIMEOUT,
+            )
+            if r.ok:
+                mt = re.search(
+                    r'<meta\s+property="og:title"\s+content="([^"]+)"',
+                    r.text or "",
+                    re.I,
+                )
+                if mt and mt.group(1).strip():
+                    nome = mt.group(1).strip()
+        except Exception:
+            pass
+        if "." not in nome:
+            nome = nome + ".pdf"
+        return [(nome, url_download_drive(file_id))]
+    return []
+
+
+def _link_documentos_na_linha(cells: list[str], idx: dict[str, int]) -> str:
+    """
+    Preferência: coluna Documentos. Se vazia/deslocada, pega o 1º link Drive
+    (ou http de documento) em qualquer célula da linha.
+    """
+    url = _cel(cells, idx, "documentos")
+    if url.startswith("http") and (
+        eh_url_google_drive(url) or eh_anexo(url) or "/wp-content/" in url.lower()
+    ):
+        return url.split()[0].strip()
+
+    # Célula Documentos com URL no meio do texto
+    if url:
+        m = _RE_DRIVE_URL_ANY.search(url)
+        if m:
+            return m.group(0).rstrip(").,;")
+
+    candidatos: list[str] = []
+    for c in cells:
+        s = str(c or "").strip()
+        if not s or "http" not in s.lower():
+            continue
+        for m in _RE_DRIVE_URL_ANY.finditer(s):
+            candidatos.append(m.group(0).rstrip(").,;"))
+        if not candidatos and s.startswith("http"):
+            # URL solta (não Drive) — só se parecer documento/página
+            low = s.lower()
+            if any(x in low for x in ("drive.google", ".pdf", "wp-content", "/licit")):
+                candidatos.append(s.split()[0].strip())
+    if not candidatos:
+        return url if url.startswith("http") else ""
+    # Prefere pasta Drive, depois arquivo Drive, depois demais
+    for u in candidatos:
+        if _id_pasta_drive(u):
+            return u
+    for u in candidatos:
+        if eh_url_google_drive(u):
+            return u
+    return candidatos[0]
 
 
 def baixar_planilha_google(url_ou_path: str, destino: Path) -> Path | None:
@@ -1469,20 +1775,24 @@ def ler_linhas_planilha_fonte(caminho: Path) -> list[dict[str, Any]]:
     if not rows:
         return []
     idx = _indice_colunas_planilha([str(c or "") for c in rows[0]])
-    if "documentos" not in idx:
-        print("  ! Coluna «Documentos» (ou Link/URL) não encontrada na planilha.")
-        return []
+    # Sem coluna Documentos ainda tenta achar links Drive nas linhas
     out: list[dict[str, Any]] = []
     for row in rows[1:]:
         if not row:
             continue
         cells = [str(c) if c is not None else "" for c in row]
-        url_doc = _cel(cells, idx, "documentos")
+        url_doc = _link_documentos_na_linha(cells, idx)
         if not url_doc.startswith("http"):
             continue
         mod = _cel(cells, idx, "modalidade")
         num = _cel(cells, idx, "numero")
         obj = _cel(cells, idx, "objeto")
+        data_pub = _cel(cells, idx, "publicacao")
+        if data_pub.startswith("http") or eh_url_google_drive(data_pub):
+            data_pub = ""
+        elif re.search(r"finaliz|publicad|realizad|fracass", data_pub or "", re.I):
+            # Coluna deslocada: situação caiu em Publicação
+            data_pub = ""
         titulo = " ".join(
             x for x in (mod, num, ("({0})".format(obj) if obj else "")) if x
         ).strip() or url_doc
@@ -1490,7 +1800,7 @@ def ler_linhas_planilha_fonte(caminho: Path) -> list[dict[str, Any]]:
             {
                 "titulo": titulo,
                 "link": url_doc,
-                "data_pub": _cel(cells, idx, "publicacao"),
+                "data_pub": data_pub,
                 "anexos": [],
                 "dados_planilha": {
                     "modalidade": mod,
@@ -1504,11 +1814,15 @@ def ler_linhas_planilha_fonte(caminho: Path) -> list[dict[str, Any]]:
                 },
             }
         )
+    if not out and "documentos" not in idx:
+        print("  ! Coluna «Documentos» (ou Link/URL) não encontrada e nenhum link Drive nas linhas.")
     return out
 
 
-def coletar_via_planilha_fonte(sessao, url_ou_path: str, pasta_cache: Path) -> list:
-    """Usa planilha (Google ou local): coluna Documentos → página → anexos."""
+def coletar_via_planilha_fonte(
+    sessao, url_ou_path: str, pasta_cache: Path, anos_filtro=None
+) -> list:
+    """Usa planilha (Google ou local): coluna Documentos → anexos (Drive ou HTML)."""
     path = baixar_planilha_google(
         url_ou_path, pasta_cache / "_planilha_fonte.xlsx"
     )
@@ -1516,6 +1830,29 @@ def coletar_via_planilha_fonte(sessao, url_ou_path: str, pasta_cache: Path) -> l
         return []
     linhas = ler_linhas_planilha_fonte(path)
     print("  · {0} linha(s) com link na planilha-fonte".format(len(linhas)))
+
+    anos_set = _anos_filtro_set(anos_filtro)
+    ano_min = _ano_minimo_filtro(anos_set)
+    if anos_set and ano_min is not None:
+        filtradas = []
+        puladas = 0
+        for lic in linhas:
+            num_pl = ((lic.get("dados_planilha") or {}).get("numero") or "").strip()
+            ano_t = ano_do_titulo(lic.get("titulo") or "") or extrai_ano(num_pl)
+            ano_p = ano_de_data_pub(lic.get("data_pub"))
+            acao = decidir_anos_vs_filtro(ano_t, ano_p, anos_set, ano_min)
+            if acao != "pegar":
+                puladas += 1
+                continue
+            filtradas.append(lic)
+        if puladas:
+            print(
+                "  · filtro anos {0}: {1} linha(s) mantida(s), {2} fora".format(
+                    ",".join(sorted(anos_set)), len(filtradas), puladas
+                )
+            )
+        linhas = filtradas
+
     res = []
     for i, lic in enumerate(linhas, 1):
         url_post = lic["link"]
@@ -1523,12 +1860,21 @@ def coletar_via_planilha_fonte(sessao, url_ou_path: str, pasta_cache: Path) -> l
             print("    · anexos planilha {0}/{1}…".format(i, len(linhas)))
         time.sleep(PAUSA)
         try:
-            r = sessao.get(url_post, timeout=TIMEOUT)
-            r.raise_for_status()
-            r.encoding = r.apparent_encoding or "utf-8"
-            anexos = extrair_anexos(r.text, url_post)
-            if not lic.get("data_pub"):
-                lic["data_pub"] = data_pub_do_html(r.text)
+            if eh_url_google_drive(url_post):
+                anexos = anexos_google_drive(sessao, url_post)
+                if not anexos:
+                    print(
+                        "    ! Drive sem arquivos públicos: {0}".format(
+                            url_post[:72]
+                        )
+                    )
+            else:
+                r = sessao.get(url_post, timeout=TIMEOUT)
+                r.raise_for_status()
+                r.encoding = r.apparent_encoding or "utf-8"
+                anexos = extrair_anexos(r.text, url_post)
+                if not lic.get("data_pub"):
+                    lic["data_pub"] = data_pub_do_html(r.text)
         except Exception as e:
             print("    ! Erro em {0}: {1}".format(url_post, e))
             anexos = []
@@ -1753,22 +2099,166 @@ def obter_texto(caminho, usar_ocr, idioma="por", min_chars=40, motor="auto",
 # PARTE 5 — DOWNLOAD
 # ============================================================================
 def baixar_arquivo(sessao, url, destino):
+    """Baixa anexo; trata confirmação anti-vírus do Google Drive em arquivos grandes."""
     for t in range(1, TENTATIVAS + 1):
         try:
             with sessao.get(url, stream=True, timeout=TIMEOUT) as r:
                 r.raise_for_status()
+                ctype = (r.headers.get("Content-Type") or "").lower()
+                # Drive às vezes devolve HTML pedindo confirm=
+                if "text/html" in ctype and "drive.google" in (url or "").lower():
+                    trecho = b"".join(list(r.iter_content(65536))[:8])
+                    html = trecho.decode("utf-8", errors="ignore")
+                    m = re.search(
+                        r"confirm=([0-9A-Za-z_]+)",
+                        html,
+                    ) or re.search(
+                        r'name="confirm"\s+value="([^"]+)"',
+                        html,
+                    )
+                    fid = _id_arquivo_drive(url) or ""
+                    if not fid:
+                        mm = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", url or "")
+                        fid = mm.group(1) if mm else ""
+                    if m and fid:
+                        url2 = (
+                            "https://drive.google.com/uc?export=download"
+                            "&confirm={0}&id={1}".format(m.group(1), fid)
+                        )
+                        with sessao.get(url2, stream=True, timeout=TIMEOUT) as r2:
+                            r2.raise_for_status()
+                            os.makedirs(os.path.dirname(destino), exist_ok=True)
+                            tmp = destino + ".part"
+                            with open(tmp, "wb") as f:
+                                for chunk in r2.iter_content(65536):
+                                    if chunk:
+                                        f.write(chunk)
+                            os.replace(tmp, destino)
+                        return True
+                    print(
+                        "        tentativa {0}/{1}: Drive pediu confirmação "
+                        "e não foi possível ler o token".format(t, TENTATIVAS)
+                    )
+                    time.sleep(1.5 * t)
+                    continue
+
                 os.makedirs(os.path.dirname(destino), exist_ok=True)
                 tmp = destino + ".part"
                 with open(tmp, "wb") as f:
                     for chunk in r.iter_content(65536):
                         if chunk:
                             f.write(chunk)
+                # HTML salvo por engano (login/bloqueio)
+                if os.path.getsize(tmp) < 5000:
+                    with open(tmp, "rb") as fh:
+                        head = fh.read(200).lstrip().lower()
+                    if head.startswith(b"<!doctype") or head.startswith(b"<html"):
+                        os.remove(tmp)
+                        raise RuntimeError("resposta HTML em vez de arquivo")
                 os.replace(tmp, destino)
             return True
         except Exception as e:
             print(f"        tentativa {t}/{TENTATIVAS}: {e}")
             time.sleep(1.5 * t)
     return False
+
+
+def _nova_sessao_download(sessao_base):
+    """Session própria por thread (requests.Session não é thread-safe)."""
+    s = requests.Session()
+    try:
+        s.headers.update(dict(sessao_base.headers))
+    except Exception:
+        s.headers.update(HEADERS)
+    s.verify = getattr(sessao_base, "verify", True)
+    return s
+
+
+def baixar_anexos_da_licitacao(sessao, anexos, pasta, *, so_planilha=False):
+    """
+    Prepara nomes únicos e baixa anexos em série ou em paralelo (DOWNLOAD_WORKERS).
+    Retorna lista de caminhos locais prontos.
+    """
+    arquivos_locais = []
+    nomes_nesta_execucao = set()
+    pendentes = []  # (arq, url, destino)
+
+    for texto_link, url_arq in anexos or []:
+        _abortar_se_cancelado()
+        arq = nome_arquivo(texto_link, url_arq)
+        if arq in nomes_nesta_execucao:
+            i = 2
+            while variante_numerada(arq, i) in nomes_nesta_execucao:
+                i += 1
+            arq = variante_numerada(arq, i)
+        nomes_nesta_execucao.add(arq)
+        destino = os.path.join(pasta, arq)
+
+        if not os.path.exists(destino):
+            legado = os.path.join(pasta, nome_arquivo_bruto(texto_link, url_arq))
+            if legado != destino and os.path.exists(legado):
+                try:
+                    os.replace(legado, destino)
+                    sc = caminho_sidecar(legado)
+                    if os.path.exists(sc):
+                        os.replace(sc, caminho_sidecar(destino))
+                    print(f"    [REN ] {os.path.basename(legado)} -> {arq}")
+                except OSError:
+                    destino = legado
+
+        if os.path.exists(destino):
+            arquivos_locais.append(destino)
+            continue
+        if so_planilha:
+            continue
+        pendentes.append((arq, url_arq, destino))
+
+    if not pendentes:
+        return arquivos_locais
+
+    workers = max(1, min(12, int(DOWNLOAD_WORKERS or 1)))
+
+    def _um(item):
+        arq, url_arq, destino = item
+        _abortar_se_cancelado()
+        print(f"    [DOWN] {arq}")
+        s = _nova_sessao_download(sessao)
+        try:
+            ok = baixar_arquivo(s, url_arq, destino)
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+        if workers <= 1:
+            time.sleep(PAUSA)
+        return destino if ok else None
+
+    if workers <= 1:
+        for item in pendentes:
+            caminho = _um(item)
+            if caminho:
+                arquivos_locais.append(caminho)
+        return arquivos_locais
+
+    print(f"    · downloads paralelos: {workers} conexões ({len(pendentes)} arquivo(s))")
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_um, item) for item in pendentes]
+        for fut in as_completed(futures):
+            _abortar_se_cancelado()
+            try:
+                caminho = fut.result()
+            except Cancelado:
+                for f in futures:
+                    f.cancel()
+                raise
+            except Exception as e:
+                print(f"        erro no download paralelo: {e}")
+                caminho = None
+            if caminho:
+                arquivos_locais.append(caminho)
+    time.sleep(min(PAUSA, 0.25))
+    return arquivos_locais
 
 
 # ============================================================================
@@ -2702,6 +3192,16 @@ def main():
         "--amostra-por-mes", type=int, default=5,
         help="Com --amostra-mensal: quantas licitações por mês (padrão: 5).",
     )
+    ap.add_argument(
+        "--priorizar-docs-leves", action="store_true",
+        help="Pula se houver qualquer contrato/aditivo; exige DFD; "
+             "ordena pelos que têm menos anexos (mais rápidos).",
+    )
+    ap.add_argument(
+        "--download-workers", type=int, default=0,
+        help="Downloads paralelos por licitação (1–12). "
+             "0 = usa DOWNLOAD_WORKERS do ambiente/painel (padrão 4).",
+    )
     args = ap.parse_args()
     # Garante dict mutável (runner antigo do painel às vezes setava None).
     _ur = globals().get("ULTIMO_RESULTADO_UPLOAD")
@@ -2720,6 +3220,11 @@ def main():
     anos_filtro = ([a.strip() for a in args.anos.split(",") if a.strip()]
                    if args.anos.strip() else list(ANOS_FILTRO))
     renomear = RENOMEAR_POR_TITULO and not args.sem_renomear
+    global DOWNLOAD_WORKERS
+    if getattr(args, "download_workers", 0) and int(args.download_workers) > 0:
+        DOWNLOAD_WORKERS = max(1, min(12, int(args.download_workers)))
+    else:
+        DOWNLOAD_WORKERS = max(1, min(12, int(DOWNLOAD_WORKERS or 4)))
 
     os.makedirs(args.saida, exist_ok=True)
 
@@ -2763,11 +3268,17 @@ def main():
     print(f"Planilha : {args.planilha_saida}  (modelo: {args.planilha_modelo})")
     print(f"Anos     : {', '.join(anos_filtro) if anos_filtro else 'todos'}")
     print(f"Renomear : {'pelo título interno dos documentos' if renomear else 'não'}")
+    print(f"Paralelo : {DOWNLOAD_WORKERS} download(s) por licitação")
     if getattr(args, "amostra_mensal", False):
         print(
             "Amostra  : até {0} por mês (modalidades diversificadas)".format(
                 getattr(args, "amostra_por_mes", 5) or 5
             )
+        )
+    if getattr(args, "priorizar_docs_leves", False):
+        print(
+            "Filtro   : docs leves (pula se tiver contrato/aditivo; "
+            "exige DFD; menos anexos primeiro)"
         )
     if args.limite and args.limite > 0:
         print(f"Limite   : {args.limite} licitação(ões)")
@@ -2786,7 +3297,7 @@ def main():
         print("► Coletando via planilha-fonte (links Documentos)...")
         cache_dir = Path(args.saida) / "_cache"
         licitacoes = coletar_via_planilha_fonte(
-            sessao, args.planilha_fonte.strip(), cache_dir
+            sessao, args.planilha_fonte.strip(), cache_dir, anos_filtro=anos_filtro
         )
     elif not args.so_html:
         print("► Coletando via API REST...")
@@ -2800,6 +3311,22 @@ def main():
         licitacoes = coletar_via_html(
             sessao, listagens, anos_filtro=anos_filtro
         )
+    nao_migradas_acum = []
+    if getattr(args, "priorizar_docs_leves", False):
+        antes = len(licitacoes or [])
+        selecionadas, rejeitadas = filtrar_licitacoes_docs_leves(licitacoes or [])
+        licitacoes = selecionadas
+        print(
+            "\n► Filtro docs leves: {0} → {1} licitação(ões) "
+            "(sem contrato/aditivo; com DFD; menos anexos primeiro).".format(
+                antes, len(licitacoes)
+            )
+        )
+        if rejeitadas:
+            nao_migradas_acum.extend(rejeitadas)
+            print("  · Rejeitadas no filtro: {0}".format(len(rejeitadas)))
+        else:
+            print("  · Nenhuma licitação rejeitada pelo filtro de docs.")
     if getattr(args, "amostra_mensal", False):
         antes = len(licitacoes or [])
         por_mes = getattr(args, "amostra_por_mes", 5) or 5
@@ -2814,18 +3341,24 @@ def main():
             )
         )
         if restantes:
-            planilha_nao = salvar_planilha_nao_migradas(args.saida, restantes)
-            print(
-                "  · Não migradas (só links): {0} → {1}".format(
-                    len(restantes), planilha_nao
-                )
-            )
-            ULTIMO_RESULTADO_UPLOAD.update({
-                "planilha_nao_migradas": planilha_nao,
-                "nao_migradas": len(restantes),
-            })
+            for r in restantes:
+                item = dict(r)
+                item.setdefault("_filtro_motivo", "fora da amostra mensal")
+                nao_migradas_acum.append(item)
+            print("  · Fora da amostra: {0}".format(len(restantes)))
         else:
             print("  · Nenhuma licitação restante para controle de não migradas.")
+    if nao_migradas_acum:
+        planilha_nao = salvar_planilha_nao_migradas(args.saida, nao_migradas_acum)
+        print(
+            "  · Não migradas (só links): {0} → {1}".format(
+                len(nao_migradas_acum), planilha_nao
+            )
+        )
+        ULTIMO_RESULTADO_UPLOAD.update({
+            "planilha_nao_migradas": planilha_nao,
+            "nao_migradas": len(nao_migradas_acum),
+        })
     if args.limite and args.limite > 0:
         licitacoes = licitacoes[: args.limite]
     print(f"\n► {len(licitacoes)} licitação(ões) a processar.\n")
@@ -2843,7 +3376,13 @@ def main():
 
             modalidade_bruta, numero = split_modalidade_numero(titulo)
             modalidade = modalidade_padrao(titulo)      # nome padronizado
-            ano = extrai_ano(numero)
+            ano = (
+                extrai_ano(numero)
+                or ano_do_titulo(titulo)
+                or extrai_ano(
+                    ((lic.get("dados_planilha") or {}).get("numero") or "")
+                )
+            )
             objeto = extrai_objeto(titulo)
 
             # --- FILTRO DE ANOS: número do título E/OU data de publicação.
@@ -2879,48 +3418,12 @@ def main():
             _log("    etapa: baixar anexos ({0} link(s))...",
                  len(lic.get("anexos") or []))
 
-            arquivos_locais = []
-            nomes_nesta_execucao = set()
-            for texto_link, url_arq in lic["anexos"]:
-                _abortar_se_cancelado()
-                arq = nome_arquivo(texto_link, url_arq)
-                # Anexos DIFERENTES com a mesma descrição (na mesma licitação):
-                # numeramos ANTES de checar existência, para que o 2º não seja
-                # confundido com um arquivo já baixado e pulado indevidamente.
-                if arq in nomes_nesta_execucao:
-                    i = 2
-                    while variante_numerada(arq, i) in nomes_nesta_execucao:
-                        i += 1
-                    arq = variante_numerada(arq, i)
-                nomes_nesta_execucao.add(arq)
-
-                destino = os.path.join(pasta, arq)
-
-                # MIGRAÇÃO: arquivo baixado por rodada antiga (nome sem
-                # capitalização) é renomeado para o padrão novo — evita
-                # duplicar o download.
-                if not os.path.exists(destino):
-                    legado = os.path.join(
-                        pasta, nome_arquivo_bruto(texto_link, url_arq))
-                    if legado != destino and os.path.exists(legado):
-                        try:
-                            os.replace(legado, destino)
-                            sc = caminho_sidecar(legado)
-                            if os.path.exists(sc):
-                                os.replace(sc, caminho_sidecar(destino))
-                            print(f"    [REN ] {os.path.basename(legado)} -> {arq}")
-                        except OSError:
-                            destino = legado          # falhou: usa o antigo
-
-                if os.path.exists(destino):          # já veio de rodada anterior
-                    arquivos_locais.append(destino)
-                    continue
-                if args.so_planilha:
-                    continue
-                print(f"    [DOWN] {arq}")
-                if baixar_arquivo(sessao, url_arq, destino):
-                    arquivos_locais.append(destino)
-                time.sleep(PAUSA)
+            arquivos_locais = baixar_anexos_da_licitacao(
+                sessao,
+                lic.get("anexos") or [],
+                pasta,
+                so_planilha=bool(args.so_planilha),
+            )
 
             if args.so_planilha:
                 for f in os.listdir(pasta):

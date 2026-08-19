@@ -84,6 +84,29 @@ class Job:
             self.progress_done = int(done)
         if label is not None:
             self.progress_label = str(label).strip()[:80]
+        # Avisa o painel (SSE) sem poluir o histórico de log.
+        entry = {
+            "t": time.strftime("%H:%M:%S"),
+            "level": "progress",
+            "msg": "",
+            "progress": {
+                "done": self.progress_done,
+                "total": self.progress_total,
+                "percent": self.progress_percent,
+                "label": self.progress_label,
+            },
+        }
+        dead: list[queue.Queue] = []
+        for q in self._subscribers:
+            try:
+                q.put_nowait(entry)
+            except Exception:
+                dead.append(q)
+        for q in dead:
+            try:
+                self._subscribers.remove(q)
+            except ValueError:
+                pass
 
     def emit(self, level: str, msg: str) -> None:
         entry = {"t": time.strftime("%H:%M:%S"), "level": level, "msg": str(msg)}

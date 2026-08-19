@@ -434,6 +434,117 @@ import { injectFooter } from "./modules/nav.js";
     return null;
   }
 
+  function normalizeProgressPayload(raw, status) {
+    if (!raw || typeof raw !== "object") return null;
+    const nested = raw.progress && typeof raw.progress === "object" ? raw.progress : null;
+    const done = Number(raw.done ?? nested?.done);
+    const total = Number(raw.total ?? nested?.total);
+    let percent = raw.percent ?? nested?.percent;
+    if (percent != null) percent = Number(percent);
+    const label = String(raw.label ?? nested?.label ?? "").trim();
+    if (!(total > 0) && percent == null && !label) return null;
+    if (status === "running" && percent != null && percent >= 100) percent = 99;
+    if (total > 0 && (percent == null || Number.isNaN(percent))) {
+      percent = Math.max(0, Math.min(100, Math.round((100 * (done || 0)) / total)));
+      if (status === "running" && percent >= 100) percent = 99;
+    }
+    return {
+      done: Number.isFinite(done) ? done : 0,
+      total: Number.isFinite(total) ? total : 0,
+      percent: Number.isFinite(percent) ? percent : null,
+      label,
+      status: status || raw.status || "",
+    };
+  }
+
+  function parseProgressFromLogMsg(msg) {
+    const text = String(msg || "");
+    const m = text.match(/\[\s*(\d+)\s*\/\s*(\d+)(?:\s*[·•.\-–—]\s*(\d+)\s*%?)?\s*\]/);
+    if (!m) return null;
+    const done = Number(m[1]);
+    const total = Number(m[2]);
+    const percent = m[3] != null ? Number(m[3]) : null;
+    if (!(total > 0)) return null;
+    return normalizeProgressPayload({ done, total, percent }, "running");
+  }
+
+  function ensureJobProgressBar() {
+    const box = el("log-console");
+    const wrap = box && box.closest(".log-wrap");
+    if (!wrap) return null;
+    let host = wrap.querySelector(".job-progress");
+    if (host) return host;
+    host = document.createElement("div");
+    host.className = "job-progress";
+    host.hidden = true;
+    host.setAttribute("role", "progressbar");
+    host.setAttribute("aria-valuemin", "0");
+    host.setAttribute("aria-valuemax", "100");
+    host.innerHTML =
+      '<div class="job-progress-meta">' +
+      '<span class="job-progress-label">Progresso</span>' +
+      '<span class="job-progress-pct">0%</span>' +
+      "</div>" +
+      '<div class="job-progress-track">' +
+      '<div class="job-progress-bar"></div>' +
+      "</div>" +
+      '<div class="job-progress-detail"></div>';
+    const toolbar = wrap.querySelector(".log-toolbar");
+    if (toolbar) wrap.insertBefore(host, toolbar);
+    else if (box) wrap.insertBefore(host, box);
+    else wrap.appendChild(host);
+    return host;
+  }
+
+  function updateJobProgressBar(raw, opts) {
+    const host = ensureJobProgressBar();
+    if (!host) return;
+    const finished = !!(opts && opts.finished);
+    const prog = normalizeProgressPayload(raw, finished ? "completed" : raw?.status);
+    if (!prog && !finished) {
+      return;
+    }
+    let pct = prog && prog.percent != null ? prog.percent : null;
+    if (finished) pct = 100;
+    if (pct == null && prog && prog.total > 0) {
+      pct = Math.round((100 * (prog.done || 0)) / prog.total);
+    }
+    if (pct == null) {
+      if (!finished) return;
+      pct = 100;
+    }
+    pct = Math.max(0, Math.min(100, Math.round(pct)));
+    host.hidden = false;
+    host.classList.toggle("is-done", finished || pct >= 100);
+    host.setAttribute("aria-valuenow", String(pct));
+    const bar = host.querySelector(".job-progress-bar");
+    const pctEl = host.querySelector(".job-progress-pct");
+    const detail = host.querySelector(".job-progress-detail");
+    const labelEl = host.querySelector(".job-progress-label");
+    if (bar) bar.style.width = `${pct}%`;
+    if (pctEl) pctEl.textContent = `${pct}%`;
+    if (labelEl) {
+      labelEl.textContent =
+        (prog && prog.label) || (finished ? "Concluído" : "Progresso");
+    }
+    if (detail) {
+      if (prog && prog.total > 0) {
+        detail.textContent = `${prog.done || 0} de ${prog.total}`;
+      } else if (finished) {
+        detail.textContent = "";
+      } else {
+        detail.textContent = "";
+      }
+    }
+  }
+
+  function hideJobProgressBar() {
+    const host = document.querySelector(".job-progress");
+    if (!host) return;
+    host.hidden = true;
+    host.classList.remove("is-done");
+  }
+
   function resolveMyJob(data, serviceId) {
     const sid = serviceId || boundServiceId || null;
     if (data && Array.isArray(data.my_jobs)) {
@@ -454,7 +565,10 @@ import { injectFooter } from "./modules/nav.js";
         id: running.id,
         service_id: running.service_id,
         status: "running",
-        percent: prog.percent,
+        done: prog.done ?? running.done,
+        total: prog.total ?? running.total,
+        percent: prog.percent ?? running.percent,
+        label: prog.label || running.label || "",
         cancel_requested: running.cancel_requested,
       };
     }
@@ -467,7 +581,10 @@ import { injectFooter } from "./modules/nav.js";
         id: pending.id,
         service_id: pending.service_id,
         status: "pending",
-        percent: prog.percent,
+        done: prog.done ?? pending.done,
+        total: prog.total ?? pending.total,
+        percent: prog.percent ?? pending.percent,
+        label: prog.label || pending.label || "",
         cancel_requested: pending.cancel_requested,
         queue_position: pos,
       };
@@ -498,6 +615,7 @@ import { injectFooter } from "./modules/nav.js";
     if (myJob && myJob.status === "running") {
       if (!boundServiceId || myJob.service_id === boundServiceId) {
         syncCancelFromHealth(myJob);
+        updateJobProgressBar(myJob);
       }
       const nome = jobDisplayName(myJob);
       const prog = formatJobProgressText(myJob);
@@ -1340,7 +1458,9 @@ import { injectFooter } from "./modules/nav.js";
   function ensureLogToolbar() {
     const box = el("log-console");
     const wrap = box && box.closest(".log-wrap");
-    if (!wrap || wrap.querySelector(".log-toolbar")) return;
+    if (!wrap) return;
+    ensureJobProgressBar();
+    if (wrap.querySelector(".log-toolbar")) return;
     const bar = document.createElement("div");
     bar.className = "log-toolbar";
     bar.innerHTML =
@@ -2078,6 +2198,15 @@ import { injectFooter } from "./modules/nav.js";
           refreshStatus(streamFor);
           return;
         }
+        if (data.level === "progress" || data.progress) {
+          updateJobProgressBar(
+            { ...(data.progress || data), status: "running" },
+            { finished: false }
+          );
+          return;
+        }
+        const fromLog = parseProgressFromLogMsg(data.msg);
+        if (fromLog) updateJobProgressBar(fromLog);
         appendLog(data, data.level);
         if ((data.msg || "").includes("— fim —")) {
           closeStream();
@@ -2134,6 +2263,8 @@ import { injectFooter } from "./modules/nav.js";
     noticeShownFor = null;
     rememberJob(jobId, boundServiceId);
     setCancelVisible(true);
+    ensureJobProgressBar();
+    if (!preserveLogs) hideJobProgressBar();
     const runBtn = el("btn-run");
     if (runBtn) runBtn.disabled = true;
     const box = el("log-console");
@@ -2216,6 +2347,9 @@ import { injectFooter } from "./modules/nav.js";
           resetLogConsole(box);
           job.logs.forEach((entry) => appendLog(entry, entry.level));
           collapseAllLogModules(box, { exceptLast: true });
+        }
+        if (job.progress) {
+          updateJobProgressBar({ ...job.progress, status: job.status });
         }
         if (job.status === "pending") {
           const pos = (job.queue && job.queue.position) || "?";
@@ -2375,6 +2509,15 @@ import { injectFooter } from "./modules/nav.js";
       const finished = ["completed", "failed", "cancelled"].includes(job.status);
       const st = el("job-status");
       if (st) st.textContent = STATUS_PT[job.status] || job.status;
+
+      if (job.progress) {
+        updateJobProgressBar(
+          { ...job.progress, status: job.status },
+          { finished: finished && job.status === "completed" }
+        );
+      } else if (finished && job.status === "completed") {
+        updateJobProgressBar({ percent: 100, label: "Concluído" }, { finished: true });
+      }
 
       if (finished) {
         stopQueuePoll();

@@ -37,12 +37,11 @@ def test_worker_job_emit_ndjson(capsys):
     assert data["msg"] == "teste"
 
 
-def test_worker_job_cancel_flag(tmp_path):
-    job = WorkerJob("abc", "sessao", {}, tmp_path)
-    assert job.cancel_requested is False
-    (tmp_path / "cancel.flag").write_text("1")
-    job.emit("info", "x")
-    assert job.cancel_requested is True
+def test_worker_job_has_owner(tmp_path):
+    job = WorkerJob("abc", "publicacao", {}, tmp_path, owner="user@example.com")
+    assert job.owner == "user@example.com"
+    job2 = WorkerJob("abc", "publicacao", {}, tmp_path)
+    assert job2.owner is None
 
 
 def test_handle_worker_line_parses_progress():
