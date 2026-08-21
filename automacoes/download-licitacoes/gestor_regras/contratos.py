@@ -30,7 +30,11 @@ _RE_PORTARIA_FISCAL = re.compile(
     r"designa(?:cao|ção)?\s+(?:d[oe]\s+)?fiscal|"
     r"nomea(?:cao|ção)?\s+(?:d[oe]\s+)?fiscal|"
     r"fiscal\s+d[oe]\s+contrato|"
-    r"portaria.*designa",
+    r"portaria.*designa|"
+    # Cumaru do Norte: "Termo Fiscal 236-2023.pdf" / "Termo de Designação.pdf"
+    r"termo\s+(?:de\s+)?(?:fiscal|designa)|"
+    r"termo\s+fiscal|"
+    r"\bfiscal\b(?=\s*[\d\-_.]|$)",
     re.I,
 )
 

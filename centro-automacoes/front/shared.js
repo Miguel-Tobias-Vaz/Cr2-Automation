@@ -2771,7 +2771,7 @@ import { injectFooter } from "./modules/nav.js";
   // Fundo WebGL (shader) em todas as páginas
   if (!window.OptoShaderBackground) {
     const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home70";
+    s.src = "/assets/shader-background.js?v=home76";
     s.async = true;
     document.head.appendChild(s);
   } else if (window.OptoShaderBackground.init) {

@@ -17,7 +17,7 @@ export function injectFooter() {
         <div class="minimal-footer__grid minimal-footer__grid--compact">
           <div class="minimal-footer__brand">
             <a class="minimal-footer__logo" href="/" aria-label="Opto Automações">
-              <img src="/assets/brand-icon.png" alt="" width="36" height="36" />
+              <img src="/assets/OPTO%20-%20Azul.png" alt="" width="36" height="36" />
             </a>
             <p class="minimal-footer__tagline">
               Automações para administração pública — baixar, publicar e integrar sistemas.

@@ -222,6 +222,17 @@ def run(job) -> None:
         )
     if upload.get("pendentes_relatorio"):
         job.result["pendentes_relatorio"] = upload["pendentes_relatorio"]
+    if upload.get("planilha_contratos"):
+        job.result["planilha_contratos"] = upload["planilha_contratos"]
+        job.emit(
+            "info",
+            "Contratos para subir: {0} linha(s) → {1}".format(
+                upload.get("contratos_linhas", "?"),
+                upload["planilha_contratos"],
+            ),
+        )
+    if upload.get("contratos_relatorio"):
+        job.result["contratos_relatorio"] = upload["contratos_relatorio"]
     if upload.get("pasta_contratos"):
         job.result["pasta_contratos"] = upload["pasta_contratos"]
     if upload.get("contratos_movidos"):
@@ -242,6 +253,10 @@ def run(job) -> None:
             job.result["planilha_licitacoes"] = p1
         if os.path.isfile(p2):
             job.result["planilha_documentos"] = p2
+    if not job.result.get("planilha_contratos"):
+        p3 = os.path.join(saida, "Contratos", "subirContratos.xlsx")
+        if os.path.isfile(p3):
+            job.result["planilha_contratos"] = p3
 
     if modo == "so_baixar":
         job.result["mensagem"] = "Anexos baixados em {0} (sem planilha).".format(saida)

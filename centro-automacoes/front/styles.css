@@ -1,17 +1,17 @@
 :root {
-  --ink: #050505;
-  --ink-2: #0c0c0c;
-  --fog: #e8e8e8;
-  --mist: #b0b0b0;
-  --mute: #6e6e6e;
-  --paper: #ffffff;
-  --copper: #2eea7a;
-  --copper-deep: #19d96a;
-  --accent: #2eea7a;
-  --accent-2: #19d96a;
-  --accent-soft: #4ade80;
-  --line: rgba(255, 255, 255, 0.08);
-  --glow: rgba(46, 234, 122, 0.18);
+  --ink: #070706;
+  --ink-2: #111211;
+  --fog: #f5f6f7;
+  --mist: #dfe3e6;
+  --mute: #8c9397;
+  --paper: #f5f6f7;
+  --copper: #e1b971;
+  --copper-deep: #d0a35a;
+  --accent: #293e63;
+  --accent-2: #1f304d;
+  --accent-soft: #5b789c;
+  --line: rgba(41, 62, 99, 0.18);
+  --glow: rgba(225, 185, 113, 0.18);
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-body: "Inter", system-ui, -apple-system, sans-serif;
   --radius: 14px;
@@ -36,7 +36,7 @@ body {
   font-size: 1rem;
   line-height: 1.55;
   letter-spacing: -0.011em;
-  background: #000;
+  background: var(--ink);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -74,12 +74,12 @@ html.has-shader-bg body::before {
 /* Sem animação / WebGL indisponível / prefers-reduced-motion → fundo preto */
 html.shader-bg-static body,
 html:not(.has-shader-bg) body {
-  background: #000;
+  background: var(--ink);
 }
 
 @media (prefers-reduced-motion: reduce) {
   html body {
-    background: #000 !important;
+    background: var(--ink) !important;
   }
 
   .orb,
@@ -165,7 +165,7 @@ a {
   height: 38vw;
   top: -14vw;
   right: -10vw;
-  background: radial-gradient(circle, rgba(46, 234, 122, 0.09), transparent 68%);
+  background: radial-gradient(circle, rgba(225, 185, 113, 0.12), transparent 68%);
 }
 
 .orb-b {
@@ -266,8 +266,8 @@ a {
 
 .nav a.nav-admin {
   opacity: 0.85;
-  color: var(--accent-soft);
-  border: 1px solid rgba(46, 234, 122, 0.25);
+  color: var(--copper);
+  border: 1px solid rgba(225, 185, 113, 0.25);
   border-radius: 0.35rem;
   padding: 0.2rem 0.55rem;
   margin-left: 0.15rem;
@@ -276,7 +276,7 @@ a {
 .nav a.nav-admin:hover,
 .nav a.nav-admin.is-active {
   color: var(--accent);
-  border-color: rgba(46, 234, 122, 0.45);
+  border-color: rgba(225, 185, 113, 0.45);
   opacity: 1;
 }
 
@@ -371,8 +371,8 @@ main {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 60% 45% at 70% 28%, rgba(46, 234, 122, 0.06), transparent 55%),
-    linear-gradient(165deg, #050505 0%, #0c0c0c 48%, #050505 100%);
+    radial-gradient(ellipse 60% 45% at 70% 28%, rgba(225, 185, 113, 0.12), transparent 55%),
+    linear-gradient(165deg, #070706 0%, #1a2438 48%, #070706 100%);
   overflow: hidden;
 }
 
@@ -477,13 +477,13 @@ main {
 
 .btn-primary {
   background: var(--accent);
-  color: #04140a;
+  color: var(--paper);
   border-color: transparent;
 }
 
 .btn-primary:hover {
   background: var(--accent-2);
-  box-shadow: 0 8px 28px rgba(46, 234, 122, 0.28);
+  box-shadow: 0 8px 28px rgba(41, 62, 99, 0.28);
 }
 
 .btn-ghost {
@@ -493,7 +493,7 @@ main {
 }
 
 .btn-ghost:hover {
-  border-color: rgba(46, 234, 122, 0.45);
+  border-color: rgba(225, 185, 113, 0.45);
   color: var(--paper);
 }
 
@@ -1093,9 +1093,9 @@ main {
 }
 
 .api-pill.running {
-  border-color: rgba(46, 234, 122, 0.4);
-  color: #e8fff0;
-  background: rgba(46, 234, 122, 0.1);
+  border-color: rgba(225, 185, 113, 0.4);
+  color: #fff5e3;
+  background: rgba(225, 185, 113, 0.1);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1110,15 +1110,15 @@ main {
 
 .api-pill.online,
 .api-pill.ok {
-  border-color: rgba(46, 234, 122, 0.28);
-  color: var(--accent-soft);
-  background: rgba(46, 234, 122, 0.06);
+  border-color: rgba(225, 185, 113, 0.28);
+  color: var(--copper);
+  background: rgba(225, 185, 113, 0.06);
 }
 
 .api-pill.online::before,
 .api-pill.ok::before {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(46, 234, 122, 0.18), 0 0 10px rgba(46, 234, 122, 0.55);
+  background: var(--copper);
+  box-shadow: 0 0 0 3px rgba(225, 185, 113, 0.18), 0 0 10px rgba(225, 185, 113, 0.55);
 }
 
 .api-pill.offline,
@@ -1157,7 +1157,7 @@ main {
 }
 
 .top .nav-download.btn-download-ready {
-  box-shadow: 0 0 0 1px rgba(46, 234, 122, 0.35);
+  box-shadow: 0 0 0 1px rgba(225, 185, 113, 0.35);
 }
 
 @media (max-width: 720px) {
@@ -1197,7 +1197,7 @@ main {
   align-items: center;
   gap: 0.65rem 0.75rem;
   padding: 0.85rem 0.95rem;
-  border: 1px solid rgba(46, 234, 122, 0.28);
+  border: 1px solid rgba(225, 185, 113, 0.28);
   border-radius: var(--radius);
   background: linear-gradient(
     165deg,
@@ -1271,7 +1271,7 @@ main {
 
 .btn-download-ready {
   background: var(--accent);
-  color: #04140a;
+  color: var(--paper);
   border-color: transparent;
   box-shadow: none;
   animation: none;
@@ -1279,7 +1279,7 @@ main {
 
 .btn-download-ready:hover {
   background: var(--accent-2);
-  box-shadow: 0 10px 28px rgba(46, 234, 122, 0.3);
+  box-shadow: 0 10px 28px rgba(41, 62, 99, 0.3);
   animation: none;
 }
 
@@ -1307,10 +1307,10 @@ main {
 @keyframes opto-dl-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(46, 234, 122, 0.28);
+    box-shadow: 0 0 0 0 rgba(225, 185, 113, 0.28);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(46, 234, 122, 0);
+    box-shadow: 0 0 0 6px rgba(225, 185, 113, 0);
   }
 }
 
@@ -2441,7 +2441,7 @@ button.log-module-toggle:hover {
 }
 
 .hub-subnav-link.is-active {
-  color: #04140a;
+  color: var(--ink);
   background: var(--accent);
   border-color: transparent;
   text-decoration: none;
@@ -2693,8 +2693,8 @@ body.has-dl-banner.has-subnav {
 
 .api-pill.online {
   color: var(--accent-soft) !important;
-  border-color: rgba(46, 234, 122, 0.28) !important;
-  background: rgba(46, 234, 122, 0.06) !important;
+  border-color: rgba(225, 185, 113, 0.28) !important;
+  background: rgba(225, 185, 113, 0.06) !important;
 }
 
 .hub-brand {
@@ -2749,7 +2749,7 @@ body.has-dl-banner.has-subnav {
   border: 1px solid rgba(255,255,255,0.08) !important;
   border-radius: 16px !important;
   background:
-    radial-gradient(120% 90% at 30% 0%, rgba(46, 234, 122, 0.07), transparent 55%),
+    radial-gradient(120% 90% at 30% 0%, rgba(225, 185, 113, 0.07), transparent 55%),
     rgba(255, 255, 255, 0.03) !important;
   background-image: none !important;
   box-shadow: none !important;
@@ -2772,7 +2772,7 @@ body.has-dl-banner.has-subnav {
   opacity: 0.55;
   background: radial-gradient(
     closest-side at 35% 40%,
-    rgba(46, 234, 122, 0.16),
+    rgba(225, 185, 113, 0.16),
     transparent 70%
   );
   filter: blur(8px);
@@ -2788,13 +2788,13 @@ body.has-dl-banner.has-subnav {
 }
 .hub-card:hover {
   transform: translateY(-4px) !important;
-  border-color: rgba(46, 234, 122, 0.4) !important;
+  border-color: rgba(225, 185, 113, 0.45) !important;
   background:
-    radial-gradient(120% 90% at 30% 0%, rgba(46, 234, 122, 0.12), transparent 55%),
-    rgba(46, 234, 122, 0.04) !important;
+    radial-gradient(120% 90% at 30% 0%, rgba(225, 185, 113, 0.12), transparent 55%),
+    rgba(41, 62, 99, 0.08) !important;
   box-shadow:
     0 18px 40px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(46, 234, 122, 0.12) !important;
+    0 0 0 1px rgba(225, 185, 113, 0.12) !important;
 }
 .hub-card-index { display: none !important; }
 .hub-card-icon {
@@ -2805,8 +2805,8 @@ body.has-dl-banner.has-subnav {
   height: 2.5rem;
   margin-bottom: 1.15rem;
   border-radius: 12px;
-  background: rgba(46, 234, 122, 0.1);
-  color: #2eea7a;
+  background: rgba(41, 62, 99, 0.14);
+  color: var(--copper);
   transition: transform 0.3s var(--ease), background 0.3s var(--ease);
 }
 .hub-card-icon svg {
@@ -2820,7 +2820,7 @@ body.has-dl-banner.has-subnav {
 }
 .hub-card:hover .hub-card-icon {
   transform: rotate(5deg);
-  background: rgba(46, 234, 122, 0.16);
+  background: rgba(225, 185, 113, 0.16);
 }
 .hub-card h3 {
   margin: 0 0 0.55rem !important;
@@ -2849,11 +2849,11 @@ body.has-dl-banner.has-subnav {
   color: #6e6e6e;
   transition: color 0.25s var(--ease);
 }
-.hub-card:hover .hub-card-foot { color: #2eea7a; }
+.hub-card:hover .hub-card-foot { color: var(--copper); }
 
 .hero-grid { display: none !important; }
 .hero-plane {
-  background: radial-gradient(ellipse 50% 42% at 50% 18%, rgba(46, 234, 122, 0.09), transparent 62%) !important;
+  background: radial-gradient(ellipse 50% 42% at 50% 18%, rgba(225, 185, 113, 0.12), transparent 62%) !important;
 }
 
 /* Partículas legado — substituído por shader-background.js */
@@ -2936,7 +2936,7 @@ body.hub-page .hub-hero .hero-plane {
   pointer-events: none;
   background: radial-gradient(
     ellipse 55% 40% at 50% 12%,
-    rgba(46, 234, 122, 0.08),
+    rgba(225, 185, 113, 0.08),
     transparent 65%
   );
 }
@@ -3020,8 +3020,8 @@ body.hub-page .hub-cta {
 body.hub-page .hub-cta .btn-primary {
   display: inline-flex;
   align-items: center;
-  background: #2eea7a;
-  color: #04140a;
+  background: var(--accent);
+  color: var(--paper);
   border-radius: 999px;
   border: none;
   font-weight: 600;
@@ -3176,7 +3176,7 @@ body.admin-sidebar-collapsed .admin-toggle-icon {
 }
 
 .admin-nav-item.is-active {
-  background: rgba(46, 234, 122, 0.12);
+  background: rgba(225, 185, 113, 0.12);
   color: var(--accent-soft);
   box-shadow: inset 3px 0 0 var(--accent);
 }
@@ -3421,7 +3421,7 @@ body.admin-sidebar-collapsed .admin-toggle-icon {
   margin: 0.75rem 0 0;
   padding: 0.65rem 0.85rem;
   border-radius: 8px;
-  background: rgba(46, 234, 122, 0.12);
+  background: rgba(225, 185, 113, 0.12);
   color: var(--accent-soft);
   font-size: 0.86rem;
 }
@@ -3448,7 +3448,7 @@ body.admin-sidebar-collapsed .admin-toggle-icon {
 
 .admin-badge--running,
 .admin-badge--pending {
-  background: rgba(46, 234, 122, 0.18);
+  background: rgba(225, 185, 113, 0.18);
   color: var(--accent-soft);
 }
 
@@ -3696,7 +3696,7 @@ body.admin-sidebar-collapsed .admin-toggle-icon {
 }
 
 .admin-tool-card:hover {
-  border-color: rgba(46, 234, 122, 0.35);
+  border-color: rgba(225, 185, 113, 0.35);
   transform: translateY(-2px);
 }
 
@@ -3827,8 +3827,8 @@ body.login-page {
 }
 
 .login-status--ok {
-  color: var(--mint, #2eea7a);
-  background: rgba(46, 234, 122, 0.08);
+  color: var(--copper, #e1b971);
+  background: rgba(225, 185, 113, 0.08);
 }
 
 .login-status--err {
@@ -3890,8 +3890,8 @@ body.login-page {
 
 .upload-zone:hover,
 .upload-zone.is-dragover {
-  border-color: rgba(46, 234, 122, 0.45);
-  background: rgba(46, 234, 122, 0.04);
+  border-color: rgba(225, 185, 113, 0.45);
+  background: rgba(225, 185, 113, 0.04);
 }
 
 .upload-zone.is-uploading {
@@ -3986,7 +3986,7 @@ body.login-page {
 .files-crumb {
   background: none;
   border: none;
-  color: var(--mint, #2eea7a);
+  color: var(--copper, #e1b971);
   cursor: pointer;
   padding: 0.15rem 0.35rem;
   border-radius: 6px;
@@ -3994,7 +3994,7 @@ body.login-page {
 }
 
 .files-crumb:hover {
-  background: rgba(46, 234, 122, 0.12);
+  background: rgba(225, 185, 113, 0.12);
 }
 
 .files-crumb.is-current {
@@ -4060,7 +4060,7 @@ body.login-page {
 }
 
 .files-link:hover {
-  color: var(--mint, #2eea7a);
+  color: var(--copper, #e1b971);
 }
 
 .files-row-actions {
@@ -4314,7 +4314,7 @@ body.files-embed-page .orb {
   background:
     radial-gradient(
       120% 80% at 50% 0%,
-      rgba(46, 234, 122, 0.08),
+      rgba(225, 185, 113, 0.08),
       transparent 55%
     ),
     rgba(12, 12, 18, 0.82);
@@ -4355,13 +4355,13 @@ body.files-embed-page .orb {
 .minimal-footer__logo {
   display: inline-flex;
   opacity: 1;
-  filter: drop-shadow(0 0 12px rgba(46, 234, 122, 0.35));
+  filter: drop-shadow(0 0 12px rgba(225, 185, 113, 0.35));
   transition: transform 0.2s var(--ease), filter 0.2s var(--ease);
 }
 
 .minimal-footer__logo:hover {
   transform: scale(1.05);
-  filter: drop-shadow(0 0 16px rgba(46, 234, 122, 0.5));
+  filter: drop-shadow(0 0 16px rgba(225, 185, 113, 0.5));
 }
 
 .minimal-footer__logo img {

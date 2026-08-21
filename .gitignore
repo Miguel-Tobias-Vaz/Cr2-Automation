@@ -1,5 +1,6 @@
 # Ambientes locais — nunca versionar / nunca colocar no ZIP
 **/venv/
+INICIAR-LOCAL.bat
 **/__pycache__/
 *.pyc
 .pytest_cache/

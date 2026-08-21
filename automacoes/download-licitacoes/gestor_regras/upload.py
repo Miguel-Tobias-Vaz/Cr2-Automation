@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Gera subirLicitacoes.xlsx e subirDocumentosLicitacoes.xlsx a partir dos modelos.
 
-Etapa final: separa PDFs de contrato/portaria em Contratos/<licitação>/
-(sem preencher planilha de contratos).
+Depois separa PDFs de contrato/portaria em Contratos/<licitação>/ e preenche
+subirContratos.xlsx (contratos + aditivos) para subir no portal.
 """
 
 from __future__ import annotations
@@ -11,17 +11,19 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .config_front import (
     ABA_DOCUMENTOS,
     ABA_LICITACOES,
+    ARQ_MODELO_CONTRATOS,
     ARQ_MODELO_DOCUMENTOS,
     ARQ_MODELO_LICITACOES,
     CAMPOS_FRONT,
 )
 from .contratos import separar_contratos_da_pasta
 from .front import alertas_licitacao, falta_para_o_front, linha_front
+from .upload_contratos import gerar_planilha_contratos
 
 PASTA_CONTRATOS = "Contratos"
 PASTA_PENDENTES = "PENDENTES"
@@ -131,10 +133,15 @@ def gerar_planilhas_upload(
     *,
     link_pasta_base: str = "",
     modelos_dir: str | Path | None = None,
+    ler_texto: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
     """
     1) Classifica prontas/pendentes → subirLicitacoes + subirDocumentos (+ PENDENTES)
     2) Separa contratos/portarias → Contratos/<licitação>/
+    3) Lê os PDFs e preenche subirContratos.xlsx (contratos + aditivos)
+
+    ler_texto: leitor de PDF (caminho -> texto). O script passa o dele, com OCR;
+    sem ele a etapa 3 lê só texto nativo.
     """
     import openpyxl
 
@@ -236,11 +243,11 @@ def gerar_planilhas_upload(
     if pendentes:
         print("  · Pendentes: {0} → {1}".format(len(pendentes), rel))
 
-    print("  ✓ ETAPA 1/2 concluída — planilhas de licitação prontas.")
+    print("  ✓ ETAPA 1/3 concluída — planilhas de licitação prontas.")
 
     print("")
     print("=" * 66)
-    print("  ETAPA 2/2 — CONTRATOS")
+    print("  ETAPA 2/3 — CONTRATOS")
     print("  Separar PDFs → Contratos/<licitação>/")
     print("=" * 66)
 
@@ -259,10 +266,33 @@ def gerar_planilhas_upload(
         print("  · Separados: {0} arquivo(s) de contrato/portaria.".format(n_contratos))
     else:
         print("  · Nenhum contrato/portaria encontrado nas pastas prontas.")
-    print("  ✓ ETAPA 2/2 concluída — contratos separados.")
+    print("  ✓ ETAPA 2/3 concluída — contratos separados.")
+
+    print("")
+    print("=" * 66)
+    print("  ETAPA 3/3 — PLANILHA DE CONTRATOS")
+    print("  Ler contratos/aditivos → %s" % ARQ_MODELO_CONTRATOS)
+    print("=" * 66)
+
+    res_ctr = gerar_planilha_contratos(
+        prontas,
+        pasta_saida,
+        ler_texto=ler_texto,
+        link_pasta_base=link_pasta_base,
+        modelos_dir=modelos_dir,
+    )
+    if res_ctr.get("planilha_contratos"):
+        print("  ✓ {0}  ({1} linha(s))".format(
+            res_ctr["planilha_contratos"], res_ctr["contratos_linhas"]))
+    else:
+        print("  · Nenhuma linha de contrato/aditivo montada.")
+    if res_ctr.get("contratos_problemas"):
+        print("  · Pendências/alertas: {0} → {1}".format(
+            res_ctr["contratos_problemas"], res_ctr["contratos_relatorio"]))
+    print("  ✓ ETAPA 3/3 concluída.")
 
     contratos_dir = os.path.join(pasta_saida, PASTA_CONTRATOS)
-    return {
+    resultado = {
         "planilha_licitacoes": saida_lic,
         "planilha_documentos": saida_doc,
         "pendentes_relatorio": rel,
@@ -276,3 +306,5 @@ def gerar_planilhas_upload(
         "alertas_ok": alertas_ok,
         "pendentes_itens": pendentes,
     }
+    resultado.update(res_ctr)
+    return resultado

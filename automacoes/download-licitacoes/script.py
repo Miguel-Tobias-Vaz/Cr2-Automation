@@ -12,6 +12,7 @@ SCRIPT ÚNICO. Faz tudo:
   4) Extrai valores, datas e situação (regras + IA local Ollama opcional)
   5) Gera Licitacoes_preenchida.xlsx (intermediária) e as planilhas oficiais
      de upload: subirLicitacoes.xlsx + subirDocumentosLicitacoes.xlsx
+  6) Lê os contratos/aditivos e gera Contratos/subirContratos.xlsx
 
 Genérico: a entidade vem da URL de --listagem (qualquer portal CR2).
 
@@ -2641,7 +2642,7 @@ def _garantir_path_script():
 def situacao_para_front(situacao):
     """Mapeia rótulos internos (Homologada, Deserta…) para o vocabulário Front."""
     if not situacao:
-        return ""
+        return "Em andamento"
     s = str(situacao).strip()
     try:
         _garantir_path_script()
@@ -3479,7 +3480,7 @@ def main():
                     "Data de Publicação": data_pub,
                     "Data de Abertura": _parse_data_planilha(dp.get("abertura")),
                     "Valor Estimado": "",
-                    "Situação da Licitação": dp.get("situacao") or "",
+                    "Situação da Licitação": dp.get("situacao") or "Em andamento",
                     "Valor Homologado": dp.get("valor_homologado") or "",
                 }
             else:
@@ -3491,7 +3492,7 @@ def main():
                     "Data de Publicação": data_pub,
                     "Data de Abertura": "",
                     "Valor Estimado": "",
-                    "Situação da Licitação": "",
+                    "Situação da Licitação": "Em andamento",
                     "Valor Homologado": "",
                 }
 
@@ -3648,11 +3649,36 @@ def main():
                 sys.path.insert(0, _dir_script)
             from gestor_regras import gerar_planilhas_upload
 
-        print("\n► Planilhas oficiais (licitação + separar contratos)...")
+        print("\n► Planilhas oficiais (licitação + contratos)...")
+
+        def _ler_texto_contrato(caminho):
+            """Leitor para a planilha de contratos — mesmo OCR do restante.
+
+            max_paginas=None de propósito: o texto NATIVO tem que vir inteiro,
+            porque a cláusula do valor global costuma ficar depois da página 6.
+            O OCR continua limitado (obter_texto corta em OCR_MAX_PAGINAS_PRIOR).
+            """
+            try:
+                texto, _origem = obter_texto(
+                    caminho,
+                    args.ocr,
+                    idioma=args.idioma_ocr,
+                    motor=args.motor_ocr,
+                    max_paginas=None,
+                    max_chars=400000,
+                )
+                return texto or ""
+            except Cancelado:
+                raise
+            except Exception as e:
+                print("    (falha ao ler %s: %s)" % (os.path.basename(caminho), e))
+                return ""
+
         resultado_upload = gerar_planilhas_upload(
             itens_upload,
             args.saida,
             link_pasta_base=(args.link_pasta_base or "").strip(),
+            ler_texto=_ler_texto_contrato,
         )
         print(
             "\n  Resumo — Prontas: {0}  |  Pendentes: {1}".format(
@@ -3662,6 +3688,13 @@ def main():
         )
         print("  ✓ Licitação: {0}".format(resultado_upload["planilha_licitacoes"]))
         print("  ✓ Documentos: {0}".format(resultado_upload["planilha_documentos"]))
+        if resultado_upload.get("planilha_contratos"):
+            print("  ✓ Contratos: {0}  ({1} linha(s))".format(
+                resultado_upload["planilha_contratos"],
+                resultado_upload.get("contratos_linhas", 0)))
+        if resultado_upload.get("contratos_relatorio"):
+            print("  · Origem dos campos: {0}".format(
+                resultado_upload["contratos_relatorio"]))
         if resultado_upload.get("contratos_movidos"):
             print("  · Contratos separados: {0} arquivo(s)".format(
                 resultado_upload["contratos_movidos"]))
@@ -3693,7 +3726,7 @@ def main():
     print("CANCELADO." if cancelado else "Concluído.")
     if not args.sem_extracao:
         print("  1) Licitação: subirLicitacoes.xlsx + subirDocumentosLicitacoes.xlsx")
-        print("  2) Contratos (depois): só pasta Contratos/ (sem planilha)")
+        print("  2) Contratos: pasta Contratos/ + subirContratos.xlsx")
         print("  Veja também a aba 'Auditoria' e a pasta PENDENTES/ se houver faltas.")
     print("=" * 66)
     if cancelado:

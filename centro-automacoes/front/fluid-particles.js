@@ -1,7 +1,7 @@
 (() => {
   /**
    * Fundo de partículas fluidas com interação do mouse.
-   * Tema escuro Opto — partículas em verde suave.
+  * Tema escuro Opto — partículas em dourado suave.
    */
   const PARTICLE_COUNT = 650;
   const NOISE_INTENSITY = 0.0025;
@@ -245,9 +245,9 @@
         if (particle.y < 0) particle.y = h;
         if (particle.y > h) particle.y = 0;
 
-        const green = particle.size > 1.05;
-        ctx.fillStyle = green
-          ? `rgba(46, 234, 122, ${opacity * 0.7})`
+        const gold = particle.size > 1.05;
+        ctx.fillStyle = gold
+          ? `rgba(225, 185, 113, ${opacity * 0.7})`
           : `rgba(255, 255, 255, ${opacity})`;
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);

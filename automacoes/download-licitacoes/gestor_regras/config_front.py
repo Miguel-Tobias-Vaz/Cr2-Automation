@@ -114,6 +114,35 @@ MAPA_SITUACAO = {
     "finalizada": "Finalizado",
 }
 
+# --- Contratos (planilha de upload do portal) ---
+CAMPOS_CONTRATO = [
+    ("licitacao_origem", "licitacaoOrigem"),
+    ("ano", "ano"),
+    ("tipo_contrato", "tipoContrato"),
+    ("numero", "numero"),
+    ("objeto", "objeto"),
+    ("nome_razao_social", "nomeRazaoSocial"),
+    ("cpf_cnpj", "cpfCnpj"),
+    ("data_vigencia_in", "dataVigenciaIN"),
+    ("data_vigencia_fim", "dataVigenciaFIM"),
+    ("valor", "valor"),
+    ("fiscal_contrato", "fiscalContrato"),
+    ("documento", "documento"),
+]
+
+ROTULOS_CONTRATO = {c[0]: c[1] for c in CAMPOS_CONTRATO}
+
+# Sem esses campos a linha nao sobe no portal.
+CAMPOS_OBRIGATORIOS_CONTRATO = (
+    "ano", "tipo_contrato", "numero", "objeto", "nome_razao_social",
+)
+
+TIPO_CONTRATO = "Contrato"
+TIPO_ADITIVO = "Aditivo"
+
+ARQ_MODELO_CONTRATOS = "subirContratos.xlsx"
+ABA_CONTRATOS = "Contrato - Sheet"
+
 ARQ_MODELO_LICITACOES = "subirLicitacoes.xlsx"
 ARQ_MODELO_DOCUMENTOS = "subirDocumentosLicitacoes.xlsx"
 ABA_LICITACOES = "Modelo_Licitacoes - Planilha"
