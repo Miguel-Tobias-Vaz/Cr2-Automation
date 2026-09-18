@@ -37,7 +37,27 @@
       whenReady(() => {
 (function () {
         const params = new URLSearchParams(location.search);
-        const next = params.get("next") || "/";
+
+        /*
+         * Para onde voltar depois de entrar — só caminho DESTE site.
+         *
+         * O valor vem da URL, então quem monta o link decide o destino. Usado
+         * direto, ele vira redirecionamento aberto: basta enviar
+         *
+         *   /login.html?next=https://site-falso/painel
+         *
+         * para a vítima conferir o domínio verdadeiro, com cadeado válido,
+         * digitar a senha e cair num site de terceiro logo após um login que
+         * de fato funcionou. Nada parece errado, e é justamente esse o valor
+         * do golpe: ele empresta a credibilidade deste domínio.
+         *
+         * A regra aceita apenas caminho interno. O `(?!\/)` não é detalhe:
+         * "//site-falso.com" é endereço relativo ao protocolo, e o navegador
+         * o trata como externo — passaria por uma checagem que só exigisse
+         * começar com barra.
+         */
+        const destinoBruto = params.get("next") || "/";
+        const next = /^\/(?!\/)/.test(destinoBruto) ? destinoBruto : "/";
         const form = document.getElementById("login-form");
         const err = document.getElementById("login-error");
         const userInput = document.getElementById("login-user");
