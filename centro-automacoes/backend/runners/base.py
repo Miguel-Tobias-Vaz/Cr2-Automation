@@ -22,9 +22,10 @@ _RE_PROGRESSO_TOTAL = re.compile(
     re.I,
 )
 _RE_PROGRESSO_ITEM = re.compile(
-    # [3/40]  ou  [3/40 · 12%]  ou  [3/40 - 12%]
+    # Só formas monotônicas de contador — NÃO “licitação 40 de 40” (índice ≠ progresso).
+    # [3/40]  |  [3/40 · 12%]  |  progresso: [3/40 · 7%]
     r"\[\s*(\d+)\s*/\s*(\d+)(?:\s*[·•.\-–—]\s*\d+\s*%?)?\s*\]|"
-    r"(?:publicando|baixando|processando|item|sess[aã]o|pdf|licita[cç][aã]o)\s+(\d+)\s*(?:de|/)\s*(\d+)",
+    r"(?:publicando|baixando|processando|item|sess[aã]o|pdf)\s+(\d+)\s*(?:de|/)\s*(\d+)",
     re.I,
 )
 
@@ -130,35 +131,38 @@ class _Tee(io.TextIOBase):
         self._callback = callback
         self._echo = echo
         self._buf = ""
+        self._lock = threading.Lock()
 
     def write(self, s: str) -> int:
         if not s:
             return 0
-        if self._echo:
-            try:
-                self._original.write(s)
-            except UnicodeEncodeError:
-                safe = s.encode("ascii", errors="replace").decode("ascii")
+        with self._lock:
+            if self._echo:
                 try:
-                    self._original.write(safe)
-                except Exception:
-                    pass
-        # tqdm usa \r — trata como quebra para filtrar progresso sujo
-        self._buf += s.replace("\r\n", "\n").replace("\r", "\n")
-        while "\n" in self._buf:
-            line, self._buf = self._buf.split("\n", 1)
-            if line.strip():
-                self._callback(line)
-        return len(s)
+                    self._original.write(s)
+                except UnicodeEncodeError:
+                    safe = s.encode("ascii", errors="replace").decode("ascii")
+                    try:
+                        self._original.write(safe)
+                    except Exception:
+                        pass
+            # tqdm usa \r — trata como quebra para filtrar progresso sujo
+            self._buf += s.replace("\r\n", "\n").replace("\r", "\n")
+            while "\n" in self._buf:
+                line, self._buf = self._buf.split("\n", 1)
+                if line.strip():
+                    self._callback(line)
+            return len(s)
 
     def flush(self) -> None:
-        try:
-            self._original.flush()
-        except Exception:
-            pass
-        if self._buf.strip():
-            self._callback(self._buf.rstrip())
-            self._buf = ""
+        with self._lock:
+            try:
+                self._original.flush()
+            except Exception:
+                pass
+            if self._buf.strip():
+                self._callback(self._buf.rstrip())
+                self._buf = ""
 
 
 # Redirecionamento por thread — evita misturar stdout quando 2+ jobs rodam juntos.
@@ -206,6 +210,41 @@ def _ensure_thread_dispatch_streams() -> None:
     sys.stdout = _ThreadDispatchStream(stderr=False)
     sys.stderr = _ThreadDispatchStream(stderr=True)
     _dispatch_installed = True
+
+
+# Tee “do job atual” — workers filhas herdam via inherit_job_log_tee.
+_job_tee_out = None
+_job_tee_err = None
+_job_tee_lock = threading.Lock()
+
+
+def inherit_job_log_tee() -> None:
+    """Copia o Tee do job para a thread atual (ThreadPool nos scripts).
+
+    Sem isso, prints das workers vão para stdout real e a barra de progresso
+    do painel não atualiza.
+    """
+    if getattr(_log_tls, "tee_out", None) is not None:
+        return
+    with _job_tee_lock:
+        out, err = _job_tee_out, _job_tee_err
+    if out is not None:
+        _log_tls.tee_out = out
+    if err is not None:
+        _log_tls.tee_err = err
+
+
+def bind_job_log_tee(tee_out, tee_err=None) -> None:
+    """Associa Tee do job a esta thread (chamar no início de cada worker)."""
+    global _job_tee_out, _job_tee_err
+    if tee_out is not None:
+        _log_tls.tee_out = tee_out
+        with _job_tee_lock:
+            _job_tee_out = tee_out
+    if tee_err is not None:
+        _log_tls.tee_err = tee_err
+        with _job_tee_lock:
+            _job_tee_err = tee_err
 
 
 def _limpar_linha_log(line: str, *, visto: set[str] | None = None) -> str | None:
@@ -317,10 +356,34 @@ def _atualizar_progresso_do_log(job, line: str) -> None:
     # Ignora [1/2] workaround quando o job já tem fila maior (ex. 40 licitações).
     if job.progress_total > 0 and total < job.progress_total:
         return
+    # Em paralelo o índice da licitação não é monotônico — só aceita avanço.
+    if (
+        job.progress_total > 0
+        and total == job.progress_total
+        and done < int(job.progress_done or 0)
+    ):
+        return
+    # Evita salto falso: “licitação 40/40” no início de um worker não deve
+    # zerar a fila — só atualiza se done for >= atual (já coberto) e se a
+    # linha parece contador agregado (progresso: / [n/m] no início).
+    low = line.lower().lstrip()
+    if not (
+        low.startswith("progresso:")
+        or low.startswith("[")
+        or "progresso:" in low[:24]
+    ):
+        # Formas “baixando 3 de 40” ainda passam pelo 2º braço do regex.
+        if not re.search(
+            r"(?:publicando|baixando|processando|item|sess[aã]o|pdf)\s+\d+",
+            low,
+            re.I,
+        ):
+            return
     job.set_progress(done=done, total=total)
 
 
 def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
+    global _job_tee_out, _job_tee_err
     fn = getattr(mod, fn_name, None)
     if not fn:
         raise AttributeError("Função {0} não encontrada".format(fn_name))
@@ -329,6 +392,13 @@ def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
         return bool(job.cancel_requested)
 
     setattr(mod, "pedido_cancelado", pedido_cancelado)
+
+    def reportar_progresso(done=None, total=None, label=None):
+        """Callback direto para a barra do painel (não depende de stdout/tee)."""
+        if hasattr(job, "set_progress"):
+            job.set_progress(done=done, total=total, label=label)
+
+    setattr(mod, "reportar_progresso", reportar_progresso)
 
     # Menos ruído de Hugging Face / Transformers no painel
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
@@ -376,8 +446,7 @@ def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
     tee_err = _Tee(_real_stderr, on_line, echo=not protocol_job)
     prev_out = getattr(_log_tls, "tee_out", None)
     prev_err = getattr(_log_tls, "tee_err", None)
-    _log_tls.tee_out = tee_out
-    _log_tls.tee_err = tee_err
+    bind_job_log_tee(tee_out, tee_err)
     # Silencia UserWarning das libs enquanto o job roda (ainda filtramos no tee)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
@@ -394,6 +463,9 @@ def run_main_with_logs(job, mod: ModuleType, fn_name: str = "main") -> None:
             tee_err.flush()
             _log_tls.tee_out = prev_out
             _log_tls.tee_err = prev_err
+            with _job_tee_lock:
+                _job_tee_out = prev_out
+                _job_tee_err = prev_err
 
     if job.cancel_requested:
         return

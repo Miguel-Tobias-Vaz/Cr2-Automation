@@ -26,7 +26,7 @@
         <button type="submit" class="btn btn-primary" id="login-btn">Entrar</button>
       </form>
       <p class="login-hint admin-muted" id="login-hint">
-        Sem login configurado? O painel abre direto (modo aberto).
+        Use a conta do painel para entrar.
       </p>
     </main>
     <script src="/assets/supabase-config.js?v=1" onerror="void 0"></script>
@@ -34,10 +34,11 @@
     <script type="module" src="/assets/shared.js?v=home72"></script>
     <script type="module">
       import { whenReady } from "/assets/modules/core.js?v=home72";
+      import { safeNextPath } from "/assets/modules/auth.js?v=sec1";
       whenReady(() => {
 (function () {
         const params = new URLSearchParams(location.search);
-        const next = params.get("next") || "/";
+        const next = safeNextPath(params.get("next") || "/");
         const form = document.getElementById("login-form");
         const err = document.getElementById("login-error");
         const userInput = document.getElementById("login-user");
@@ -94,7 +95,7 @@
             lede.textContent = "Entre com usuário e senha.";
             hint.textContent = "Usuários definidos em OPTO_USERS (opto.env).";
           } else {
-            hint.textContent = "Login não configurado — o painel funciona sem autenticação.";
+            hint.textContent = "Peça acesso ao administrador se não conseguir entrar.";
           }
         }
 

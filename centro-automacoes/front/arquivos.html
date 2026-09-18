@@ -56,8 +56,8 @@
     </main>
 
     <script type="module">
-      import { mountFileBrowser } from "/assets/modules/files.js?v=home73";
-      import { guardAuth, ensureLogoutButton } from "/assets/modules/auth.js";
+      import { mountFileBrowser } from "/assets/modules/files.js?v=sec1";
+      import { guardAuth, ensureLogoutButton } from "/assets/modules/auth.js?v=sec1";
 
       const params = new URLSearchParams(window.location.search);
       const embed = params.get("embed") === "1";
@@ -98,8 +98,15 @@
         const banner = document.getElementById("pick-banner");
         if (banner) {
           banner.hidden = false;
-          banner.innerHTML = `Escolhendo pasta para o campo <code>${pickField}</code>.
-            <a href="${ret}">Voltar sem escolher</a>`;
+          banner.innerHTML = `Escolhendo pasta para o campo <code></code>.
+            <a href="#">Voltar sem escolher</a>`;
+          const code = banner.querySelector("code");
+          const link = banner.querySelector("a");
+          if (code) code.textContent = pickField;
+          if (link) {
+            const safeRet = ret.startsWith("/") && !ret.startsWith("//") ? ret : "/";
+            link.setAttribute("href", safeRet);
+          }
         }
       }
 

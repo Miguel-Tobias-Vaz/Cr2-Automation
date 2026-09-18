@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 MOD_PATH = ROOT / "script.py"
+PDF_OK = b"%PDF-1.4\n" + (b"x" * 80)
 
 
 def _load():
@@ -34,7 +35,7 @@ def test_baixar_anexos_paralelo_chama_todos(tmp_path):
     ]
 
     def fake_baixar(sessao, url, destino):
-        Path(destino).write_bytes(b"%PDF-1.4 fake")
+        Path(destino).write_bytes(PDF_OK)
         return True
 
     with patch.object(mod, "baixar_arquivo", side_effect=fake_baixar):
@@ -60,13 +61,13 @@ def test_baixar_anexos_pula_ja_existente(tmp_path):
 
     # Cria arquivo com o nome final que nome_arquivo produz
     nome_dfd = mod.nome_arquivo("DFD.pdf", "http://ex/dfd.pdf")
-    (pasta / nome_dfd).write_bytes(b"old")
+    (pasta / nome_dfd).write_bytes(PDF_OK)
 
     chamadas = []
 
     def fake_baixar(sessao, url, destino):
         chamadas.append(url)
-        Path(destino).write_bytes(b"new")
+        Path(destino).write_bytes(PDF_OK)
         return True
 
     with patch.object(mod, "baixar_arquivo", side_effect=fake_baixar):

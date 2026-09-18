@@ -1,4 +1,4 @@
-#!C:\Users\tobia\Documents\GitHub\Cr2-Automation\centro-automacoes\venv\Scripts\python.exe
+#!C:\Users\tobia\Documents\GitHub\Cr2\Automação\Cr2-Automation\centro-automacoes\venv\Scripts\python.exe
 """Extract pdf structure in XML format"""
 
 import logging

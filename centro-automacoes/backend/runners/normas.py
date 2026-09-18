@@ -60,7 +60,7 @@ def _parse_fontes_legado(texto: str) -> list[dict]:
 
 def run(job) -> None:
     cfg = job.config
-    pasta = (cfg.get("pasta_base") or r"C:\Downloads\Inhangapi").strip()
+    pasta = (cfg.get("pasta_base") or r"C:\Downloads").strip()
     site = (cfg.get("site") or "").strip()
     ler_pdf = bool(cfg.get("ler_pdf", True))
     limite = int(cfg.get("limite_posts") or 0)

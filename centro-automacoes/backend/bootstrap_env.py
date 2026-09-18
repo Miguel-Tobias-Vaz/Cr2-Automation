@@ -10,15 +10,16 @@ ROOT = Path(__file__).resolve().parent.parent
 _BOOTSTRAPPED = False
 
 
-def _load_dotenv_file(path: Path) -> None:
+def _load_dotenv_file(path: Path, *, override: bool = False) -> None:
     if not path.is_file():
         return
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        # utf-8-sig remove BOM (ex.: arquivo salvo pelo Notepad/PowerShell)
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
     except OSError:
         return
     for line in lines:
-        stripped = line.strip()
+        stripped = line.strip().lstrip("\ufeff")
         if not stripped or stripped.startswith("#"):
             continue
         if stripped.startswith("export "):
@@ -26,9 +27,11 @@ def _load_dotenv_file(path: Path) -> None:
         if "=" not in stripped:
             continue
         key, _, val = stripped.partition("=")
-        key = key.strip()
+        key = key.strip().lstrip("\ufeff")
         val = val.strip()
-        if not key or key in os.environ:
+        if not key:
+            continue
+        if not override and key in os.environ:
             continue
         if (val.startswith('"') and val.endswith('"')) or (
             val.startswith("'") and val.endswith("'")
@@ -61,6 +64,7 @@ def bootstrap_env() -> None:
     if _BOOTSTRAPPED:
         return
     _BOOTSTRAPPED = True
-    for path in (ROOT / "deploy" / "opto.env", ROOT / "opto.env"):
-        _load_dotenv_file(path)
+    # deploy = defaults da VPS; opto.env local sobrescreve (PC pessoal)
+    _load_dotenv_file(ROOT / "deploy" / "opto.env", override=False)
+    _load_dotenv_file(ROOT / "opto.env", override=True)
     _load_supabase_js(ROOT / "front" / "supabase-config.js")

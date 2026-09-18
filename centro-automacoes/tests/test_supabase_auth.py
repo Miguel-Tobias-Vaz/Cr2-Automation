@@ -11,6 +11,8 @@ from backend import supabase_auth
 @pytest.fixture
 def supabase_env(monkeypatch):
     monkeypatch.delenv("OPTO_USERS", raising=False)
+    # opto.env de dev pode trazer OPTO_AUTH=off e desligar o auth do teste
+    monkeypatch.delenv("OPTO_AUTH", raising=False)
     monkeypatch.setenv(
         "OPTO_SUPABASE_URL", "https://test.supabase.co"
     )
@@ -89,3 +91,27 @@ def test_session_without_profile(supabase_env, monkeypatch):
     assert sess is not None
     assert sess.username == "novo@x.com"
     assert sess.role == "user"
+
+
+def test_session_inactive_profile_denied(supabase_env, monkeypatch):
+    class FakeResp:
+        def __init__(self, status, payload):
+            self.status_code = status
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/auth/v1/user"):
+            return FakeResp(200, {"id": "uid-off", "email": "off@x.com"})
+        if "/rest/v1/profiles" in url:
+            return FakeResp(
+                200,
+                [{"role": "editor", "ativo": False, "email": "off@x.com", "nome": "Off"}],
+            )
+        return FakeResp(404, {})
+
+    monkeypatch.setattr(supabase_auth.requests, "get", fake_get)
+    assert auth.session_from_token("tok-inactive") is None
+

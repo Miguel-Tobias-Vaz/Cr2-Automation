@@ -18,13 +18,11 @@ def auth_users(monkeypatch):
     monkeypatch.delenv("OPTO_SUPABASE_URL", raising=False)
     monkeypatch.delenv("OPTO_SUPABASE_ANON_KEY", raising=False)
     monkeypatch.delenv("OPTO_LOCAL", raising=False)
-    monkeypatch.setenv("OPTO_REQUIRE_AUTH", "1")
     monkeypatch.setenv("OPTO_USERS", "admin:secret:admin,maria:123:user")
     monkeypatch.setattr(auth, "USERS_FILE", auth.AUTH_DIR / "users.test.json")
     auth.reload_users()
     yield
     monkeypatch.delenv("OPTO_USERS", raising=False)
-    monkeypatch.delenv("OPTO_REQUIRE_AUTH", raising=False)
     auth.reload_users()
 
 
@@ -103,17 +101,27 @@ def test_logs_stream_requires_auth(api_client):
     assert r.status_code == 401
 
 
-def test_logs_stream_token_query(api_client):
+def test_logs_stream_ticket(api_client):
     j = Job(id="s1", service_id="documentos", config={}, owner="maria")
     j.status = JobStatus.COMPLETED
     jobs._jobs[j.id] = j
     sess = auth.login("maria", "123")
     assert sess is not None
+    ticket = auth.issue_ticket(sess, "stream")
     with api_client.stream(
         "GET",
-        f"/api/jobs/s1/logs/stream?access_token={sess.token}",
+        f"/api/jobs/s1/logs/stream?ticket={ticket}",
     ) as r:
         assert r.status_code == 200
+
+
+def test_logs_stream_jwt_query_rejected(api_client):
+    j = Job(id="s1", service_id="documentos", config={}, owner="maria")
+    jobs._jobs[j.id] = j
+    sess = auth.login("maria", "123")
+    assert sess is not None
+    r = api_client.get(f"/api/jobs/s1/logs/stream?access_token={sess.token}")
+    assert r.status_code == 401
 
 
 def test_logs_stream_forbidden_other_user(api_client):
@@ -130,11 +138,10 @@ def test_milagre_status_requires_auth(api_client):
 
 def test_open_without_auth(monkeypatch):
     monkeypatch.setenv("OPTO_AUTH", "off")
+    monkeypatch.setenv("OPTO_LOCAL", "1")
     monkeypatch.delenv("OPTO_SUPABASE_URL", raising=False)
     monkeypatch.delenv("OPTO_SUPABASE_ANON_KEY", raising=False)
     monkeypatch.delenv("OPTO_USERS", raising=False)
-    monkeypatch.delenv("OPTO_LOCAL", raising=False)
-    monkeypatch.delenv("OPTO_REQUIRE_AUTH", raising=False)
     monkeypatch.setattr(auth, "USERS_FILE", auth.AUTH_DIR / "users.test-empty.json")
     auth.reload_users()
     jobs._persist_enabled = False

@@ -110,7 +110,10 @@ def renderizar_paginas(caminho: Path, dpi: int = 180, max_paginas: int = 4):
     max_paginas = max(1, int(max_paginas or 4))
     # 1) PyMuPDF
     try:
-        import fitz
+        try:
+            import pymupdf as fitz
+        except Exception:
+            import fitz
         from PIL import Image
 
         doc = fitz.open(str(caminho))

@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from backend.config import DOWNLOAD_WORKERS
+from backend.config import DOWNLOAD_WORKERS, LICITACAO_WORKERS
 from backend.runners.base import SCRIPTS, apply_globals, load_module, run_main_with_logs
 
 
@@ -39,7 +39,7 @@ def run(job) -> None:
             "Informe a URL da listagem ou o link da planilha Google (Documentos)."
         )
 
-    saida = (cfg.get("pasta_saida") or r"C:\Downloads\Licitacoes").strip()
+    saida = (cfg.get("pasta_saida") or r"C:\Downloads").strip()
 
     anos = (cfg.get("anos") or "").strip()
     planilha_modelo = (cfg.get("planilha_modelo") or "").strip()
@@ -92,11 +92,26 @@ def run(job) -> None:
             "Filtro docs leves: pula só contrato/aditivo puro; prioriza docs úteis "
             "e menos anexos → Nao_migradas_links.xlsx",
         )
-    if DOWNLOAD_WORKERS > 1:
+    dw_job, lw_job = DOWNLOAD_WORKERS, LICITACAO_WORKERS
+    if planilha_fonte:
+        dw_job = min(max(1, int(dw_job or 1)), 1)
+        lw_job = min(max(1, int(lw_job or 1)), 2)
         job.emit(
             "info",
-            "Downloads paralelos: {0} conexões por licitação".format(DOWNLOAD_WORKERS),
+            "Fonte planilha/Drive: paralelismo reduzido — {0} licitação(ões) "
+            "e {1} download(s) (evita 500 do Google)".format(lw_job, dw_job),
         )
+    else:
+        if dw_job > 1:
+            job.emit(
+                "info",
+                "Downloads paralelos: {0} conexões por licitação".format(dw_job),
+            )
+        if lw_job > 1:
+            job.emit(
+                "info",
+                "Licitações em paralelo: {0} ao mesmo tempo".format(lw_job),
+            )
     if ocr:
         job.emit("info", "OCR: ligado ({0})".format(motor_ocr))
     else:
@@ -153,6 +168,10 @@ def run(job) -> None:
         argv += ["--amostra-por-mes", str(amostra_por_mes)]
     if priorizar_docs_leves:
         argv.append("--priorizar-docs-leves")
+    if lw_job > 0:
+        argv += ["--licitacao-workers", str(lw_job)]
+    if dw_job > 0:
+        argv += ["--download-workers", str(dw_job)]
     if ocr:
         argv.append("--ocr")
         argv += ["--motor-ocr", motor_ocr or "tesseract"]
@@ -180,7 +199,8 @@ def run(job) -> None:
 
     mod = load_module("download_licitacoes", SCRIPTS["licitacoes"])
     mapping = {
-        "DOWNLOAD_WORKERS": DOWNLOAD_WORKERS,
+        "DOWNLOAD_WORKERS": dw_job,
+        "LICITACAO_WORKERS": lw_job,
     }
     # Painel: anos vazio = todos (não usa o ANOS_FILTRO hardcoded do script)
     if not anos:

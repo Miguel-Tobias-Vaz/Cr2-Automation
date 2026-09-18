@@ -91,6 +91,12 @@ def session_from_token(token: str, sessions: dict, lock) -> Session | None:
         nome = str(profile.get("nome") or "").strip()
         role = map_role(profile.get("role"))
 
+        ativo = profile.get("ativo")
+        if ativo is False or str(ativo).strip().lower() in ("0", "false", "f", "no"):
+            with lock:
+                sessions.pop(token, None)
+            return None
+
         sess = Session(
             token=token,
             username=username,

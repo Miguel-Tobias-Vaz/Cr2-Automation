@@ -43,11 +43,42 @@ export function authHeaders(extra) {
   return h;
 }
 
-export function streamUrl(path) {
-  const t = authToken();
-  if (!t) return `${API}${path}`;
+export function safeNextPath(raw) {
+  if (!raw || typeof raw !== "string") return "/";
+  let s = raw.trim();
+  try {
+    s = decodeURIComponent(s);
+  } catch (_) {}
+  if (!s.startsWith("/") || s.startsWith("//") || s.includes("\\")) return "/";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return "/";
+  if (s.includes("://")) return "/";
+  return s;
+}
+
+export function revealApp() {
+  document.documentElement.classList.remove("opto-auth-wait");
+}
+
+export async function issueTicket(purpose) {
+  try {
+    const r = await authFetch(`${API}/api/auth/ticket`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ purpose: purpose || "stream" }),
+    });
+    if (!r.ok) return "";
+    const d = await r.json();
+    return d.ticket || "";
+  } catch (_) {
+    return "";
+  }
+}
+
+export async function streamUrl(path) {
+  const ticket = await issueTicket("stream");
+  if (!ticket) return `${API}${path}`;
   const sep = path.includes("?") ? "&" : "?";
-  return `${API}${path}${sep}access_token=${encodeURIComponent(t)}`;
+  return `${API}${path}${sep}ticket=${encodeURIComponent(ticket)}`;
 }
 
 let _authRefreshPromise = null;
@@ -126,17 +157,27 @@ export function authFetch(url, opts) {
 }
 
 export async function guardAuth() {
-  if (location.pathname.includes("login.html")) return;
+  if (location.pathname.includes("login.html")) {
+    revealApp();
+    return;
+  }
+  const next = encodeURIComponent(location.pathname + location.search);
   try {
     await refreshSupabaseSessionIfNeeded();
     const r = await authFetch(`${API}/api/auth/me`);
-    if (!r.ok) return;
+    if (!r.ok) {
+      location.href = `/login.html?next=${next}`;
+      return;
+    }
     const d = await r.json();
     if (d.auth_required && !d.user) {
-      const next = encodeURIComponent(location.pathname + location.search);
       location.href = `/login.html?next=${next}`;
+      return;
     }
-  } catch (_) {}
+    revealApp();
+  } catch (_) {
+    location.href = `/login.html?next=${next}`;
+  }
 }
 
 export function setAuthToken(token) {

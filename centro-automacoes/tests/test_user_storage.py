@@ -204,6 +204,23 @@ def test_list_workspace_files(users_root):
     assert "teste.pdf" in names
 
 
+def test_list_esconde_runtime_json(users_root):
+    info = workspace_info("ana")
+    jobs = Path(info["jobs_dir"])
+    (jobs / "runtime.json").write_text('{"senha":"x"}', encoding="utf-8")
+    (jobs / "ok.txt").write_text("ok", encoding="utf-8")
+    data = list_workspace_files("ana", "jobs")
+    names = [e["name"] for e in data["entries"]]
+    assert "ok.txt" in names
+    assert "runtime.json" not in names
+    uploads = Path(info["uploads_dir"])
+    (uploads / "runtime.json").write_text("{}", encoding="utf-8")
+    from backend.user_storage import workspace_download_target
+
+    with pytest.raises(ValueError, match="interno"):
+        workspace_download_target("ana", "uploads/runtime.json")
+
+
 def test_list_workspace_files_pasta_com_tamanho(users_root):
     info = workspace_info("ana")
     out = Path(info["output_dir"])
@@ -544,3 +561,31 @@ def test_disk_job_payload_detects_resultado_zip(users_root, tmp_path, monkeypatc
     payload = disk_job_payload("diskzip1", "ana")
     assert payload is not None
     assert payload["has_download"] is True
+
+
+def test_normalize_owner_preserva_uuid(users_root):
+    from backend.user_storage import normalize_owner, storage_key_for_user
+    from backend.auth import Session
+
+    uid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    assert normalize_owner(uid) == uid
+    sess = Session("t", "ana@empresa.com", "user", 0, user_id=uid)
+    assert storage_key_for_user(sess) == uid
+    info = workspace_info(storage_key_for_user(sess))
+    assert uid in info["root_dir"]
+    assert "ana_empresa" not in info["root_dir"]
+
+
+def test_migra_pasta_email_para_uuid(users_root):
+    from backend.user_storage import migrate_email_folder_to_uuid, normalize_owner
+
+    uid = "11111111-2222-3333-4444-555555555555"
+    slug = normalize_owner("ana@empresa.com")
+    old = users_root / slug
+    (old / "output").mkdir(parents=True)
+    (old / "output" / "x.txt").write_text("ok", encoding="utf-8")
+    key = migrate_email_folder_to_uuid(uid, "ana@empresa.com")
+    assert key == uid
+    assert (users_root / uid / "output" / "x.txt").is_file()
+    assert not old.exists()
+

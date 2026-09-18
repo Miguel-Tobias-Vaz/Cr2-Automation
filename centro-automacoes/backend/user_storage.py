@@ -60,6 +60,20 @@ FOLDER_SIZE_ON_LIST = os.getenv("OPTO_FOLDER_SIZE_ON_LIST", "0").strip().lower()
     "on",
 )
 
+HIDDEN_WORKSPACE_NAMES = frozenset(
+    {"runtime.json", "config.json", "cancel.flag"}
+)
+
+
+def is_hidden_workspace_name(name: str) -> bool:
+    n = (name or "").strip().lower()
+    if n in HIDDEN_WORKSPACE_NAMES:
+        return True
+    if n.endswith(".auth-state.json"):
+        return True
+    return n.startswith(".")
+
+
 ALLOWED_SINGLE = frozenset(
     {".xlsx", ".xlsm", ".xls", ".csv", ".pdf", ".zip"}
 )
@@ -99,10 +113,82 @@ _WIN_DEFAULTS = (
 )
 
 
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.I,
+)
+
+
+def is_uuid_owner(value: str | None) -> bool:
+    return bool(value and _UUID_RE.match(value.strip()))
+
+
 def normalize_owner(owner: str | None) -> str:
     raw = (owner or "local").strip().lower()
+    if is_uuid_owner(raw):
+        return raw
     safe = re.sub(r"[^a-z0-9._-]", "_", raw)[:48]
     return safe or "local"
+
+
+def owner_keys(identity: Any) -> set[str]:
+    """Chaves com as quais um job/pasta pode bater (e-mail, slug, UUID)."""
+    if identity is None:
+        return set()
+    if isinstance(identity, (set, list, tuple)):
+        out: set[str] = set()
+        for item in identity:
+            out |= owner_keys(item)
+        return out
+    if hasattr(identity, "username"):
+        keys: set[str] = set()
+        for raw in (
+            getattr(identity, "username", None),
+            getattr(identity, "user_id", None),
+        ):
+            keys |= owner_keys(raw)
+        return keys
+    text = str(identity).strip().lower()
+    if not text:
+        return set()
+    return {text, normalize_owner(text)}
+
+
+def owners_match(job_owner: str | None, identity: Any) -> bool:
+    if not job_owner:
+        return False
+    keys = owner_keys(identity)
+    if not keys:
+        return False
+    raw = job_owner.strip().lower()
+    return raw in keys or normalize_owner(job_owner) in keys
+
+
+def migrate_email_folder_to_uuid(user_id: str, username: str | None) -> str:
+    """Pasta do usuário = UUID. Se ainda existir a pasta antiga do e-mail, renomeia."""
+    uid = user_id.strip().lower()
+    uuid_root = USERS_ROOT / uid
+    slug = normalize_owner(username) if username else ""
+    if uuid_root.exists():
+        return uid
+    if slug and slug != uid:
+        slug_root = USERS_ROOT / slug
+        if slug_root.is_dir():
+            try:
+                USERS_ROOT.mkdir(parents=True, exist_ok=True)
+                slug_root.rename(uuid_root)
+            except OSError:
+                return slug
+    return uid
+
+
+def storage_key_for_user(user: Any) -> str:
+    """Identificador de pasta: UUID do Supabase, senão username local."""
+    uid = str(getattr(user, "user_id", "") or "").strip()
+    username = str(getattr(user, "username", "") or "").strip()
+    if is_uuid_owner(uid):
+        return migrate_email_folder_to_uuid(uid, username)
+    return normalize_owner(username or "local")
 
 
 def user_root(owner: str | None) -> Path:
@@ -137,13 +223,36 @@ def path_belongs_to_user(value: str | Path | None, owner: str | None) -> bool:
         return False
 
 
+def _is_blank_or_win_default(value: str | None) -> bool:
+    """Vazio ou placeholder generico do formulario (VPS reescreve)."""
+    if not value or not str(value).strip():
+        return True
+    norm = str(value).strip().replace("/", "\\").lower().rstrip("\\")
+    return norm in _WIN_DEFAULTS
+
+
+def is_local_mode() -> bool:
+    """PC local: OPTO_LOCAL=1, ou auth desligada (pacote Windows)."""
+    raw = os.getenv("OPTO_LOCAL", "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    # Sem OPTO_LOCAL explicito: pacote local usa OPTO_AUTH=off
+    auth = os.getenv("OPTO_AUTH", "").strip().lower()
+    if auth in ("off", "0", "false", "no"):
+        return True
+    return False
+
+
 def _should_rewrite_pasta(
     value: str | None,
     owner: str | None,
     service_id: str | None,
 ) -> bool:
     if is_local_mode():
-        return _is_blank_or_win_default(value)
+        # No PC: so reescreve se o campo estiver vazio
+        return not value or not str(value).strip()
     if _is_blank_or_win_default(value):
         return True
     if not path_belongs_to_user(value, owner):
@@ -179,17 +288,6 @@ def workspace_info(owner: str | None) -> dict[str, str]:
         "root_dir": str(dirs["root"].resolve()),
         "layout": "data/users/{0}/{{uploads|output|jobs}}".format(user),
     }
-
-
-def _is_blank_or_win_default(value: str | None) -> bool:
-    if not value or not str(value).strip():
-        return True
-    norm = str(value).strip().replace("/", "\\").lower().rstrip("\\")
-    return norm in _WIN_DEFAULTS or norm.startswith(r"c:\downloads\\")
-
-
-def is_local_mode() -> bool:
-    return os.getenv("OPTO_LOCAL", "").strip().lower() in ("1", "true", "yes", "on")
 
 
 # Extrações na VPS: cada job grava em output/{serviço}/{job_id}/ (evita misturar ZIP).
@@ -259,17 +357,18 @@ def assign_job_output_dir(job, *, owner: str | None, service_id: str | None) -> 
         job.config.pop("nome_pasta", None)
 
     if is_local_mode():
+        # Sem nome custom: usa a pasta escolhida (ex.: C:\Downloads) direto.
         if label == job.id:
             return None
         base_raw = None
         for key in JOB_OUTPUT_PASTA_KEYS:
             val = (job.config or {}).get(key)
-            if val and str(val).strip() and not _is_blank_or_win_default(val):
+            if val and str(val).strip():
                 base_raw = str(val).strip()
                 break
         if not base_raw:
             return None
-        run_dir = Path(base_raw).resolve() / label
+        run_dir = Path(base_raw).expanduser().resolve() / label
         run_dir.mkdir(parents=True, exist_ok=True)
         return _apply_job_run_path(job, str(run_dir))
 
@@ -489,7 +588,7 @@ def list_workspace_files(
     )
     entries: list[dict[str, Any]] = []
     for item in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
-        if item.name.startswith("."):
+        if is_hidden_workspace_name(item.name):
             continue
         try:
             stat = item.stat()
@@ -550,6 +649,8 @@ def _assert_download_allowed(owner: str | None, target: Path, root: Path) -> Non
     rel = target.relative_to(root).as_posix()
     if rel == "jobs" or rel.startswith("jobs/"):
         raise ValueError("Download da pasta jobs não permitido.")
+    if target.is_file() and is_hidden_workspace_name(target.name):
+        raise ValueError("Arquivo interno do processo não pode ser baixado.")
 
 
 def workspace_download_target(

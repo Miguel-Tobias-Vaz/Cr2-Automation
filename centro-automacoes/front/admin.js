@@ -1,4 +1,4 @@
-import { whenReady } from "./modules/core.js";
+import { whenReady, escapeHtml } from "./modules/core.js";
 
 (() => {
   "use strict";
@@ -225,8 +225,8 @@ import { whenReady } from "./modules/core.js";
         "<tr>" +
         "<td>" + pos + "</td>" +
         '<td><span class="' + statusClass(j.status) + '">' + (STATUS_LABEL[j.status] || j.status) + "</span></td>" +
-        "<td>" + serviceName(j.service_id, labels) + "</td>" +
-        "<td>" + (j.owner || "—") + "</td>" +
+        "<td>" + escapeHtml(serviceName(j.service_id, labels)) + "</td>" +
+        "<td>" + escapeHtml(j.owner || "—") + "</td>" +
         "<td>" + pct + "</td>" +
         '<td><code class="admin-code">' + j.id + "</code></td>" +
         "<td>" + jobActionButtons(j) + "</td>" +
@@ -276,10 +276,10 @@ import { whenReady } from "./modules/core.js";
       <div class="admin-active-job">
         <div class="admin-active-head">
           <span class="${statusClass(a.status)}">${STATUS_LABEL[a.status] || a.status}</span>
-          <code class="admin-code">${a.id}</code>
+          <code class="admin-code">${escapeHtml(a.id)}</code>
         </div>
-        <p class="admin-active-name">${a.nome}</p>
-        <p class="admin-muted">${a.label || "Em andamento…"}</p>
+        <p class="admin-active-name">${escapeHtml(a.nome || "")}</p>
+        <p class="admin-muted">${escapeHtml(a.label || "Em andamento…")}</p>
         <div class="admin-progress">
           <div class="admin-progress-bar" style="width:${bar}%"></div>
         </div>
@@ -309,7 +309,7 @@ import { whenReady } from "./modules/core.js";
         const w = Math.round((n / max) * 100);
         return `
         <div class="admin-bar-row">
-          <span class="admin-bar-label">${serviceName(sid, labels)}</span>
+          <span class="admin-bar-label">${escapeHtml(serviceName(sid, labels))}</span>
           <div class="admin-bar-track"><div class="admin-bar-fill" style="width:${w}%"></div></div>
           <span class="admin-bar-num">${n}</span>
         </div>`;
@@ -328,12 +328,12 @@ import { whenReady } from "./modules/core.js";
     el.innerHTML = recent
       .slice(0, 8)
       .map((j) => {
-        const msg = (j.result && j.result.mensagem) || j.error || "—";
+        const msg = escapeHtml(String((j.result && j.result.mensagem) || j.error || "—").slice(0, 80));
         return `
-        <button type="button" class="admin-activity-row" data-view-job="${j.id}">
+        <button type="button" class="admin-activity-row" data-view-job="${escapeHtml(j.id)}">
           <span class="${statusClass(j.status)}">${STATUS_LABEL[j.status] || j.status}</span>
-          <span class="admin-activity-title">${serviceName(j.service_id, labels)}</span>
-          <span class="admin-activity-msg">${String(msg).slice(0, 80)}</span>
+          <span class="admin-activity-title">${escapeHtml(serviceName(j.service_id, labels))}</span>
+          <span class="admin-activity-msg">${msg}</span>
           <span class="admin-activity-time">${fmtTime(j.created_at)}</span>
         </button>`;
       })
@@ -367,10 +367,10 @@ import { whenReady } from "./modules/core.js";
         return `
         <tr>
           <td><code class="admin-code">${j.id}</code></td>
-          <td>${serviceName(j.service_id, labels)}</td>
+          <td>${escapeHtml(serviceName(j.service_id, labels))}</td>
           <td><span class="${statusClass(j.status)}">${STATUS_LABEL[j.status] || j.status}</span></td>
           <td>${pos}</td>
-          <td>${j.owner || "—"}</td>
+          <td>${escapeHtml(j.owner || "—")}</td>
           <td>${pct}</td>
           <td>${fmtTime(j.created_at)}</td>
           <td>${jobActionButtons(j)}</td>
@@ -394,10 +394,10 @@ import { whenReady } from "./modules/core.js";
         const hidden = ocultos.has(s.id);
         const count = ((data.stats && data.stats.by_service) || {})[s.id] || 0;
         return `
-        <a class="admin-tool-card" href="${s.pagina}">
-          <span class="admin-tool-index">${s.icone || "—"}</span>
-          <h3>${s.nome}${hidden ? ' <span class="admin-badge admin-badge--muted">oculto</span>' : ""}</h3>
-          <p>${s.descricao}</p>
+        <a class="admin-tool-card" href="${escapeHtml(s.pagina || "#")}">
+          <span class="admin-tool-index">${escapeHtml(s.icone || "—")}</span>
+          <h3>${escapeHtml(s.nome || "")}${hidden ? ' <span class="admin-badge admin-badge--muted">oculto</span>' : ""}</h3>
+          <p>${escapeHtml(s.descricao || "")}</p>
           <footer><span>${count} execução(ões)</span><span>Abrir →</span></footer>
         </a>`;
       })
@@ -421,9 +421,9 @@ import { whenReady } from "./modules/core.js";
         ${pending
           .map((j, i) => {
             const pos = (j.queue && j.queue.position) || i + 1;
-            return `<li draggable="true" data-id="${j.id}">
+            return `<li draggable="true" data-id="${escapeHtml(j.id)}">
               <span class="admin-drag-handle" aria-hidden="true">⋮⋮</span>
-              <span>#${pos} · ${serviceName(j.service_id, labels)} · <code class="admin-code">${j.id}</code>${j.owner ? ` · ${j.owner}` : ""}</span>
+              <span>#${pos} · ${escapeHtml(serviceName(j.service_id, labels))} · <code class="admin-code">${escapeHtml(j.id)}</code>${j.owner ? ` · ${escapeHtml(j.owner)}` : ""}</span>
             </li>`;
           })
           .join("")}
@@ -570,7 +570,7 @@ import { whenReady } from "./modules/core.js";
       const panel = $("cleanup-panel");
       if (panel) {
         panel.innerHTML =
-          '<p class="admin-error">' + (e.message || e) + "</p>";
+          '<p class="admin-error">' + escapeHtml(e.message || e) + "</p>";
       }
     }
   }
@@ -723,7 +723,7 @@ import { whenReady } from "./modules/core.js";
     } catch (e) {
       host.innerHTML =
         '<p class="admin-error">Erro ao abrir explorador: ' +
-        (e.message || e) +
+        escapeHtml(e.message || e) +
         "</p>";
       filesBrowser = null;
     }
@@ -772,7 +772,7 @@ import { whenReady } from "./modules/core.js";
         .map((u) => {
           const mb = u.size_bytes ? (u.size_bytes / (1024 * 1024)).toFixed(1) + " MB" : "";
           const label = u.id + (mb ? " · " + mb : "");
-          return `<option value="${u.id}">${label}</option>`;
+          return `<option value="${escapeHtml(u.id)}">${escapeHtml(label)}</option>`;
         })
         .join("");
       filesUsersLoaded = true;
@@ -783,7 +783,7 @@ import { whenReady } from "./modules/core.js";
       select.innerHTML = '<option value="">Erro ao carregar</option>';
       if (host) {
         host.innerHTML =
-          '<p class="admin-error">' + (e.message || e) + "</p>";
+          '<p class="admin-error">' + escapeHtml(e.message || e) + "</p>";
       }
     }
   }
@@ -833,7 +833,7 @@ import { whenReady } from "./modules/core.js";
       }
     } catch (e) {
       $("admin-stats").innerHTML =
-        '<p class="admin-error">Erro ao carregar: ' + (e.message || e) + "</p>";
+        '<p class="admin-error">Erro ao carregar: ' + escapeHtml(e.message || e) + "</p>";
     }
   }
 

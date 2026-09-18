@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home75" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home78" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -79,9 +79,12 @@
                 value="https://cmbrasilnovo.pa.gov.br/c/licitacoes"
               />
             </label>
-            <label class="field">
+            <label class="field" id="wrap-pasta-saida">
               <span class="field-label"><em>Pasta de saída</em></span>
-              <input type="text" id="pasta_saida" value="C:\Downloads\Licitacoes" />
+              <input type="text" id="pasta_saida" value="C:\Downloads" />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Padrao: <code>C:\Downloads</code> — cada licitacao vira uma subpasta.
+              </small>
             </label>
             <label class="field field--nome-pasta" id="wrap-nome-pasta">
               <span class="field-label"><em>Nome da pasta *</em></span>
@@ -225,14 +228,32 @@
           <h2>Log</h2>
           <p>Situação: <strong id="log-state">Parado</strong> - Processo: <span id="job-status">-</span></p>
         </header>
+        <section class="licitacao-log-board" id="licitacao-log-board" hidden>
+          <div class="licitacao-log-list">
+            <header class="log-board-head">
+              <span>Fila de licitações</span>
+              <strong id="licitacao-log-count">0 / 0</strong>
+            </header>
+            <div class="log-board-items" id="licitacao-log-items"></div>
+          </div>
+          <div class="licitacao-log-detail">
+            <header class="log-board-head">
+              <span>Etapas da licitação</span>
+              <strong id="licitacao-log-active">Aguardando</strong>
+            </header>
+            <div class="log-step-list" id="licitacao-log-steps">
+              <p class="log-empty">As etapas aparecem quando o processamento começar.</p>
+            </div>
+          </div>
+        </section>
         <div class="log-console" id="log-console"></div>
       </section>
     </main>
 
-        <script src="/assets/fluid-particles.js?v=home75"></script>
-    <script type="module" src="/assets/shared.js?v=home75"></script>
+        <script src="/assets/shader-background.js?v=home78"></script>
+    <script type="module" src="/assets/shared.js?v=home78"></script>
     <script type="module">
-import { whenReady } from "/assets/modules/core.js?v=home75";
+import { whenReady } from "/assets/modules/core.js?v=home78";
 whenReady(() => {
         const C = window.OptoAutomacoes;
         C.injectNav("licitacoes");

@@ -31,6 +31,11 @@ USE_SUBPROCESS = os.getenv("OPTO_SUBPROCESS", "1").strip().lower() not in (
 # Timeout automático por job running (0 = desligado). Ex.: 21600 = 6 h
 JOB_TIMEOUT_S = max(0, int(os.getenv("OPTO_JOB_TIMEOUT_S", "0")))
 
-# Downloads HTTP paralelos nos scripts de extração (documentos, etc.)
+# Downloads HTTP paralelos de anexos dentro de uma licitação (portal CR2).
+# Com --planilha-fonte o script reduz para 1 (Drive devolve 500 em rajada).
 DOWNLOAD_WORKERS = max(1, min(12, int(os.getenv("OPTO_DOWNLOAD_WORKERS", "6"))))
+
+# Licitações processadas ao mesmo tempo (download + extração) no portal.
+# Com --planilha-fonte o script reduz para 2.
+LICITACAO_WORKERS = max(1, min(16, int(os.getenv("OPTO_LICITACAO_WORKERS", "12"))))
 

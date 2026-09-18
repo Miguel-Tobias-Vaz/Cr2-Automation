@@ -18,38 +18,45 @@ def _local_bypass_session() -> auth.Session:
 
 def _token_from_request(
     authorization: str | None,
-    access_token: str | None,
-) -> str | None:
+    ticket: str | None,
+) -> tuple[str, str] | None:
+    """Retorna ('bearer'|'ticket', valor). JWT na querystring não é aceito."""
     token = auth.bearer_token(authorization)
     if token:
-        return token
-    if access_token:
-        stripped = access_token.strip()
+        return "bearer", token
+    if ticket:
+        stripped = ticket.strip()
         if stripped:
-            return stripped
+            return "ticket", stripped
     return None
+
+
+def _session_from_parts(kind: str, value: str) -> auth.Session | None:
+    if kind == "ticket":
+        return auth.session_from_ticket(value)
+    return auth.session_from_token(value)
 
 
 def get_optional_user(
     authorization: str | None = Header(None),
-    access_token: str | None = Query(None),
+    ticket: str | None = Query(None),
 ) -> auth.Session | None:
     if not auth.is_enabled():
         return _local_bypass_session()
-    token = _token_from_request(authorization, access_token)
-    if not token:
+    parts = _token_from_request(authorization, ticket)
+    if not parts:
         return None
-    return auth.session_from_token(token)
+    return _session_from_parts(*parts)
 
 
 def require_user(
     authorization: str | None = Header(None),
-    access_token: str | None = Query(None),
+    ticket: str | None = Query(None),
 ) -> auth.Session:
     if not auth.is_enabled():
         return _local_bypass_session()
-    token = _token_from_request(authorization, access_token)
-    sess = auth.session_from_token(token) if token else None
+    parts = _token_from_request(authorization, ticket)
+    sess = _session_from_parts(*parts) if parts else None
     if not sess:
         raise HTTPException(401, "Login necessário.")
     return sess

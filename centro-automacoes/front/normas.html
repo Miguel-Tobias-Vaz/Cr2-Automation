@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home73" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home78" />
   </head>
   <body class="page-normas">
     <div class="noise" aria-hidden="true"></div>
@@ -89,9 +89,12 @@
                 </label>
               </div>
               <div class="grid-2">
-                <label class="field">
-                  <span class="field-label"><em>Pasta base *</em></span>
-                  <input type="text" id="pasta_base" value="C:\Downloads\Prefeitura" required />
+                <label class="field" id="wrap-pasta-base">
+                  <span class="field-label"><em>Pasta de saída *</em></span>
+                  <input type="text" id="pasta_base" value="C:\Downloads" required />
+                  <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                    Padrao: <code>C:\Downloads</code> — altere se quiser outra pasta no PC.
+                  </small>
                 </label>
                 <label class="field field--nome-pasta" id="wrap-nome-pasta">
                   <span class="field-label"><em>Nome da pasta *</em></span>
@@ -213,10 +216,10 @@
       </div>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home73"></script>
-    <script type="module" src="/assets/shared.js?v=home73"></script>
+    <script src="/assets/shader-background.js?v=home78"></script>
+    <script type="module" src="/assets/shared.js?v=home78"></script>
     <script type="module">
-import { whenReady } from "/assets/modules/core.js?v=home73";
+import { whenReady } from "/assets/modules/core.js?v=home78";
 whenReady(() => {
         const C = window.OptoAutomacoes;
         C.injectNav("normas");

@@ -44,9 +44,15 @@ def _worker_env() -> dict[str, str]:
 
 
 def _write_runtime_config(job) -> None:
+    import stat
+
     path = job.dir / "runtime.json"
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(job.config or {}, fh, ensure_ascii=False, indent=2)
+    try:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    except OSError:
+        pass
 
 
 def _cleanup_worker_files(job) -> None:

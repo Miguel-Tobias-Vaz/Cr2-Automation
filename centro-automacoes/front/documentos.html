@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home72" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home78" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -62,9 +62,12 @@
           <fieldset class="bloco">
             <legend>Parâmetros</legend>
             <div class="grid-2">
-              <label class="field">
-                <span class="field-label"><em>Pasta base</em></span>
+              <label class="field" id="wrap-pasta-base">
+                <span class="field-label"><em>Pasta de saída</em></span>
                 <input type="text" id="pasta_base" value="C:\Downloads" />
+                <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                  Padrao: <code>C:\Downloads</code> — altere se quiser outra pasta no PC.
+                </small>
               </label>
               <label class="field">
                 <span class="field-label"><em>Tipo (opcional)</em></span>
@@ -111,10 +114,10 @@
       </section>
     </main>
 
-        <script src="/assets/fluid-particles.js?v=home72"></script>
-    <script type="module" src="/assets/shared.js?v=home72"></script>
+        <script src="/assets/shader-background.js?v=home78"></script>
+    <script type="module" src="/assets/shared.js?v=home78"></script>
     <script type="module">
-import { whenReady } from "/assets/modules/core.js?v=home72";
+import { whenReady } from "/assets/modules/core.js?v=home78";
 whenReady(() => {
         const C = window.OptoAutomacoes;
         C.injectNav("documentos");

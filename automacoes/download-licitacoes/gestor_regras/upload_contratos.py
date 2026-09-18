@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Gera subirContratos.xlsx a partir dos PDFs de contrato/aditivo.
+"""Gera subirContratos.xlsx a partir dos PDFs de contrato.
 
-Roda depois da separação (Contratos/<licitação>/). Fontes de cada linha:
+Roda depois da separação. Fontes de cada linha:
 
-  - contratos  -> Contratos/<licitação>/ (movidos na etapa anterior)
-  - aditivos   -> pasta da própria licitação (regra 13: aditivo não é contrato,
-                  então o arquivo NÃO é movido — só entra na planilha)
+  - contratos  -> Contratos/<licitação>/
   - fiscal     -> do próprio contrato ou da portaria de designação da pasta
+
+Termos aditivos NÃO entram nesta planilha (não há publicação automática);
+ficam só em Aditivos/<licitação>/.
 """
 
 from __future__ import annotations
@@ -23,13 +24,12 @@ from .config_front import (
     ROTULOS_CONTRATO,
 )
 from .contratos import (
+    PASTA_CONTRATOS,
     eh_arquivo_contrato,
     eh_arquivo_portaria_fiscal,
     nome_pasta_contrato,
 )
-from .campos_contrato import eh_aditivo
 
-PASTA_CONTRATOS = "Contratos"
 ARQ_RELATORIO = "_RELATORIO_CONTRATOS.txt"
 EXT_LEGIVEIS = (".pdf",)
 
@@ -106,16 +106,17 @@ def coletar_linhas_contratos(
     link_pasta_base: str = "",
     log: Callable[[str], None] | None = None,
 ) -> tuple[list[dict[str, Any]], list[tuple[str, list[str], list[str]]]]:
-    """Devolve (linhas_prontas, problemas) lendo contratos e aditivos."""
+    """Devolve (linhas_prontas, problemas) lendo só contratos (não aditivos)."""
     leitor = ler_texto or _ler_texto_padrao
     fala = log or (lambda _m: None)
 
     linhas: list[dict[str, Any]] = []
     problemas: list[tuple[str, list[str], list[str]]] = []
+    saida_abs = os.path.abspath(pasta_saida)
 
     for lf, pasta_lic, titulo in prontas:
         sub = nome_pasta_contrato(lf)
-        dir_contratos = os.path.join(os.path.abspath(pasta_saida), PASTA_CONTRATOS, sub)
+        dir_contratos = os.path.join(saida_abs, PASTA_CONTRATOS, sub)
         origem = (lf.get("numero") or "").strip()
 
         candidatos: list[tuple[str, str]] = []  # (caminho, sub_para_link)
@@ -128,15 +129,7 @@ def coletar_linhas_contratos(
                     texto_portaria = leitor(caminho)
                 continue
             if eh_arquivo_contrato(nome):
-                candidatos.append((caminho, sub))
-
-        # Aditivos ficam na pasta da licitação (regra 13) — entram só na planilha
-        for caminho in _arquivos(pasta_lic):
-            nome = os.path.basename(caminho)
-            if eh_aditivo(nome):
-                candidatos.append(
-                    (caminho, os.path.basename(os.path.abspath(pasta_lic).rstrip("\\/")))
-                )
+                candidatos.append((caminho, "%s/%s" % (PASTA_CONTRATOS, sub)))
 
         if not candidatos:
             continue

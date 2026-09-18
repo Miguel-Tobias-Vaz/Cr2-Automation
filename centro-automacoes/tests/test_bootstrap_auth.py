@@ -43,6 +43,7 @@ def test_auth_config_supabase_when_enabled(monkeypatch):
 
 
 def test_auth_config_off_when_opt_auth_off(monkeypatch):
+    monkeypatch.setenv("OPTO_LOCAL", "1")
     monkeypatch.setenv("OPTO_AUTH", "off")
     monkeypatch.setenv("OPTO_SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("OPTO_SUPABASE_ANON_KEY", "test-anon-key")

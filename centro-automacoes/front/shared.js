@@ -8,7 +8,7 @@ import {
   logout,
   guardAuth,
   ensureLogoutButton,
-} from "./modules/auth.js";
+} from "./modules/auth.js?v=sec1";
 import { uploadFile, bindFileUpload, setUploadNotifier } from "./modules/upload.js";
 import {
   applyPendingFolderPick,
@@ -16,7 +16,7 @@ import {
   fetchOutputHints,
   mountFileBrowser,
   pickFolderUrl,
-} from "./modules/files.js";
+} from "./modules/files.js?v=sec1";
 import { injectFooter } from "./modules/nav.js";
 
   /** Ferramentas por id (páginas de automação). */
@@ -138,7 +138,7 @@ import { injectFooter } from "./modules/nav.js";
 
   /** Hubs de alto nível: Extração | Publicação | Mapa */
   // Alinhado ao backend SERVICES_OCULTOS — não listar no hub/subnav.
-  const TOOLS_OCULTOS = new Set(["contratos", "dic_est_ter"]);
+  const TOOLS_OCULTOS = new Set(["dic_est_ter"]);
 
   const HUBS = [
     {
@@ -150,8 +150,7 @@ import { injectFooter } from "./modules/nav.js";
         "Baixas do portal: documentos, categorias, Extração Pro, licitações CR2 e repasses.",
       icon: "download",
       cta: "Ver ferramentas",
-      tools: ["documentos", "categorias", "normas", "licitacoes", "repasses"],
-      // ocultos por enquanto: "contratos"
+      tools: ["documentos", "categorias", "normas", "licitacoes", "repasses", "contratos"],
     },
     {
       key: "publicar",
@@ -1444,6 +1443,175 @@ import { injectFooter } from "./modules/nav.js";
     if (!block || !block.dataset.userCollapsed) {
       box.scrollTop = box.scrollHeight;
     }
+
+    updateLicitacaoLogBoard(rawMsg, lvl);
+  }
+
+  function updateLicitacaoLogBoard(rawMsg, level) {
+    const board = el("licitacao-log-board");
+    if (!board || boundServiceId !== "licitacoes") return;
+    const text = String(rawMsg || "");
+
+    // Contador agregado da barra — nao e item individual
+    if (/^\s*progresso:\s*\[/i.test(text)) return;
+
+    let index = 0;
+    let total = 0;
+    let m = text.match(/licita[cç][aã]o\s+(\d+)\s*(?:de|\/)\s*(\d+)/i);
+    if (m) {
+      index = Number(m[1]);
+      total = Number(m[2]);
+    } else {
+      // Formato antigo: ✓ [3/39 · 7%] concluída
+      m = text.match(/✓\s*\[\s*(\d+)\s*\/\s*(\d+)[^\]]*\]\s*conclu/i)
+        || text.match(/\[\s*(\d+)\s*\/\s*(\d+)[^\]]*\]\s*conclu[ií]da/i)
+        || text.match(/[!·]\s*\[\s*(\d+)\s*\/\s*(\d+)\s*\]/);
+      if (m) {
+        index = Number(m[1]);
+        total = Number(m[2]);
+      }
+    }
+
+    const isDone =
+      (/conclu[ií]da|\b✓\b|\bpulada\b/i.test(text)) && index > 0;
+    const isError = (/\berro\b|\bfalha\b|\!\s*\[/i.test(text) || /licitação\s+\d+\s+de\s+\d+\s+erro/i.test(text)) && index > 0 && !isDone;
+    const isStart =
+      /licita[cç][aã]o\s+\d+\s*(?:de|\/)\s*\d+/i.test(text) && !isDone && !isError;
+
+    board.hidden = false;
+    if (total > 0) board.dataset.total = String(total);
+    total = Number(board.dataset.total || total || 0);
+
+    const items = el("licitacao-log-items");
+    if (!items) return;
+
+    // Mensagens de etapa sem numero: so anexam no detalhe do item ativo
+    if (!index) {
+      index = Number(board.dataset.activeIndex || 0);
+      if (!index) return;
+      _appendLicitacaoStep(index, text, level);
+      return;
+    }
+
+    if (isStart || isDone || isError) {
+      board.dataset.activeIndex = String(index);
+    }
+
+    const id = `licitacao-log-item-${index}`;
+    let item = el(id);
+    if (!item) {
+      item = document.createElement("button");
+      item.type = "button";
+      item.id = id;
+      item.className = "licitacao-log-item";
+      item.innerHTML =
+        '<span class="licitacao-log-number"></span>' +
+        '<span class="licitacao-log-name"></span>' +
+        '<span class="licitacao-log-state"></span>';
+      items.appendChild(item);
+      item.onclick = () => {
+        document.querySelectorAll(".licitacao-log-item").forEach((node) => {
+          node.classList.toggle("is-active", node === item);
+        });
+        document.querySelectorAll(".licitacao-log-step").forEach((node) => {
+          node.hidden = node.dataset.licitacao !== String(index);
+        });
+        const active = el("licitacao-log-active");
+        const name = item.querySelector(".licitacao-log-name")?.textContent || "";
+        if (active) {
+          active.textContent = `${String(index).padStart(3, "0")} · ${name}`;
+        }
+      };
+    }
+
+    item.querySelector(".licitacao-log-number").textContent = String(index).padStart(3, "0");
+
+    if (isStart || (m && /licita[cç][aã]o\s+\d+/i.test(text))) {
+      const title = text
+        .replace(/^.*?\]\s*/, "")
+        .replace(/^──\s*/, "")
+        .replace(/licita[cç][aã]o\s+\d+\s+de\s+\d+\s*[·•.\-–—]?\s*/i, "")
+        .replace(/\s+\d+\s*%\s*/g, " ")
+        .replace(/\[[#\-=]+\]/g, "")
+        .replace(/\s+conclu[ií]da.*$/i, "")
+        .trim();
+      if (title) item.querySelector(".licitacao-log-name").textContent = title;
+    }
+    if (!item.querySelector(".licitacao-log-name").textContent) {
+      item.querySelector(".licitacao-log-name").textContent = `Licitação ${index}`;
+    }
+
+    const stateEl = item.querySelector(".licitacao-log-state");
+    const prev = (stateEl.textContent || "").trim();
+    let state = prev || "Em andamento";
+    // Nunca regride Concluída/Erro para Em andamento
+    if (isDone) state = /pulada/i.test(text) ? "Pulada" : "Concluída";
+    else if (isError) state = "Erro";
+    else if (isStart && prev !== "Concluída" && prev !== "Erro" && prev !== "Pulada") {
+      state = "Em andamento";
+    }
+    stateEl.textContent = state;
+    item.classList.toggle("is-done", state === "Concluída" || state === "Pulada");
+    item.classList.toggle("is-error", state === "Erro");
+
+    const next = [...items.children].find(
+      (node) => Number(node.id.split("-").pop()) > index
+    );
+    if (next) items.insertBefore(item, next);
+    else items.appendChild(item);
+
+    const done = [...items.querySelectorAll(".licitacao-log-state")].filter(
+      (n) => {
+        const s = (n.textContent || "").trim();
+        return s === "Concluída" || s === "Pulada";
+      }
+    ).length;
+    const count = el("licitacao-log-count");
+    if (count) {
+      count.textContent = total > 0 ? `${done} / ${total}` : `${done}`;
+    }
+
+    if (isStart || isDone || isError) {
+      const active = el("licitacao-log-active");
+      const name = item.querySelector(".licitacao-log-name")?.textContent || "";
+      if (active) {
+        active.textContent = `${String(index).padStart(3, "0")} · ${name}`;
+      }
+      document.querySelectorAll(".licitacao-log-item").forEach((node) => {
+        node.classList.toggle("is-active", node === item);
+      });
+      document.querySelectorAll(".licitacao-log-step").forEach((node) => {
+        node.hidden = node.dataset.licitacao !== String(index);
+      });
+    }
+
+    if (/etapa:|baixando|lendo|extra[íi]r|conclu[ií]da|✓/i.test(text)) {
+      _appendLicitacaoStep(index, text, level);
+    }
+  }
+
+  function _appendLicitacaoStep(index, rawMsg, level) {
+    const steps = el("licitacao-log-steps");
+    if (!steps) return;
+    const empty = steps.querySelector(".log-empty");
+    if (empty) empty.remove();
+    const step = document.createElement("div");
+    step.className = `licitacao-log-step log-step-${level || "info"}`;
+    step.dataset.licitacao = String(index);
+    step.textContent = beautifyLogMsg(rawMsg).replace(
+      /^Agora: licitação \d+ de \d+\s*[—-]?\s*/i,
+      ""
+    );
+    const activeIndex = Number(el("licitacao-log-board")?.dataset.activeIndex || 0);
+    step.hidden = activeIndex > 0 && activeIndex !== index;
+    if (
+      !steps.lastElementChild ||
+      steps.lastElementChild.textContent !== step.textContent ||
+      steps.lastElementChild.dataset.licitacao !== String(index)
+    ) {
+      steps.appendChild(step);
+    }
+    if (!step.hidden) steps.scrollTop = steps.scrollHeight;
   }
 
   function resetLogConsole(box) {
@@ -1453,6 +1621,12 @@ import { injectFooter } from "./modules/nav.js";
     box._logModuleBody = null;
     box._logActiveModule = null;
     box._paginaSeq = 0;
+    const board = el("licitacao-log-board");
+    if (board) board.hidden = true;
+    const items = el("licitacao-log-items");
+    if (items) items.innerHTML = "";
+    const steps = el("licitacao-log-steps");
+    if (steps) steps.innerHTML = '<p class="log-empty">As etapas aparecem quando o processamento começar.</p>';
   }
 
   function ensureLogToolbar() {
@@ -1510,7 +1684,9 @@ import { injectFooter } from "./modules/nav.js";
           : kind === "info"
             ? "Fila"
             : "Concluído";
-    note.innerHTML = `<strong>${title}</strong><span>${message}</span>`;
+    note.innerHTML = "<strong></strong><span></span>";
+    note.querySelector("strong").textContent = title;
+    note.querySelector("span").textContent = String(message || "");
     host.appendChild(note);
     requestAnimationFrame(() => note.classList.add("is-in"));
     setTimeout(() => {
@@ -1571,14 +1747,6 @@ import { injectFooter } from "./modules/nav.js";
     return String(raw).replace(/^baixar\s+/i, "").trim() || "Automação";
   }
 
-  function escapeHtml(value) {
-    return String(value || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
   function ownersMatch(a, b) {
     if (!a || !b) return false;
     return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
@@ -1588,6 +1756,7 @@ import { injectFooter } from "./modules/nav.js";
   const _PATH_FIELD_IDS = new Set([
     "pasta_base",
     "pasta_saida",
+    "pasta_local",
   ]);
 
   const JOB_SCOPED_SERVICES = new Set([
@@ -1680,18 +1849,34 @@ import { injectFooter } from "./modules/nav.js";
       const r = await authFetch(`${API}/api/workspace`);
       if (!r.ok) return null;
       const ws = await r.json();
+      // PC local (127.0.0.1): sempre mostra pasta C:\ — mesmo se o
+      // servidor antigo ainda estiver sem OPTO_LOCAL.
+      const host = String(location.hostname || "").toLowerCase();
+      const onLocalHost =
+        host === "127.0.0.1" || host === "localhost" || host === "::1";
+      if (onLocalHost) ws.local_mode = true;
       workspaceCache = ws;
       const ids = fieldIds || [
         "pasta_base",
         "pasta_saida",
+        "pasta_local",
       ];
 
       if (ws.local_mode) {
         ids.forEach((id) => {
           const node = el(id);
-          if (node) _setPathFieldVisible(node, true);
+          if (!node) return;
+          _setPathFieldVisible(node, true);
+          if (!String(node.value || "").trim()) {
+            node.value = "C:\\Downloads";
+          }
         });
         _refreshNomePastaUi(ws);
+        const hint = el("workspace-hint");
+        if (hint) {
+          hint.textContent =
+            "Modo local: escolha a pasta de saida (padrao C:\\Downloads).";
+        }
         return ws;
       }
 
@@ -2183,12 +2368,14 @@ import { injectFooter } from "./modules/nav.js";
     streamJobId = null;
   }
 
-  function attachStream(jobId) {
+  async function attachStream(jobId) {
     if (!jobId || jobId !== currentJobId) return;
     closeStream();
     streamJobId = jobId;
     const streamFor = jobId;
-    es = new EventSource(streamUrl(`/api/jobs/${jobId}/logs/stream`));
+    const url = await streamUrl(`/api/jobs/${jobId}/logs/stream`);
+    if (streamJobId !== streamFor || currentJobId !== streamFor) return;
+    es = new EventSource(url);
     es.onmessage = (ev) => {
       if (streamJobId !== streamFor || currentJobId !== streamFor) return;
       try {
@@ -2754,27 +2941,29 @@ import { injectFooter } from "./modules/nav.js";
     if (el("api-pill")) pingApi();
   }
 
-  guardAuth().catch(() => {});
-  ensureLogoutButton();
-  ensureNavDownloadButton();
-  autoInjectNav();
-  autoInitHubContent();
-  autoPingApi();
-  applyNavAuth().catch(() => {});
-  injectFooter();
-  applyPendingFolderPick();
-  bindFolderPickButtons();
-  loadWorkspace()
-    .catch(() => null)
-    .then(() => pollDownloadsReady().catch(() => {}));
+  guardAuth()
+    .then(() => {
+      ensureLogoutButton();
+      ensureNavDownloadButton();
+      autoInjectNav();
+      autoInitHubContent();
+      autoPingApi();
+      applyNavAuth().catch(() => {});
+      injectFooter();
+      applyPendingFolderPick();
+      bindFolderPickButtons();
+      loadWorkspace()
+        .catch(() => null)
+        .then(() => pollDownloadsReady().catch(() => {}));
 
-  // Fundo WebGL (shader) em todas as páginas
-  if (!window.OptoShaderBackground) {
-    const s = document.createElement("script");
-    s.src = "/assets/shader-background.js?v=home76";
-    s.async = true;
-    document.head.appendChild(s);
-  } else if (window.OptoShaderBackground.init) {
-    window.OptoShaderBackground.init();
-  }
-  markReady();
+      if (!window.OptoShaderBackground) {
+        const s = document.createElement("script");
+        s.src = "/assets/shader-background.js?v=home76";
+        s.async = true;
+        document.head.appendChild(s);
+      } else if (window.OptoShaderBackground.init) {
+        window.OptoShaderBackground.init();
+      }
+      markReady();
+    })
+    .catch(() => {});

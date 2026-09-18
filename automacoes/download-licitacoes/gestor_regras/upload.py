@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Gera subirLicitacoes.xlsx e subirDocumentosLicitacoes.xlsx a partir dos modelos.
 
-Depois separa PDFs de contrato/portaria em Contratos/<licitação>/ e preenche
-subirContratos.xlsx (contratos + aditivos) para subir no portal.
+Depois separa PDFs:
+  - contratos/portarias → Contratos/<licitação>/ (+ subirContratos.xlsx)
+  - termos aditivos     → Aditivos/<licitação>/ (só pasta; sem planilha)
 """
 
 from __future__ import annotations
@@ -21,11 +22,12 @@ from .config_front import (
     ARQ_MODELO_LICITACOES,
     CAMPOS_FRONT,
 )
-from .contratos import separar_contratos_da_pasta
+from .contratos import separar_aditivos_da_pasta, separar_contratos_da_pasta
 from .front import alertas_licitacao, falta_para_o_front, linha_front
 from .upload_contratos import gerar_planilha_contratos
 
 PASTA_CONTRATOS = "Contratos"
+PASTA_ADITIVOS = "Aditivos"
 PASTA_PENDENTES = "PENDENTES"
 
 _DIR = Path(__file__).resolve().parent.parent
@@ -137,6 +139,7 @@ def gerar_planilhas_upload(
 ) -> dict[str, Any]:
     """
     1) Classifica prontas/pendentes → subirLicitacoes + subirDocumentos (+ PENDENTES)
+       Pendentes TAMBÉM entram nas planilhas, só com os campos que tiverem.
     2) Separa contratos/portarias → Contratos/<licitação>/
     3) Lê os PDFs e preenche subirContratos.xlsx (contratos + aditivos)
 
@@ -160,26 +163,51 @@ def gerar_planilhas_upload(
     print("  Classificar prontas/pendentes e gerar planilhas de upload")
     print("=" * 66)
 
-    for item in itens:
+    itens_ordenados = sorted(
+        itens,
+        key=lambda item: (
+            int(item.get("ordem") or 999999),
+            str(item.get("titulo") or "").casefold(),
+        ),
+    )
+    for item in itens_ordenados:
         linha_bruta = item.get("linha") or {}
         pasta = item.get("pasta") or ""
         titulo = item.get("titulo") or str(linha_bruta.get("Número") or "licitacao")
         reg = registro_de_linha_planilha(linha_bruta)
         faltas = falta_para_o_front(reg)
         alerts = alertas_licitacao(reg)
+        lf = linha_front(reg)
+        lf = _garantir_numero_igual_nas_planilhas(lf, linha_bruta)
+        lf["_ordem"] = item.get("ordem")
+        lf["_titulo"] = titulo
+
         if faltas:
+            # Pendente: ainda assim entra na planilha com o que tiver;
+            # pasta vai para PENDENTES/ e o LinkDaPasta aponta para o destino.
             destino, log_move = _mover_para_pendentes(pasta, pendentes_dir, titulo)
             logs_move.append("%s -> %s" % (titulo, log_move))
             pendentes.append((titulo, faltas, alerts, destino, log_move))
+            pasta_planilha = destino or pasta
+            if pasta_planilha:
+                lf["_pasta_nome"] = os.path.basename(
+                    os.path.abspath(pasta_planilha).rstrip("\\/")
+                )
+            prontas.append((lf, pasta_planilha, titulo))
             continue
-        lf = linha_front(reg)
-        lf = _garantir_numero_igual_nas_planilhas(lf, linha_bruta)
+
+        if pasta:
+            lf["_pasta_nome"] = os.path.basename(
+                os.path.abspath(pasta).rstrip("\\/")
+            )
         prontas.append((lf, pasta, titulo))
         if alerts:
             alertas_ok.append((titulo, alerts))
 
     print(
-        "  · Prontas: {0}  |  Pendentes: {1}".format(len(prontas), len(pendentes))
+        "  · Na planilha: {0}  |  delas pendentes (dados parciais): {1}".format(
+            len(prontas), len(pendentes)
+        )
     )
 
     modelo_lic = modelos / ARQ_MODELO_LICITACOES
@@ -220,7 +248,10 @@ def gerar_planilhas_upload(
 
     rel = os.path.join(pendentes_dir, "_RELATORIO.txt")
     with open(rel, "w", encoding="utf-8") as fh:
-        fh.write("PENDENTES — licitações que NÃO entraram nas planilhas de upload\n")
+        fh.write(
+            "PENDENTES — licitações com dados incompletos "
+            "(ENTRAM em subirLicitacoes.xlsx com o que houver)\n"
+        )
         fh.write("A pasta de anexos de cada uma foi movida para esta pasta.\n")
         fh.write("=" * 70 + "\n\n")
         if not pendentes:
@@ -233,7 +264,7 @@ def gerar_planilhas_upload(
             fh.write("  Pasta: %s\n" % (destino or log_move))
             fh.write("\n")
         if alertas_ok:
-            fh.write("\nALERTAS em linhas ACEITAS (preenchimento por regra)\n")
+            fh.write("\nALERTAS em linhas completas (preenchimento por regra)\n")
             fh.write("-" * 70 + "\n")
             for titulo, alerts in alertas_ok:
                 fh.write("- %s\n" % titulo)
@@ -241,37 +272,55 @@ def gerar_planilhas_upload(
                     fh.write("  · %s\n" % a)
                 fh.write("\n")
     if pendentes:
-        print("  · Pendentes: {0} → {1}".format(len(pendentes), rel))
+        print(
+            "  · Pendentes (dados parciais na planilha): {0} → {1}".format(
+                len(pendentes), rel
+            )
+        )
 
     print("  ✓ ETAPA 1/3 concluída — planilhas de licitação prontas.")
 
     print("")
     print("=" * 66)
-    print("  ETAPA 2/3 — CONTRATOS")
-    print("  Separar PDFs → Contratos/<licitação>/")
+    print("  ETAPA 2/3 — CONTRATOS E ADITIVOS")
+    print("  Separar PDFs → Contratos/<licitação>/ e Aditivos/<licitação>/")
     print("=" * 66)
 
     logs_contratos: list[str] = []
     n_contratos = 0
+    n_aditivos = 0
     for lf, pasta, titulo in prontas:
         movidos = separar_contratos_da_pasta(pasta, pasta_saida, lf)
         if movidos:
             n_contratos += len(movidos)
             pasta_ctr = os.path.dirname(movidos[0])
-            msg = "%s: %d arquivo(s) → %s" % (titulo, len(movidos), pasta_ctr)
+            msg = "%s: %d contrato(s)/portaria(s) → %s" % (
+                titulo, len(movidos), pasta_ctr
+            )
+            logs_contratos.append(msg)
+            print("  · {0}".format(msg))
+        movidos_ad = separar_aditivos_da_pasta(pasta, pasta_saida, lf)
+        if movidos_ad:
+            n_aditivos += len(movidos_ad)
+            pasta_ad = os.path.dirname(movidos_ad[0])
+            msg = "%s: %d aditivo(s) → %s" % (titulo, len(movidos_ad), pasta_ad)
             logs_contratos.append(msg)
             print("  · {0}".format(msg))
 
     if n_contratos:
         print("  · Separados: {0} arquivo(s) de contrato/portaria.".format(n_contratos))
     else:
-        print("  · Nenhum contrato/portaria encontrado nas pastas prontas.")
-    print("  ✓ ETAPA 2/3 concluída — contratos separados.")
+        print("  · Nenhum contrato/portaria encontrado nas pastas.")
+    if n_aditivos:
+        print("  · Separados: {0} termo(s) aditivo(s).".format(n_aditivos))
+    else:
+        print("  · Nenhum termo aditivo encontrado nas pastas.")
+    print("  ✓ ETAPA 2/3 concluída — contratos e aditivos separados.")
 
     print("")
     print("=" * 66)
     print("  ETAPA 3/3 — PLANILHA DE CONTRATOS")
-    print("  Ler contratos/aditivos → %s" % ARQ_MODELO_CONTRATOS)
+    print("  Ler contratos → %s (aditivos ficam só na pasta Aditivos/)" % ARQ_MODELO_CONTRATOS)
     print("=" * 66)
 
     res_ctr = gerar_planilha_contratos(
@@ -292,14 +341,19 @@ def gerar_planilhas_upload(
     print("  ✓ ETAPA 3/3 concluída.")
 
     contratos_dir = os.path.join(pasta_saida, PASTA_CONTRATOS)
+    aditivos_dir = os.path.join(pasta_saida, PASTA_ADITIVOS)
+    n_completas = max(0, len(prontas) - len(pendentes))
     resultado = {
         "planilha_licitacoes": saida_lic,
         "planilha_documentos": saida_doc,
         "pendentes_relatorio": rel,
         "pasta_contratos": contratos_dir if n_contratos else "",
-        "prontas": len(prontas),
+        "pasta_aditivos": aditivos_dir if n_aditivos else "",
+        "prontas": n_completas,
         "pendentes": len(pendentes),
+        "na_planilha": len(prontas),
         "contratos_movidos": n_contratos,
+        "aditivos_movidos": n_aditivos,
         "logs_link": logs_link,
         "logs_move": logs_move,
         "logs_contratos": logs_contratos,

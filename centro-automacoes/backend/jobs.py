@@ -57,6 +57,7 @@ class Job:
     progress_total: int = 0
     progress_label: str = ""
     _subscribers: list[queue.Queue] = field(default_factory=list, repr=False)
+    _io_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @property
     def dir(self) -> Path:
@@ -78,55 +79,61 @@ class Job:
         total: int | None = None,
         label: str | None = None,
     ) -> None:
-        if total is not None and total >= 0:
-            self.progress_total = int(total)
-        if done is not None and done >= 0:
-            self.progress_done = int(done)
-        if label is not None:
-            self.progress_label = str(label).strip()[:80]
-        # Avisa o painel (SSE) sem poluir o histórico de log.
-        entry = {
-            "t": time.strftime("%H:%M:%S"),
-            "level": "progress",
-            "msg": "",
-            "progress": {
-                "done": self.progress_done,
-                "total": self.progress_total,
-                "percent": self.progress_percent,
-                "label": self.progress_label,
-            },
-        }
-        dead: list[queue.Queue] = []
-        for q in self._subscribers:
-            try:
-                q.put_nowait(entry)
-            except Exception:
-                dead.append(q)
-        for q in dead:
-            try:
-                self._subscribers.remove(q)
-            except ValueError:
-                pass
+        with self._io_lock:
+            if total is not None and total >= 0:
+                self.progress_total = int(total)
+            if done is not None and done >= 0:
+                # Monotônico: em paralelo não regride
+                if int(done) >= int(self.progress_done or 0) or (
+                    total is not None and int(total) != int(self.progress_total or 0)
+                ):
+                    self.progress_done = int(done)
+            if label is not None:
+                self.progress_label = str(label).strip()[:80]
+            # Avisa o painel (SSE) sem poluir o histórico de log.
+            entry = {
+                "t": time.strftime("%H:%M:%S"),
+                "level": "progress",
+                "msg": "",
+                "progress": {
+                    "done": self.progress_done,
+                    "total": self.progress_total,
+                    "percent": self.progress_percent,
+                    "label": self.progress_label,
+                },
+            }
+            dead: list[queue.Queue] = []
+            for q in list(self._subscribers):
+                try:
+                    q.put_nowait(entry)
+                except Exception:
+                    dead.append(q)
+            for q in dead:
+                try:
+                    self._subscribers.remove(q)
+                except ValueError:
+                    pass
 
     def emit(self, level: str, msg: str) -> None:
-        entry = {"t": time.strftime("%H:%M:%S"), "level": level, "msg": str(msg)}
-        self.logs.append(entry)
-        if len(self.logs) > 500:
-            self.logs = self.logs[-500:]
-        dead: list[queue.Queue] = []
-        for q in self._subscribers:
-            try:
-                q.put_nowait(entry)
-            except Exception:
-                dead.append(q)
-        for q in dead:
-            try:
-                self._subscribers.remove(q)
-            except ValueError:
-                pass
-        log_file = self.dir / "job.log"
-        with open(log_file, "a", encoding="utf-8") as fh:
-            fh.write("{t} [{level}] {msg}\n".format(**entry))
+        with self._io_lock:
+            entry = {"t": time.strftime("%H:%M:%S"), "level": level, "msg": str(msg)}
+            self.logs.append(entry)
+            if len(self.logs) > 500:
+                self.logs = self.logs[-500:]
+            dead: list[queue.Queue] = []
+            for q in list(self._subscribers):
+                try:
+                    q.put_nowait(entry)
+                except Exception:
+                    dead.append(q)
+            for q in dead:
+                try:
+                    self._subscribers.remove(q)
+                except ValueError:
+                    pass
+            log_file = self.dir / "job.log"
+            with open(log_file, "a", encoding="utf-8") as fh:
+                fh.write("{t} [{level}] {msg}\n".format(**entry))
 
     def subscribe(self) -> queue.Queue:
         q: queue.Queue = queue.Queue()
@@ -450,10 +457,10 @@ class JobManager:
         return self._jobs.get(job_id)
 
     @staticmethod
-    def _owners_match(owner: str | None, username: str | None) -> bool:
-        if not owner or not username:
-            return False
-        return owner.strip().lower() == username.strip().lower()
+    def _owners_match(owner: str | None, username) -> bool:
+        from backend.user_storage import owners_match
+
+        return owners_match(owner, username)
 
     def _job_visible_to_user(
         self, job: Job, username: str, *, is_admin: bool
@@ -769,13 +776,8 @@ class JobManager:
         return dest
 
     def save_config(self, job: Job) -> None:
-        sensiveis = ("senha", "password", "app_password", "token", "api_key", "secret")
-        limpo: dict[str, Any] = {}
-        for k, v in (job.config or {}).items():
-            kl = str(k).lower()
-            if any(s in kl for s in sensiveis):
-                limpo[k] = "***" if v else ""
-            else:
-                limpo[k] = v
+        from backend.secrets_redact import redact_config
+
+        limpo = redact_config(job.config)
         with open(job.dir / "config.json", "w", encoding="utf-8") as fh:
             json.dump(limpo, fh, ensure_ascii=False, indent=2)

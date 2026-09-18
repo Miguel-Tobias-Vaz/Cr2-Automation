@@ -67,7 +67,10 @@ class WorkerJob:
         if total is not None and total >= 0:
             self.progress_total = int(total)
         if done is not None and done >= 0:
-            self.progress_done = int(done)
+            if int(done) >= int(self.progress_done or 0) or (
+                total is not None and int(total) != int(self.progress_total or 0)
+            ):
+                self.progress_done = int(done)
         if label is not None:
             self.progress_label = str(label).strip()[:80]
         self._emit_op(

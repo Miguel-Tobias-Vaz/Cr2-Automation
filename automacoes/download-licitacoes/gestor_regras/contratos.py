@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Separa contratos da pasta da licitação para Contratos/<número-modalidade>/."""
+"""Separa contratos e termos aditivos das pastas de licitação.
+
+  Contratos/<licitação>/  — contrato assinado, extrato, portaria de fiscal
+  Aditivos/<licitação>/   — termo aditivo / apostilamento
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,7 @@ import re
 import shutil
 from typing import Any
 
-# Aditivo NÃO é contrato (regra 13 do Gestor) — fica na pasta da licitação.
+# Aditivo NÃO é contrato (regra 13 do Gestor) — vai para Aditivos/.
 _RE_ADITIVO = re.compile(
     r"termo\s*aditivo|\baditivo\b|apostilamento",
     re.I,
@@ -37,6 +41,17 @@ _RE_PORTARIA_FISCAL = re.compile(
     r"\bfiscal\b(?=\s*[\d\-_.]|$)",
     re.I,
 )
+
+PASTA_CONTRATOS = "Contratos"
+PASTA_ADITIVOS = "Aditivos"
+
+
+def eh_arquivo_aditivo(nome: str) -> bool:
+    """True se o nome parece termo aditivo / apostilamento."""
+    base = os.path.splitext(os.path.basename(nome or ""))[0]
+    if not base:
+        return False
+    return bool(_RE_ADITIVO.search(base))
 
 
 def eh_arquivo_contrato(nome: str) -> bool:
@@ -68,9 +83,17 @@ def eh_arquivo_relevante_contrato(nome: str) -> bool:
 
 def nome_pasta_contrato(lf: dict[str, Any]) -> str:
     """
-    Subpasta em Contratos/: número + modalidade (via sigla).
-    Ex.: 003/2025-RPPE -> 003-2025-RPPE
+    Subpasta em Contratos/ e Aditivos/: espelha a pasta da licitação (001 - nome…).
     """
+    pasta_nome = (lf.get("_pasta_nome") or "").strip()
+    if pasta_nome:
+        return _limpar(pasta_nome)
+
+    ordem = lf.get("_ordem")
+    titulo = (lf.get("_titulo") or "").strip()
+    if ordem and titulo:
+        return _limpar("%03d - %s" % (int(ordem), titulo))
+
     numero = (lf.get("numero") or "").strip()
     modalidade = (lf.get("modalidade") or "").strip()
     if numero:
@@ -106,24 +129,26 @@ def _destino_livre(pasta: str, nome_arquivo: str) -> str:
         n += 1
 
 
-def separar_contratos_da_pasta(
-    pasta_licitacao: str,
-    pasta_saida: str,
-    lf: dict[str, Any],
-) -> list[str]:
-    """
-    Move arquivos de contrato e portaria de fiscal de pasta_licitacao para:
-        <pasta_saida>/Contratos/<003-2025-RPPE>/
+def _eh_artefato_temporario(nome: str) -> bool:
+    nlow = (nome or "").lower()
+    return (
+        nlow.endswith(".ocr.pdf")
+        or nlow.endswith(".ocr.txt")
+        or nlow.endswith(".ocr")
+        or ".ocr." in nlow
+        or nlow.endswith(".part")
+    )
 
-    Só cria Contratos/<licitação>/ se houver ao menos um arquivo a mover.
-    Retorna lista de caminhos de destino (vazia se nada movido).
-    """
+
+def _mover_filtrados(
+    pasta_licitacao: str,
+    dest_dir: str,
+    aceita,
+) -> list[str]:
+    """Move arquivos da pasta da licitação que passam em `aceita(nome)`."""
     pasta_licitacao = os.path.abspath(pasta_licitacao) if pasta_licitacao else ""
     if not pasta_licitacao or not os.path.isdir(pasta_licitacao):
         return []
-
-    sub = nome_pasta_contrato(lf)
-    dest_dir = os.path.join(os.path.abspath(pasta_saida), "Contratos", sub)
 
     movidos: list[str] = []
     try:
@@ -135,7 +160,9 @@ def separar_contratos_da_pasta(
         origem = os.path.join(pasta_licitacao, nome)
         if not os.path.isfile(origem):
             continue
-        if not eh_arquivo_relevante_contrato(nome):
+        if _eh_artefato_temporario(nome):
+            continue
+        if not aceita(nome):
             continue
         try:
             os.makedirs(dest_dir, exist_ok=True)
@@ -148,3 +175,36 @@ def separar_contratos_da_pasta(
         except OSError:
             continue
     return movidos
+
+
+def separar_contratos_da_pasta(
+    pasta_licitacao: str,
+    pasta_saida: str,
+    lf: dict[str, Any],
+) -> list[str]:
+    """
+    Move arquivos de contrato e portaria de fiscal de pasta_licitacao para:
+        <pasta_saida>/Contratos/<003-2025-RPPE>/
+
+    Só cria Contratos/<licitação>/ se houver ao menos um arquivo a mover.
+    Retorna lista de caminhos de destino (vazia se nada movido).
+    """
+    sub = nome_pasta_contrato(lf)
+    dest_dir = os.path.join(os.path.abspath(pasta_saida), PASTA_CONTRATOS, sub)
+    return _mover_filtrados(pasta_licitacao, dest_dir, eh_arquivo_relevante_contrato)
+
+
+def separar_aditivos_da_pasta(
+    pasta_licitacao: str,
+    pasta_saida: str,
+    lf: dict[str, Any],
+) -> list[str]:
+    """
+    Move termos aditivos / apostilamentos para:
+        <pasta_saida>/Aditivos/<mesma pasta da licitação>/
+
+    Só cria a subpasta se houver ao menos um arquivo. Retorna destinos.
+    """
+    sub = nome_pasta_contrato(lf)
+    dest_dir = os.path.join(os.path.abspath(pasta_saida), PASTA_ADITIVOS, sub)
+    return _mover_filtrados(pasta_licitacao, dest_dir, eh_arquivo_aditivo)

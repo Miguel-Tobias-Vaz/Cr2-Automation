@@ -6,13 +6,15 @@ import asyncio
 import json
 import mimetypes
 import os
+import re
 import shutil
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -27,7 +29,8 @@ bootstrap_env()
 from backend import auth  # noqa: E402
 from backend.config import JOB_TIMEOUT_S  # noqa: E402
 from backend.deps import get_optional_user, require_admin, require_user  # noqa: E402
-from backend.jobs import JobManager, JobStatus, QueueFullError  # noqa: E402
+from backend.security_headers import SecurityHeadersMiddleware  # noqa: E402
+from backend.jobs import JobStatus, QueueFullError  # noqa: E402
 from backend.job_output import ZIP_LOGIC_VERSION, ensure_disk_download, ensure_download_zip  # noqa: E402
 from backend import cleanup  # noqa: E402
 from backend import audit_log  # noqa: E402
@@ -67,7 +70,34 @@ def _cors_origins() -> list[str]:
     return []
 
 
-app = FastAPI(title="Opto Automações", version="1.0.0")
+def _api_docs_enabled() -> bool:
+    return is_local_mode()
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    auth.reload_users()
+    auth.assert_production_auth()
+    restored = jobs.restore_from_disk()
+    jobs.resume_queue(dispatch)
+    if restored:
+        import logging
+
+        logging.getLogger("uvicorn.error").info(
+            "Fila restaurada: %s job(s) pending após reinício.", restored
+        )
+    yield
+
+
+app = FastAPI(
+    title="Opto Automações",
+    version="1.0.0",
+    docs_url="/docs" if _api_docs_enabled() else None,
+    redoc_url="/redoc" if _api_docs_enabled() else None,
+    openapi_url="/openapi.json" if _api_docs_enabled() else None,
+    lifespan=_lifespan,
+)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
@@ -162,7 +192,7 @@ SERVICES = {
 
 # Ocultos no hub (código permanece; não entram na API de jobs do painel).
 # Quando prontos para o time: retire o id deste conjunto e inclua em HUBS no front.
-SERVICES_OCULTOS = frozenset({"contratos", "dic_est_ter"})
+SERVICES_OCULTOS = frozenset({"dic_est_ter"})
 
 
 class JobCreate(BaseModel):
@@ -173,6 +203,10 @@ class JobCreate(BaseModel):
 class LoginBody(BaseModel):
     username: str
     password: str
+
+
+class TicketBody(BaseModel):
+    purpose: str = "stream"
 
 
 class QueueReorderBody(BaseModel):
@@ -211,10 +245,18 @@ def _owner_short_name(owner: str | None) -> str:
     return raw or "local"
 
 
-def _owners_match(owner: str | None, username: str | None) -> bool:
-    if not owner or not username:
-        return False
-    return owner.strip().lower() == username.strip().lower()
+def _owners_match(owner: str | None, identity) -> bool:
+    from backend.user_storage import owners_match
+
+    return owners_match(owner, identity)
+
+
+def _job_owner(user) -> str | None:
+    if not auth.is_enabled():
+        return None
+    from backend.user_storage import storage_key_for_user
+
+    return storage_key_for_user(user)
 
 
 def _service_download_base(service_id: str) -> str:
@@ -283,17 +325,16 @@ def _health_payload(user) -> dict:
         }
 
     sees_all = bool(user and _sees_all_jobs(user))
-    username = user.username if user else "local"
     if auth.is_enabled() and user:
-        snap = jobs.queue_snapshot_for_user(username, is_admin=sees_all)
+        snap = jobs.queue_snapshot_for_user(user, is_admin=sees_all)
     else:
         snap = jobs.queue_snapshot()
 
     # Nunca expor o "ativo" de outro usuário no painel pessoal (nem para role admin).
     ativo = jobs.job_ativo()
     if auth.is_enabled() and user and ativo:
-        if not _owners_match(ativo.owner, user.username):
-            own = jobs.user_job_for_owner(user.username)
+        if not _owners_match(ativo.owner, user):
+            own = jobs.user_job_for_owner(user)
             ativo = own if own and own.status in (
                 JobStatus.RUNNING,
                 JobStatus.PENDING,
@@ -319,7 +360,7 @@ def _health_payload(user) -> dict:
         visible_running = jobs.running_jobs()
         if not sees_all:
             visible_running = [
-                j for j in visible_running if _owners_match(j.owner, user.username)
+                j for j in visible_running if _owners_match(j.owner, user)
             ]
         payload["running_jobs"] = [_job_summary(j) for j in visible_running]
     elif not auth.is_enabled():
@@ -330,7 +371,7 @@ def _health_payload(user) -> dict:
 
     if user:
         my_jobs: list[dict] = []
-        for mine in jobs.user_jobs_for_owner(user.username):
+        for mine in jobs.user_jobs_for_owner(user):
             summary = _job_summary(mine)
             summary["status"] = mine.status.value
             if mine.status.value == "pending":
@@ -404,6 +445,17 @@ def auth_logout(authorization: str | None = None):
     return {"ok": True}
 
 
+@app.post("/api/auth/ticket")
+def auth_ticket(body: TicketBody, user=Depends(require_user)):
+    """Ticket curto para SSE e download — evita JWT na querystring/logs."""
+    purpose = (body.purpose or "stream").strip().lower()
+    if purpose not in ("stream", "download"):
+        raise HTTPException(400, "purpose inválido")
+    ticket = auth.issue_ticket(user, purpose)
+    ttl = auth._TICKET_TTL_S.get(purpose, 90)
+    return {"ticket": ticket, "expires_in": ttl, "purpose": purpose}
+
+
 def _assert_can_cancel(job, user) -> None:
     if not auth.can_cancel_job(user, job.owner):
         raise HTTPException(403, "Sem permissão para cancelar este processo.")
@@ -423,15 +475,15 @@ def list_services():
 @app.get("/api/jobs")
 def list_jobs(user=Depends(require_user)):
     return jobs.list_jobs_for_user(
-        user.username, is_admin=_sees_all_jobs(user)
+        user, is_admin=_sees_all_jobs(user)
     )
 
 
 @app.get("/api/jobs/downloads-ready")
 def jobs_downloads_ready(user=Depends(require_user)):
     """ZIPs prontos para download — apenas jobs do usuário logado."""
-    owner = user.username if auth.is_enabled() else None
-    items = jobs.list_downloads_ready(owner)
+    owner = _job_owner(user)
+    items = jobs.list_downloads_ready(user if auth.is_enabled() else owner)
     return {
         "downloads": [
             {
@@ -449,7 +501,7 @@ def jobs_downloads_ready(user=Depends(require_user)):
 @app.get("/api/queue")
 def get_queue(user=Depends(require_user)):
     return jobs.queue_snapshot_for_user(
-        user.username, is_admin=_sees_all_jobs(user)
+        user, is_admin=_sees_all_jobs(user)
     )
 
 
@@ -463,7 +515,7 @@ def cancel_active_job(user=Depends(require_user)):
             if j.status in (JobStatus.PENDING, JobStatus.RUNNING)
         ]
     if auth.is_enabled() and not _sees_all_jobs(user):
-        alive = [j for j in alive if _owners_match(j.owner, user.username)]
+        alive = [j for j in alive if _owners_match(j.owner, user)]
     if not alive:
         return {
             "ok": True,
@@ -499,25 +551,12 @@ def reorder_queue(body: QueueReorderBody, _admin=Depends(require_admin)):
     return {"ok": True, "order": final, "queue": jobs.queue_snapshot()}
 
 
-@app.on_event("startup")
-def _startup_resume_queue():
-    auth.reload_users()
-    restored = jobs.restore_from_disk()
-    jobs.resume_queue(dispatch)
-    if restored:
-        import logging
-
-        logging.getLogger("uvicorn.error").info(
-            "Fila restaurada: %s job(s) pending após reinício.", restored
-        )
-
-
 def _assert_can_access_job(job, user) -> None:
     if not auth.is_enabled():
         return
     if _sees_all_jobs(user):
         return
-    if _owners_match(job.owner, user.username):
+    if _owners_match(job.owner, user):
         return
     raise HTTPException(403, "Sem permissão para acessar este processo.")
 
@@ -563,7 +602,7 @@ def _resolve_lot_for_download(owner, path, lot):
 @app.get("/api/workspace")
 def get_workspace(user=Depends(require_user)):
     """Pastas do usuário (uploads + saída padrão). Modo local: pastas Windows."""
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     if is_local_mode():
         return {
             "ok": True,
@@ -591,7 +630,7 @@ def get_workspace_files(
     """Lista arquivos e pastas do workspace do usuário."""
     if is_local_mode():
         raise HTTPException(400, "Explorador de arquivos disponível apenas na VPS.")
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     try:
         payload = list_workspace_files(
             owner, path, include_folder_sizes=_parse_sizes_query(sizes)
@@ -608,7 +647,7 @@ def get_workspace_folder_size(path: str = "", user=Depends(require_user)):
         raise HTTPException(400, "Explorador de arquivos disponível apenas na VPS.")
     if not (path or "").strip():
         raise HTTPException(400, "Informe o caminho da pasta.")
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     try:
         payload = workspace_folder_size(owner, path)
     except ValueError as exc:
@@ -621,7 +660,7 @@ def get_output_hints(user=Depends(require_user)):
     """Pastas RGF/RREO/etc. detectadas em output/ (extrações anteriores)."""
     if is_local_mode():
         return {"ok": True, "local_mode": True, "hints": {}}
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     hints = output_publicacao_hints(owner)
     return {"ok": True, "hints": hints}
 
@@ -634,7 +673,7 @@ class WorkspaceMkdirBody(BaseModel):
 def post_workspace_mkdir(body: WorkspaceMkdirBody, user=Depends(require_user)):
     if is_local_mode():
         raise HTTPException(400, "Disponível apenas na VPS.")
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     try:
         meta = mkdir_workspace(owner, body.path)
     except ValueError as exc:
@@ -646,7 +685,7 @@ def post_workspace_mkdir(body: WorkspaceMkdirBody, user=Depends(require_user)):
 def delete_workspace_file(path: str, user=Depends(require_user)):
     if is_local_mode():
         raise HTTPException(400, "Disponível apenas na VPS.")
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     try:
         delete_workspace_path(owner, path)
     except ValueError as exc:
@@ -666,7 +705,7 @@ def download_workspace_file(
         raise HTTPException(400, "Disponível apenas na VPS.")
     if not (path or "").strip():
         raise HTTPException(400, "Informe o caminho.")
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     return _workspace_file_response(owner, path, background_tasks, lot=max(1, lot))
 
 
@@ -677,7 +716,7 @@ def plan_workspace_download(path: str, user=Depends(require_user)):
         raise HTTPException(400, "Disponível apenas na VPS.")
     if not (path or "").strip():
         raise HTTPException(400, "Informe o caminho.")
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     try:
         return {"ok": True, **folder_download_plan(owner, path)}
     except ValueError as exc:
@@ -691,7 +730,7 @@ async def upload_file(
     extract: str = Form("false"),
 ):
     """Recebe planilha ou ZIP; opcionalmente extrai ZIP na pasta do usuário."""
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     raw = await file.read()
     if not raw:
         raise HTTPException(400, "Arquivo vazio.")
@@ -715,8 +754,6 @@ def get_job(job_id: str, user=Depends(require_user)):
     job = jobs.get(job_id)
     if job:
         _assert_can_access_job(job, user)
-        from backend.jobs import JobStatus
-
         if job.status == JobStatus.COMPLETED and not job.result.get("_zip_building"):
             ensure_download_zip(job)
         logs = list(job.logs[-200:])
@@ -754,9 +791,12 @@ def get_job(job_id: str, user=Depends(require_user)):
 def create_job(body: JobCreate, user=Depends(require_user)):
     if body.service_id not in SERVICES or body.service_id in SERVICES_OCULTOS:
         raise HTTPException(400, "Serviço inválido")
-    owner = user.username if auth.is_enabled() else None
+    owner = _job_owner(user)
     config = apply_user_defaults(body.config, owner, service_id=body.service_id)
     try:
+        from backend.url_guard import prepare_job_config
+
+        config = prepare_job_config(config)
         job = jobs.enqueue(body.service_id, config, dispatch, owner=owner)
     except QueueFullError as exc:
         raise HTTPException(503, str(exc)) from exc
@@ -848,11 +888,25 @@ def download_job(job_id: str, user=Depends(require_user)):
     raise HTTPException(404, "Nenhum arquivo para download")
 
 
+_AUTH_GATE = (
+    '<style id="opto-auth-gate">'
+    "html.opto-auth-wait body{visibility:hidden!important}"
+    "html.opto-auth-wait{background:#070706}"
+    "</style>"
+    '<script>document.documentElement.classList.add("opto-auth-wait");</script>'
+)
+_SHARED_JS_BUST = "sec1"
+
+
 def _page(name: str):
     path = FRONT / name
-    if path.is_file():
-        return FileResponse(path, media_type="text/html; charset=utf-8")
-    raise HTTPException(404)
+    if not path.is_file():
+        raise HTTPException(404)
+    html = path.read_text(encoding="utf-8")
+    html = re.sub(r"shared\.js\?v=home\d+", f"shared.js?v={_SHARED_JS_BUST}", html)
+    if name != "login.html" and "opto-auth-gate" not in html:
+        html = html.replace("<head>", "<head>\n    " + _AUTH_GATE, 1)
+    return HTMLResponse(html, media_type="text/html; charset=utf-8")
 
 
 @app.get("/")
@@ -863,76 +917,6 @@ def index():
 @app.get("/index.html")
 def index_html():
     return RedirectResponse(url="/", status_code=302)
-
-
-@app.get("/extrair.html")
-def page_extrair():
-    return _page("extrair.html")
-
-
-@app.get("/publicar.html")
-def page_publicar():
-    return _page("publicar.html")
-
-
-@app.get("/documentos.html")
-def page_documentos():
-    return _page("documentos.html")
-
-
-@app.get("/categorias.html")
-def page_categorias():
-    return _page("categorias.html")
-
-
-@app.get("/normas.html")
-def page_normas():
-    return _page("normas.html")
-
-
-@app.get("/licitacoes.html")
-def page_licitacoes():
-    return _page("licitacoes.html")
-
-
-@app.get("/repasses.html")
-def page_repasses():
-    return _page("repasses.html")
-
-
-@app.get("/contratos.html")
-def page_contratos():
-    return _page("contratos.html")
-
-
-@app.get("/publicacao.html")
-def page_publicacao():
-    return _page("publicacao.html")
-
-
-@app.get("/sessao.html")
-def page_sessao():
-    return _page("sessao.html")
-
-
-@app.get("/pub-repasses.html")
-def page_pub_repasses():
-    return _page("pub-repasses.html")
-
-
-@app.get("/mapa.html")
-def page_mapa():
-    return _page("mapa.html")
-
-
-@app.get("/arquivos.html")
-def page_arquivos():
-    return _page("arquivos.html")
-
-
-@app.get("/dic-est-ter.html")
-def page_dic_est_ter():
-    return _page("dic-est-ter.html")
 
 
 @app.get("/api/admin/overview")
@@ -1174,11 +1158,6 @@ def admin_health_detail(_admin=Depends(require_admin)):
     }
 
 
-@app.get("/login.html")
-def page_login():
-    return _page("login.html")
-
-
 @app.get("/login")
 def redirect_login():
     return RedirectResponse(url="/login.html", status_code=302)
@@ -1189,9 +1168,33 @@ def redirect_admin():
     return RedirectResponse(url="/admin.html", status_code=302)
 
 
-@app.get("/admin.html")
-def page_admin():
-    return _page("admin.html")
+_HTML_PAGES = frozenset(
+    {
+        "login.html",
+        "admin.html",
+        "extrair.html",
+        "publicar.html",
+        "documentos.html",
+        "categorias.html",
+        "normas.html",
+        "licitacoes.html",
+        "repasses.html",
+        "contratos.html",
+        "publicacao.html",
+        "sessao.html",
+        "pub-repasses.html",
+        "mapa.html",
+        "arquivos.html",
+        "dic-est-ter.html",
+    }
+)
+
+
+@app.get("/{page_name}")
+def serve_html_page(page_name: str):
+    if page_name not in _HTML_PAGES:
+        raise HTTPException(404)
+    return _page(page_name)
 
 
 

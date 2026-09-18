@@ -1,18 +1,43 @@
 Opto Automacoes
 ===============
 
-Ambiente servidor (VPS)
------------------------
-O painel roda no servidor. Nao use scripts .bat locais.
+COMO USAR (PC local)
+-------------------
+1) Extrair o ZIP (nao abrir de dentro do ZIP)
 
-1) Configure as variaveis de ambiente / opto.env no servidor
-2) Suba o backend (uvicorn / servico systemd)
-3) Acesse o painel pela URL do servidor
+2) 1a VEZ:  COMECE_AQUI.bat
+3) DEPOIS:  INICIAR.bat
 
-Guia de uso das ferramentas:  COMO_USAR.txt
+Painel: http://127.0.0.1:8765
+Deixe a janela preta aberta.
+
+Em Licitacoes deve aparecer "Pasta de saida" com caminho C:\
+(ex.: C:\Downloads\Licitacoes).
 
 
-SE DER ERRO
------------
-Veja os logs do servico no servidor (systemd / docker / uvicorn).
-Nao e necessario empacotar ZIP nem instalar pelo Windows.
+SE O CAMINHO C:\ NAO APARECER
+-----------------------------
+O painel antigo ficou em modo servidor.
+1) Feche a janela preta do Opto
+2) Duplo clique em REINICIAR-LOCAL.bat
+3) Na pagina Licitacoes: Ctrl+F5
+
+
+OUTROS
+------
+DIAGNOSTICO.bat   - gera diagnostico-log.txt
+EMPACOTAR.bat     - gera ZIP para enviar
+REINICIAR-LOCAL.bat - sobe de novo em modo local
+
+
+SE A INSTALACAO FALHAR NO PyMuPDF (fitz / DLL _extra)
+----------------------------------------------------
+O pip ja instalou o resto. No PC do amigo, abra CMD na pasta do pacote e rode:
+
+  centro-automacoes\venv\Scripts\pip uninstall -y pymupdf
+  centro-automacoes\venv\Scripts\pip install --force-reinstall --no-cache-dir "pymupdf==1.25.5"
+
+Se ainda falhar, instale o "Microsoft Visual C++ Redistributable" (x64)
+em https://aka.ms/vs/17/release/vc_redist.x64.exe e rode COMECE_AQUI.bat de novo.
+
+O painel funciona sem PyMuPDF; so o OCR de PDF escaneado pode ficar limitado.

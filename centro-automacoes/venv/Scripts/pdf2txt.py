@@ -1,4 +1,4 @@
-#!C:\Users\tobia\Documents\GitHub\Cr2-Automation\centro-automacoes\venv\Scripts\python.exe
+#!C:\Users\tobia\Documents\GitHub\Cr2\Automação\Cr2-Automation\centro-automacoes\venv\Scripts\python.exe
 """A command line tool for extracting text and images from PDF and
 output it to plain text, html, xml or tags.
 """

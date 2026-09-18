@@ -225,14 +225,53 @@ def is_supabase() -> bool:
     return supabase_auth.is_configured()
 
 
-def is_enabled() -> bool:
+def _auth_flag_off() -> bool:
     raw = (os.getenv("OPTO_AUTH") or "").strip().lower()
-    if raw in ("0", "off", "false", "no", "disabled"):
+    return raw in ("0", "off", "false", "no", "disabled")
+
+
+def _local_panel_open() -> bool:
+    """Painel sem login só no PC (OPTO_LOCAL=1 ou pacote Windows). Nunca na VPS."""
+    from backend.user_storage import is_local_mode
+
+    return is_local_mode() and _auth_flag_off()
+
+
+def is_enabled() -> bool:
+    """VPS sempre exige login. OPTO_AUTH=off só vale em modo local."""
+    if _local_panel_open():
         return False
+    from backend.user_storage import is_local_mode
+
+    if not is_local_mode():
+        return True
     if is_supabase():
         return True
     with _lock:
         return bool(_users)
+
+
+def auth_backend_ready() -> bool:
+    """Supabase ou usuários locais configurados."""
+    if is_supabase():
+        return True
+    with _lock:
+        return bool(_users)
+
+
+def assert_production_auth() -> None:
+    """Recusa subir a VPS com painel aberto (fail-closed)."""
+    from backend.user_storage import is_local_mode
+
+    if is_local_mode():
+        return
+    if auth_backend_ready():
+        return
+    raise RuntimeError(
+        "Recusando iniciar: VPS (OPTO_LOCAL=0) sem OPTO_SUPABASE_URL/"
+        "OPTO_SUPABASE_ANON_KEY e sem OPTO_USERS. "
+        "Isso deixaria o painel aberto como administrador."
+    )
 
 
 def login(username: str, password: str) -> Session | None:
@@ -336,7 +375,62 @@ def can_cancel_job(sess: Session | None, owner: str | None) -> bool:
         return True
     if not owner:
         return False
-    return sess.username.strip().lower() == owner.strip().lower()
+    from backend.user_storage import owners_match
+
+    return owners_match(owner, sess)
+
+
+# Tickets curtos para EventSource / <a download> — o JWT não vai na querystring.
+_TICKET_TTL_S = {"stream": 120, "download": 90}
+_tickets: dict[str, dict[str, Any]] = {}
+
+
+def _clean_tickets_locked() -> None:
+    now = time.time()
+    dead = [k for k, v in _tickets.items() if float(v.get("expires_at") or 0) <= now]
+    for k in dead:
+        _tickets.pop(k, None)
+
+
+def issue_ticket(sess: Session, purpose: str = "stream") -> str:
+    purpose = (purpose or "stream").strip().lower()
+    if purpose not in _TICKET_TTL_S:
+        purpose = "stream"
+    ttl = _TICKET_TTL_S[purpose]
+    raw = secrets.token_urlsafe(24)
+    with _lock:
+        _clean_tickets_locked()
+        _tickets[raw] = {
+            "username": sess.username,
+            "role": sess.role,
+            "nome": sess.nome,
+            "user_id": sess.user_id,
+            "purpose": purpose,
+            "expires_at": time.time() + ttl,
+        }
+    return raw
+
+
+def session_from_ticket(ticket: str | None) -> Session | None:
+    if not ticket:
+        return None
+    key = ticket.strip()
+    if not key:
+        return None
+    now = time.time()
+    with _lock:
+        item = _tickets.get(key)
+        if not item or float(item.get("expires_at") or 0) <= now:
+            _tickets.pop(key, None)
+            return None
+        return Session(
+            token="",
+            username=str(item.get("username") or ""),
+            role=str(item.get("role") or "user"),
+            expires_at=float(item["expires_at"]),
+            nome=str(item.get("nome") or ""),
+            user_id=str(item.get("user_id") or ""),
+        )
 
 
 reload_users()

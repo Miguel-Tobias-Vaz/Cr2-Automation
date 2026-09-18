@@ -18,6 +18,7 @@ PAGES = [
     "/normas.html",
     "/licitacoes.html",
     "/repasses.html",
+    "/contratos.html",
     "/publicacao.html",
     "/sessao.html",
     "/pub-repasses.html",
@@ -43,7 +44,6 @@ def open_client(monkeypatch):
     monkeypatch.delenv("OPTO_SUPABASE_URL", raising=False)
     monkeypatch.delenv("OPTO_SUPABASE_ANON_KEY", raising=False)
     monkeypatch.delenv("OPTO_USERS", raising=False)
-    monkeypatch.delenv("OPTO_REQUIRE_AUTH", raising=False)
     monkeypatch.setenv("OPTO_LOCAL", "1")
     monkeypatch.setattr(auth, "USERS_FILE", auth.AUTH_DIR / "users.test-smoke.json")
     auth.reload_users()

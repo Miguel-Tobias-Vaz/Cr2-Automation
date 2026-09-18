@@ -24,6 +24,7 @@ from backend.deps import require_user  # noqa: E402
 from backend.jobs import JobStatus, QueueFullError  # noqa: E402
 from backend.runners import dispatch  # noqa: E402
 from backend.state import jobs  # noqa: E402
+from backend.user_storage import storage_key_for_user  # noqa: E402
 
 router = APIRouter(tags=["dic_est_ter"])
 
@@ -36,10 +37,10 @@ def _sees_all_jobs(user) -> bool:
     return auth.is_panel_admin(user)
 
 
-def _owners_match(owner: str | None, username: str | None) -> bool:
-    if not owner or not username:
-        return False
-    return owner.strip().lower() == username.strip().lower()
+def _owners_match(owner: str | None, identity) -> bool:
+    from backend.user_storage import owners_match
+
+    return owners_match(owner, identity)
 
 
 def _assert_can_access_dic_job(job, user) -> None:
@@ -47,7 +48,7 @@ def _assert_can_access_dic_job(job, user) -> None:
         return
     if _sees_all_jobs(user):
         return
-    if _owners_match(job.owner, user.username):
+    if _owners_match(job.owner, user):
         return
     raise HTTPException(403, "Sem permissão para acessar este processo.")
 
@@ -72,7 +73,7 @@ def _active_dic_job_for_user(user):
         return None
     if not auth.is_enabled():
         return gjob
-    if _sees_all_jobs(user) or _owners_match(gjob.owner, user.username):
+    if _sees_all_jobs(user) or _owners_match(gjob.owner, user):
         return gjob
     return None
 
@@ -181,8 +182,11 @@ def milagre_publicar(body: dict, user=Depends(require_user)):
                 "erro": "Validação falhou antes de enfileirar.",
             },
         )
-    owner = user.username if auth.is_enabled() else None
+    owner = None if not auth.is_enabled() else storage_key_for_user(user)
     try:
+        from backend.url_guard import prepare_job_config
+
+        body = prepare_job_config(body)
         job = jobs.enqueue("dic_est_ter", body, dispatch, owner=owner)
     except QueueFullError as exc:
         raise HTTPException(503, str(exc)) from exc

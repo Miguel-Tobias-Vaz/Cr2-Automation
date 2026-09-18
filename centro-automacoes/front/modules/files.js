@@ -1,6 +1,6 @@
 /** Explorador de arquivos do workspace (ES module). */
 import { API, el, escapeHtml, formatBytes, formatDate } from "./core.js";
-import { authFetch, authToken } from "./auth.js";
+import { authFetch, issueTicket } from "./auth.js";
 import { uploadFile } from "./upload.js";
 
 const PICK_STORAGE = "opto-folder-pick";
@@ -72,7 +72,7 @@ function filesUrl(path, ctx, method = "GET") {
     : `${API}/api/workspace/files`;
 }
 
-export function workspaceDownloadUrl(path, opts = {}, lot = 1) {
+export async function workspaceDownloadUrl(path, opts = {}, lot = 1) {
   const ctx = fileCtx(opts);
   const rel = (path || "").trim();
   if (!rel) return "";
@@ -85,9 +85,9 @@ export function workspaceDownloadUrl(path, opts = {}, lot = 1) {
     url = `${API}/api/workspace/files/download?path=${encodeURIComponent(rel)}`;
   }
   url += `&lot=${Math.max(1, Number(lot) || 1)}`;
-  const token = authToken();
-  if (token) {
-    url += `&access_token=${encodeURIComponent(token)}`;
+  const ticket = await issueTicket("download");
+  if (ticket) {
+    url += `&ticket=${encodeURIComponent(ticket)}`;
   }
   return url;
 }
@@ -109,8 +109,8 @@ async function fetchDownloadPlan(path, ctx) {
   return data;
 }
 
-function triggerDownload(path, ctx, lot = 1) {
-  const url = workspaceDownloadUrl(path, ctx, lot);
+async function triggerDownload(path, ctx, lot = 1) {
+  const url = await workspaceDownloadUrl(path, ctx, lot);
   if (!url) return;
   const a = document.createElement("a");
   a.href = url;

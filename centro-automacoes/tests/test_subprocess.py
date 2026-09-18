@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
@@ -28,11 +29,12 @@ def test_uses_subprocess():
     assert uses_subprocess("normas") is False
 
 
-def test_worker_job_emit_ndjson(capsys):
+def test_worker_job_emit_ndjson(monkeypatch):
+    buf = io.StringIO()
+    monkeypatch.setattr(sys, "__stdout__", buf)
     job = WorkerJob("abc", "publicacao", {}, Path("."))
     job.emit("info", "teste")
-    out = capsys.readouterr().out.strip()
-    data = json.loads(out)
+    data = json.loads(buf.getvalue().strip())
     assert data["op"] == "log"
     assert data["msg"] == "teste"
 

@@ -671,10 +671,12 @@
     }
   }
 
-  function ensureEventSource() {
+  async function ensureEventSource() {
     if (es) return;
     try {
-      es = new EventSource(streamUrl("/api/logs"));
+      const url = await streamUrl("/api/logs");
+      if (es) return;
+      es = new EventSource(url);
       es.onmessage = (ev) => {
         try {
           const entry = JSON.parse(ev.data);

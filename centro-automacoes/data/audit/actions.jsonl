@@ -8,3 +8,35 @@
 {"t": 1786484050.968558, "ts": "2026-08-11T18:34:10", "action": "auth.login", "user": "teste"}
 {"t": 1786484060.1079564, "ts": "2026-08-11T18:34:20", "action": "auth.login", "user": "teste"}
 {"t": 1786484090.8681023, "ts": "2026-08-11T18:34:50", "action": "auth.login", "user": "teste"}
+{"t": 1787236628.7125459, "ts": "2026-08-20T11:37:08", "action": "job.create", "user": "local", "job_id": "37de87ae27e1", "service_id": "licitacoes"}
+{"t": 1787238523.4062262, "ts": "2026-08-20T12:08:43", "action": "job.create", "user": "local", "job_id": "d17596cef89d", "service_id": "licitacoes"}
+{"t": 1787238912.4418762, "ts": "2026-08-20T12:15:12", "action": "job.cancel", "user": "local", "job_id": "d17596cef89d"}
+{"t": 1787240869.828002, "ts": "2026-08-20T12:47:49", "action": "job.create", "user": "local", "job_id": "96711adc6549", "service_id": "licitacoes"}
+{"t": 1787241185.886813, "ts": "2026-08-20T12:53:05", "action": "job.cancel", "user": "local", "job_id": "96711adc6549"}
+{"t": 1787241216.3383753, "ts": "2026-08-20T12:53:36", "action": "job.create", "user": "local", "job_id": "b9809dc10fd4", "service_id": "licitacoes"}
+{"t": 1787245211.7209504, "ts": "2026-08-20T14:00:11", "action": "job.create", "user": "local", "job_id": "9e651dd0fa11", "service_id": "documentos"}
+{"t": 1787245553.4021254, "ts": "2026-08-20T14:05:53", "action": "job.create", "user": "local", "job_id": "a9226515cead", "service_id": "publicacao"}
+{"t": 1787246234.0146258, "ts": "2026-08-20T14:17:14", "action": "job.cancel", "user": "local", "job_id": "a9226515cead"}
+{"t": 1787246263.8585513, "ts": "2026-08-20T14:17:43", "action": "job.create", "user": "local", "job_id": "3940b6ab5e83", "service_id": "publicacao"}
+{"t": 1787246890.068113, "ts": "2026-08-20T14:28:10", "action": "job.cancel", "user": "local", "job_id": "3940b6ab5e83"}
+{"t": 1787246927.403111, "ts": "2026-08-20T14:28:47", "action": "job.create", "user": "local", "job_id": "50efbb48da2d", "service_id": "publicacao"}
+{"t": 1787252045.4196928, "ts": "2026-08-20T15:54:05", "action": "job.create", "user": "local", "job_id": "0957128709e9", "service_id": "licitacoes"}
+{"t": 1787252115.596139, "ts": "2026-08-20T15:55:15", "action": "job.create", "user": "local", "job_id": "058959e0a288", "service_id": "licitacoes"}
+{"t": 1787255144.904317, "ts": "2026-08-20T16:45:44", "action": "job.create", "user": "local", "job_id": "811ef2e8b4b1", "service_id": "licitacoes"}
+{"t": 1787255985.1681495, "ts": "2026-08-20T16:59:45", "action": "job.cancel", "user": "local", "job_id": "811ef2e8b4b1"}
+{"t": 1787312952.7495503, "ts": "2026-08-21T08:49:12", "action": "job.create", "user": "local", "job_id": "51c08925556a", "service_id": "licitacoes"}
+{"t": 1787322412.3001719, "ts": "2026-08-21T11:26:52", "action": "job.create", "user": "local", "job_id": "732e03ea2356", "service_id": "licitacoes"}
+{"t": 1787323836.3370543, "ts": "2026-08-21T11:50:36", "action": "job.create", "user": "local", "job_id": "b21c6a894881", "service_id": "licitacoes"}
+{"t": 1787325764.8485422, "ts": "2026-08-21T12:22:44", "action": "job.create", "user": "local", "job_id": "6ee2f93f72b0", "service_id": "licitacoes"}
+{"t": 1787325897.659392, "ts": "2026-08-21T12:24:57", "action": "job.cancel", "user": "local", "job_id": "6ee2f93f72b0"}
+{"t": 1787326040.8796804, "ts": "2026-08-21T12:27:20", "action": "job.cancel", "user": "local", "job_id": "6ee2f93f72b0"}
+{"t": 1787326324.438447, "ts": "2026-08-21T12:32:04", "action": "job.create", "user": "local", "job_id": "56d92781f5be", "service_id": "licitacoes"}
+{"t": 1787326962.3283336, "ts": "2026-08-21T12:42:42", "action": "job.cancel", "user": "local", "job_id": "56d92781f5be"}
+{"t": 1787326980.924709, "ts": "2026-08-21T12:43:00", "action": "job.create", "user": "local", "job_id": "43bfb8973319", "service_id": "licitacoes"}
+{"t": 1787340865.1303017, "ts": "2026-08-21T16:34:25", "action": "job.create", "user": "local", "job_id": "fe0df1e2aefb", "service_id": "licitacoes"}
+{"t": 1787575062.4324906, "ts": "2026-08-24T09:37:42", "action": "job.create", "user": "local", "job_id": "8b774a95b041", "service_id": "licitacoes"}
+{"t": 1787578873.9254248, "ts": "2026-08-24T10:41:13", "action": "job.create", "user": "local", "job_id": "452fdc87025d", "service_id": "contratos"}
+{"t": 1787590683.857451, "ts": "2026-08-24T13:58:03", "action": "job.create", "user": "local", "job_id": "72f7f2f4a6a1", "service_id": "licitacoes"}
+{"t": 1787693239.4641051, "ts": "2026-08-25T18:27:19", "action": "job.create", "user": "local", "job_id": "0eb6aa3ba755", "service_id": "licitacoes"}
+{"t": 1787694453.7634337, "ts": "2026-08-25T18:47:33", "action": "job.create", "user": "local", "job_id": "c1119f3d60b8", "service_id": "licitacoes"}
+{"t": 1787695350.457765, "ts": "2026-08-25T19:02:30", "action": "job.create", "user": "local", "job_id": "60fa1356d8ab", "service_id": "licitacoes"}

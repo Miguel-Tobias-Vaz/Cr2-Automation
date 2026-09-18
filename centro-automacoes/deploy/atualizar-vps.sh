@@ -30,8 +30,19 @@ if [[ -f "$ENV_FILE" ]]; then
   echo "==> validando opto.env"
   # shellcheck disable=SC1090
   source "$ENV_FILE"
-  if [[ "${OPTO_AUTH:-}" =~ ^(0|off|false|no|disabled)$ ]]; then
-    echo "Auth: desligada (OPTO_AUTH=off) — painel aberto."
+  if [[ "${OPTO_LOCAL:-1}" == "0" ]]; then
+    if [[ "${OPTO_AUTH:-}" =~ ^(0|off|false|no|disabled)$ ]]; then
+      echo "ERRO: VPS (OPTO_LOCAL=0) não pode ter OPTO_AUTH=off — o painel ficaria aberto."
+      exit 1
+    fi
+    if [[ -z "${OPTO_SUPABASE_URL:-}" || -z "${OPTO_SUPABASE_ANON_KEY:-}" ]] && \
+       [[ -z "${OPTO_USERS:-}" ]]; then
+      echo "ERRO: VPS exige OPTO_SUPABASE_URL + OPTO_SUPABASE_ANON_KEY (ou OPTO_USERS)."
+      exit 1
+    fi
+    echo "Auth: VPS fail-closed (Supabase ou OPTO_USERS)."
+  elif [[ "${OPTO_AUTH:-}" =~ ^(0|off|false|no|disabled)$ ]]; then
+    echo "Auth: desligada (modo local)."
     SUPABASE_JS="$APP_DIR/centro-automacoes/front/supabase-config.js"
     rm -f "$SUPABASE_JS"
   elif [[ -n "${OPTO_SUPABASE_URL:-}" || -n "${OPTO_USERS:-}" ]]; then

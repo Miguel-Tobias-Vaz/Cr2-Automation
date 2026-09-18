@@ -24,8 +24,12 @@
   box-sizing: border-box;
 }
 
-html {
-  scroll-behavior: smooth;
+html.opto-auth-wait body {
+  visibility: hidden !important;
+}
+
+html.opto-auth-wait {
+  background: var(--ink);
 }
 
 body {
@@ -84,8 +88,7 @@ html:not(.has-shader-bg) body {
 
   .orb,
   .noise,
-  .shader-background,
-  .fluid-particles {
+  .shader-background {
     display: none !important;
   }
 }
@@ -1842,6 +1845,118 @@ body.has-dl-banner:not(.has-subnav) main {
   gap: 0.55rem;
 }
 
+.licitacao-log-board {
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.9fr) minmax(0, 1.1fr);
+  gap: 0.75rem;
+  margin: 0 0 0.75rem;
+}
+
+.licitacao-log-board[hidden] {
+  display: none;
+}
+
+.licitacao-log-list,
+.licitacao-log-detail {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  overflow: hidden;
+}
+
+.log-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--mist);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.log-board-head strong {
+  color: var(--copper, var(--accent));
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.log-board-items,
+.log-step-list {
+  max-height: min(38vh, 360px);
+  overflow: auto;
+  padding: 0.45rem;
+}
+
+.licitacao-log-item {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  gap: 0.55rem;
+  padding: 0.58rem 0.55rem;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mist);
+  cursor: pointer;
+  text-align: left;
+}
+
+.licitacao-log-item:hover,
+.licitacao-log-item.is-active {
+  background: rgba(225, 185, 113, 0.1);
+  color: var(--paper);
+}
+
+.licitacao-log-number {
+  color: var(--copper, var(--accent));
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.licitacao-log-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.licitacao-log-state {
+  color: rgba(210, 220, 226, 0.6);
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.licitacao-log-item.is-done .licitacao-log-state { color: #8fd99c; }
+.licitacao-log-item.is-error .licitacao-log-state { color: #e09a8e; }
+
+.licitacao-log-step {
+  padding: 0.48rem 0.55rem 0.48rem 1rem;
+  border-left: 2px solid rgba(225, 185, 113, 0.45);
+  color: rgba(230, 236, 240, 0.8);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.licitacao-log-step + .licitacao-log-step {
+  margin-top: 0.2rem;
+}
+
+@media (max-width: 720px) {
+  .licitacao-log-board {
+    grid-template-columns: 1fr;
+  }
+}
+
 .log-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -2854,11 +2969,6 @@ body.has-dl-banner.has-subnav {
 .hero-grid { display: none !important; }
 .hero-plane {
   background: radial-gradient(ellipse 50% 42% at 50% 18%, rgba(225, 185, 113, 0.12), transparent 62%) !important;
-}
-
-/* Partículas legado — substituído por shader-background.js */
-.fluid-particles {
-  display: none !important;
 }
 
 .shader-background {

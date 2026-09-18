@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Contratos — Opto Automações</title>
+    <title>Arrumador de Licitações — Opto Automações</title>
     <link rel="icon" type="image/png" href="/assets/OPTO%20-%20Azul.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/assets/styles.css?v=home72" />
+    <link rel="stylesheet" href="/assets/styles.css?v=home78" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -32,21 +32,21 @@
         <div class="hero-plane" aria-hidden="true"><div class="hero-grid"></div></div>
         <div class="hero-main">
           <header class="hero-copy">
-            <h1>Contratos / Aditivos</h1>
+            <h1>Arrumador de Licitações</h1>
             <p class="lede">
-              Varre a listagem do Governo Transparente, abre cada detalhe,
-              baixa os PDFs e monta a planilha de contratos e aditivos.
+              Compara o que já está publicado no Portal CR2 com os arquivos
+              de licitações, contratos e documentos da sua pasta local.
             </p>
           </header>
           <article class="stream is-in">
             <span class="stream-index">09</span>
-            <h3>O que faz</h3>
+            <h3>Conferência de migração</h3>
             <ul>
-              <li>Listagem paginada no portal Governo Transparente</li>
-              <li>Extração dos dados de cada contrato/aditivo</li>
-              <li>Baixa dos anexos por pasta</li>
-              <li>Planilha <code>Relacao de contratos e aditivos.xlsx</code></li>
-              <li>Retomada automática via checkpoint</li>
+              <li>Lê a listagem pública da entidade</li>
+              <li>Compara números de licitação com suas pastas</li>
+              <li>Aponta itens publicados e pendentes</li>
+              <li>Gera relatório Excel e TXT</li>
+              <li>Não move nem altera seus arquivos</li>
             </ul>
           </article>
         </div>
@@ -56,79 +56,32 @@
         <header class="section-head"><h2>Painel</h2></header>
         <form class="painel-form" id="form-contratos">
           <fieldset class="bloco">
-            <legend>Fonte e destino</legend>
+            <legend>Fonte e arquivos da migração</legend>
             <label class="field">
-              <span class="field-label"><em>ID do órgão *</em></span>
-              <input type="text" id="orgao" value="43559588" required />
+              <span class="field-label"><em>URL pública da entidade *</em></span>
+              <input type="url" id="url_entidade" placeholder="https://www.portalcr2.com.br/licitacoes/licitacoes-itaituba" required />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
-                Número na URL do portal, ex.:
-                <code>.../acessoinfo/<strong>43559588</strong>/consultarcontratoaditivo</code>
+                Cole a página pública de licitações da entidade no Portal CR2.
               </small>
             </label>
-            <div class="opcoes-grid" style="grid-template-columns:1fr 1fr;gap:1rem">
-              <label class="field">
-                <span class="field-label"><em>Data início *</em></span>
-                <input type="text" id="inicio" value="01/01/2023" placeholder="dd/mm/aaaa" required />
-              </label>
-              <label class="field">
-                <span class="field-label"><em>Data fim *</em></span>
-                <input type="text" id="fim" value="31/12/2023" placeholder="dd/mm/aaaa" required />
-              </label>
-            </div>
-            <label class="field">
-              <span class="field-label"><em>Pasta de saída</em></span>
-              <input type="text" id="pasta_saida" value="C:\Downloads\Contratos" />
+            <label class="field" id="wrap-pasta-local">
+              <span class="field-label"><em>Pasta local com pendências *</em></span>
+              <input type="text" id="pasta_local" value="C:\Downloads" placeholder="C:\Downloads" required />
               <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
-                Cria <code>contratos/</code>, <code>dados/</code>, <code>logs/</code> e <code>checkpoint/</code> dentro desta pasta.
+                Padrao: <code>C:\Downloads</code> — pasta com contratos/aditivos por licitacao.
               </small>
             </label>
-            <label class="field field--nome-pasta" id="wrap-nome-pasta">
-              <span class="field-label"><em>Nome da pasta *</em></span>
-              <input type="text" id="nome_pasta" placeholder="Ex.: CMBelém, CM BelBranco" autocomplete="off" required />
-              <span class="field-hint" id="hint-nome-pasta"></span>
+            <label class="field" id="wrap-pasta-saida">
+              <span class="field-label"><em>Pasta de saída (relatório)</em></span>
+              <input type="text" id="pasta_saida" value="C:\Downloads" placeholder="C:\Downloads" />
+              <small class="field-hint" style="display:block;margin-top:0.25rem;color:var(--mist)">
+                Padrao: <code>C:\Downloads</code> — onde grava o relatorio da conferencia.
+              </small>
             </label>
-            <label class="field">
-              <span class="field-label"><em>Limite de registros (opcional)</em></span>
-              <input type="number" id="limite" min="0" step="1" value="0" placeholder="0 = todos" />
-            </label>
-          </fieldset>
-
-          <fieldset class="bloco bloco-opcoes">
-            <legend>Opções</legend>
-            <div class="opcoes-grid">
-              <label class="check-row" for="headed">
-                <input type="checkbox" id="headed" />
-                <span class="check-copy">
-                  <strong>Mostrar navegador</strong>
-                  <small>Abre o Chromium visível (útil para depurar)</small>
-                </span>
-              </label>
-              <label class="check-row" for="apenas_listagem">
-                <input type="checkbox" id="apenas_listagem" />
-                <span class="check-copy">
-                  <strong>Apenas listagem</strong>
-                  <small>Só varre a tabela — sem detalhes nem downloads</small>
-                </span>
-              </label>
-              <label class="check-row" for="reset_checkpoint">
-                <input type="checkbox" id="reset_checkpoint" />
-                <span class="check-copy">
-                  <strong>Resetar checkpoint</strong>
-                  <small>Recomeça do zero (ignora retomada)</small>
-                </span>
-              </label>
-              <label class="check-row" for="sem_retry_erros">
-                <input type="checkbox" id="sem_retry_erros" />
-                <span class="check-copy">
-                  <strong>Não retentar erros</strong>
-                  <small>Pula registros que falharam em execuções anteriores</small>
-                </span>
-              </label>
-            </div>
           </fieldset>
 
           <div class="acao-row">
-            <button type="submit" class="btn btn-primary" id="btn-run">Iniciar</button>
+            <button type="submit" class="btn btn-primary" id="btn-run">Conferir migração</button>
             <button type="button" class="btn btn-stop" id="btn-cancel" hidden title="Interrompe a fila deste processo">Cancelar fila</button>
             <a class="btn btn-ghost" href="#log">Ver log</a>
           </div>
@@ -144,39 +97,22 @@
       </section>
     </main>
 
-    <script src="/assets/fluid-particles.js?v=home72"></script>
-    <script type="module" src="/assets/shared.js?v=home72"></script>
+    <script src="/assets/shader-background.js?v=home78"></script>
+    <script type="module" src="/assets/shared.js?v=home78"></script>
     <script type="module">
-import { whenReady } from "/assets/modules/core.js?v=home72";
+import { whenReady } from "/assets/modules/core.js?v=home78";
 whenReady(() => {
         const C = window.OptoAutomacoes;
         C.injectNav("contratos");
       C.pingApi();
 
-      const fields = [
-        "orgao",
-        "inicio",
-        "fim",
-        "pasta_saida",
-        "limite",
-        "headed",
-        "apenas_listagem",
-        "reset_checkpoint",
-        "sem_retry_erros",
-      ];
+      const fields = ["url_entidade", "pasta_local", "pasta_saida"];
 
       C.bindRun("contratos", "form-contratos", fields, () => {
-        const limiteVal = document.getElementById("limite").value.trim();
         return {
-          orgao: document.getElementById("orgao").value.trim(),
-          inicio: document.getElementById("inicio").value.trim(),
-          fim: document.getElementById("fim").value.trim(),
+          url_entidade: document.getElementById("url_entidade").value.trim(),
+          pasta_local: document.getElementById("pasta_local").value.trim(),
           pasta_saida: document.getElementById("pasta_saida").value.trim(),
-          limite: limiteVal === "" ? 0 : Number(limiteVal),
-          headed: document.getElementById("headed").checked,
-          apenas_listagem: document.getElementById("apenas_listagem").checked,
-          reset_checkpoint: document.getElementById("reset_checkpoint").checked,
-          sem_retry_erros: document.getElementById("sem_retry_erros").checked,
         };
       }, false);
 });

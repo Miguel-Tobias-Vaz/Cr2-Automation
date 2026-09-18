@@ -48,12 +48,13 @@ class BaseContratos(unittest.TestCase):
 
 
 class TestColeta(BaseContratos):
-    def test_gera_uma_linha_por_contrato_e_aditivo(self):
+    def test_gera_linha_so_do_contrato_nao_do_aditivo(self):
         linhas, _problemas = coletar_linhas_contratos(
             self.prontas, self.saida, ler_texto=self.ler
         )
         tipos = sorted(l["tipo_contrato"] for l in linhas)
-        self.assertEqual(tipos, ["Aditivo 02", "Contrato"])
+        # Aditivo fica só na pasta Aditivos/ — não entra na planilha
+        self.assertEqual(tipos, ["Contrato"])
 
     def test_portaria_e_edital_nao_viram_linha(self):
         linhas, _p = coletar_linhas_contratos(
@@ -62,6 +63,7 @@ class TestColeta(BaseContratos):
         docs = [os.path.basename(l["documento"]) for l in linhas]
         self.assertNotIn("Portaria Fiscal 45-2025.pdf", docs)
         self.assertNotIn("Edital 009-2025.pdf", docs)
+        self.assertNotIn("2 Termo Aditivo 003-2025.pdf", docs)
 
     def test_licitacao_origem_vem_do_numero_da_licitacao(self):
         linhas, _p = coletar_linhas_contratos(
@@ -76,13 +78,6 @@ class TestColeta(BaseContratos):
         contrato = [l for l in linhas if l["tipo_contrato"] == "Contrato"][0]
         self.assertEqual(contrato["fiscal_contrato"], "JOAO CARLOS PEREIRA")
 
-    def test_aditivo_usa_fiscal_da_portaria(self):
-        linhas, _p = coletar_linhas_contratos(
-            self.prontas, self.saida, ler_texto=self.ler
-        )
-        aditivo = [l for l in linhas if l["tipo_contrato"] == "Aditivo 02"][0]
-        self.assertEqual(aditivo["fiscal_contrato"], "MARIA APARECIDA SOUZA")
-
     def test_documento_recebe_url_quando_ha_link_base(self):
         linhas, _p = coletar_linhas_contratos(
             self.prontas,
@@ -93,7 +88,7 @@ class TestColeta(BaseContratos):
         contrato = [l for l in linhas if l["tipo_contrato"] == "Contrato"][0]
         self.assertEqual(
             contrato["documento"],
-            "https://exemplo.com/arquivos/009-2025-PE/Contrato 003-2025.pdf",
+            "https://exemplo.com/arquivos/Contratos/009-2025-PE/Contrato 003-2025.pdf",
         )
 
     def test_documento_e_relativo_a_pasta_de_saida(self):
@@ -110,15 +105,12 @@ class TestColeta(BaseContratos):
         # e o relativo realmente aponta para o arquivo
         self.assertTrue(os.path.isfile(os.path.join(self.saida, doc)))
 
-    def test_documento_do_aditivo_e_relativo_tambem(self):
+    def test_aditivo_nao_entra_na_planilha(self):
         linhas, _p = coletar_linhas_contratos(
             self.prontas, self.saida, ler_texto=self.ler
         )
-        aditivo = [l for l in linhas if l["tipo_contrato"] == "Aditivo 02"][0]
-        self.assertEqual(
-            aditivo["documento"], "PE 009-2025/2 Termo Aditivo 003-2025.pdf"
-        )
-        self.assertTrue(os.path.isfile(os.path.join(self.saida, aditivo["documento"])))
+        docs = [os.path.basename(l["documento"]) for l in linhas]
+        self.assertNotIn("2 Termo Aditivo 003-2025.pdf", docs)
 
     def test_documento_sem_campo_obrigatorio_fica_de_fora(self):
         self._criar(self.dir_ctr, "Contrato vazio.pdf", "papel em branco")
@@ -142,7 +134,7 @@ class TestPlanilha(BaseContratos):
         res = gerar_planilha_contratos(self.prontas, self.saida, ler_texto=self.ler)
         wb = openpyxl.load_workbook(res["planilha_contratos"])
         ws = wb[ABA_CONTRATOS]
-        self.assertEqual(ws.max_row, 3)  # cabeçalho + contrato + aditivo
+        self.assertEqual(ws.max_row, 2)  # cabeçalho + contrato (sem aditivo)
         linha = {
             rotulo: ws.cell(2, i).value
             for i, (_c, rotulo) in enumerate(CAMPOS_CONTRATO, start=1)
@@ -161,7 +153,7 @@ class TestPlanilha(BaseContratos):
             os.path.dirname(res["planilha_contratos"]),
             os.path.join(self.saida, "Contratos"),
         )
-        self.assertEqual(res["contratos_linhas"], 2)
+        self.assertEqual(res["contratos_linhas"], 1)
 
     def test_relatorio_lista_pendencias(self):
         self._criar(self.dir_ctr, "Contrato ruim.pdf", "nada")
