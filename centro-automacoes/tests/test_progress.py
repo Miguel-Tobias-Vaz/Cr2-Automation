@@ -28,6 +28,37 @@ def test_progress_ignores_smaller_total_after_queue_established():
     assert job.progress_total == 40
 
 
+def test_progress_ignores_collection_total_inside_sentence():
+    """Extração Pro logava 'posts novos. Total: N' e a barra travava em 0/N."""
+    job = Job(id="n", service_id="normas", config={})
+    _atualizar_progresso_do_log(job, "  12 posts novos. Total: 45")
+    assert job.progress_total == 0
+    assert job.progress_done == 0
+
+    _atualizar_progresso_do_log(job, "  Portarias na fila: 001/2025, 002/2025")
+    assert job.progress_total == 0
+
+    _atualizar_progresso_do_log(job, "[001/12] lei-ordinaria-n-1-2024")
+    assert job.progress_done == 1
+    assert job.progress_total == 12
+
+
+def test_progress_reads_standalone_total_line():
+    job = Job(id="p", service_id="publicacao", config={})
+    _atualizar_progresso_do_log(job, "  Total: 40")
+    assert job.progress_total == 40
+    assert job.progress_done == 0
+
+
+def test_progress_reads_normas_post_counter():
+    job = Job(id="n2", service_id="normas", config={})
+    _atualizar_progresso_do_log(job, "[001/187] algum-post")
+    assert job.progress_done == 1
+    assert job.progress_total == 187
+    _atualizar_progresso_do_log(job, "[010/187] outro-post")
+    assert job.progress_done == 10
+
+
 def test_user_jobs_for_owner_lists_all_running():
     mgr = JobManager()
     mgr._persist_enabled = False

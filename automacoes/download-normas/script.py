@@ -56,6 +56,61 @@ def _abortar_se_cancelado() -> None:
         raise Cancelado()
 
 
+# Barra do painel (Extração Pro). Acumula fontes: categoria + hub + página.
+_PROGRESSO_LOCK = threading.Lock()
+_PROGRESSO_DONE = 0
+_PROGRESSO_TOTAL = 0
+
+
+def _avisar_progresso(done=None, total=None, label=""):
+    """Callback direto do painel; fallback em linha parseável se rodar solto."""
+    fn = globals().get("reportar_progresso")
+    if callable(fn):
+        try:
+            fn(done=done, total=total, label=label or None)
+            return
+        except Exception:
+            pass
+    if total:
+        pct = int(round(100.0 * (done or 0) / max(int(total), 1)))
+        print(
+            "  progresso: [{0}/{1} · {2}%] {3}".format(
+                done or 0, total, pct, label or ""
+            )
+        )
+
+
+def _progresso_definir_fila(n: int, label: str = "") -> None:
+    global _PROGRESSO_TOTAL
+    n = max(0, int(n or 0))
+    if n <= 0:
+        return
+    with _PROGRESSO_LOCK:
+        _PROGRESSO_TOTAL += n
+        total = _PROGRESSO_TOTAL
+        done = _PROGRESSO_DONE
+    _avisar_progresso(done=done, total=total, label=label)
+
+
+def _progresso_item(label: str = "") -> None:
+    global _PROGRESSO_DONE
+    with _PROGRESSO_LOCK:
+        _PROGRESSO_DONE += 1
+        done = _PROGRESSO_DONE
+        total = _PROGRESSO_TOTAL
+    _avisar_progresso(done=done, total=total or done, label=label)
+
+
+def _herdar_log_painel() -> None:
+    """Workers do ThreadPool precisam do Tee do job, senão o log some."""
+    try:
+        from backend.runners.base import inherit_job_log_tee
+
+        inherit_job_log_tee()
+    except Exception:
+        pass
+
+
 # --- Configuração ---
 PASTA_BASE = r"C:\Downloads\Inhangapi"
 SITE = "https://inhangapi.pa.gov.br"
@@ -1131,7 +1186,7 @@ def coletar_posts_categoria(url_categoria: str) -> list[tuple[str, str]]:
             soup = BeautifulSoup(resp.text, "html.parser")
             novos = _posts_de_soup_categoria(soup, resp0.url, url_categoria, vistos)
             posts.extend(novos)
-            print(f"  {len(novos)} posts novos. Total: {len(vistos)}")
+            print(f"  {len(novos)} posts novos. Acumulados: {len(vistos)}")
             if not novos:
                 print("  Nenhum post novo. Fim.")
                 break
@@ -1164,7 +1219,7 @@ def coletar_posts_categoria(url_categoria: str) -> list[tuple[str, str]]:
             print(f"  Página {pagina}: {url}")
 
         novos = _posts_de_soup_categoria(soup, base, url_categoria, vistos)
-        print(f"  {len(novos)} posts novos. Total: {len(vistos)}")
+        print(f"  {len(novos)} posts novos. Acumulados: {len(vistos)}")
         posts.extend(novos)
         if not novos:
             print("  Nenhum post novo. Fim.")
@@ -1636,11 +1691,13 @@ def _executar_downloads_pdfs(
     url_fonte: str,
     pasta_fixa: str | None = None,
     ano_fixo: int | None = None,
+    contar_progresso: bool = False,
 ) -> None:
     """Baixa PDFs em série ou em paralelo (DOWNLOAD_WORKERS)."""
     workers = max(1, min(12, int(DOWNLOAD_WORKERS or 1)))
 
     def _baixar_item(item):
+        _herdar_log_painel()
         _abortar_se_cancelado()
         if len(item) == 3:
             texto_link, url_pdf, ano = item
@@ -1657,7 +1714,7 @@ def _executar_downloads_pdfs(
             pasta_hint=pasta_hint,
             ano_fallback=ano,
         )
-        return baixar_e_salvar(
+        resultado = baixar_e_salvar(
             url_pdf,
             pasta,
             nome_previo,
@@ -1667,6 +1724,9 @@ def _executar_downloads_pdfs(
             ano_fallback=ano,
             url_fonte=url_fonte,
         )
+        if contar_progresso:
+            _progresso_item((nome_previo or texto_link or url_pdf)[:60])
+        return resultado
 
     if workers <= 1:
         for item in items:
@@ -1724,11 +1784,13 @@ def processar_categoria(fonte: dict, contadores: dict) -> None:
             fila.append((url_post, texto_lista, extrair_ano(texto_lista, url_post)))
 
     total = len(fila)
+    _progresso_definir_fila(total, pasta_hint)
     for i, (url_post, texto_lista, ano_lista) in enumerate(fila, 1):
         _abortar_se_cancelado()
         prefix = f"[{str(i).zfill(3)}/{total}]"
         slug = url_post.rstrip("/").split("/")[-1][:60]
         print(f"{prefix} {slug}")
+        _progresso_item(slug)
         try:
             titulo, pdfs = obter_pdfs_do_post(url_post)
         except Exception as e:
@@ -1800,9 +1862,11 @@ def processar_hub_anos(fonte: dict, contadores: dict) -> None:
     if LIMITE_POSTS and LIMITE_POSTS > 0:
         paginas = paginas[:LIMITE_POSTS]
 
+    _progresso_definir_fila(len(paginas), pasta_hint)
     for i, (rotulo, url_ano) in enumerate(paginas, 1):
         _abortar_se_cancelado()
         print(f"[{str(i).zfill(2)}/{len(paginas)}] {rotulo} -> {url_ano}")
+        _progresso_item(rotulo)
         try:
             resp = _get(url_ano)
             soup = BeautifulSoup(resp.content, "html.parser")
@@ -1896,6 +1960,7 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
         ]
 
     print(f"  {len(pdfs)} PDF(s) na fila")
+    _progresso_definir_fila(len(pdfs), pasta_hint)
     # Log rápido dos números (ajuda a ver se 022/025 entraram)
     nums_fila = []
     for item in pdfs:
@@ -1914,6 +1979,7 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
         titulo=titulo or "",
         pasta_hint=pasta_hint,
         url_fonte=url,
+        contar_progresso=True,
     )
 
     _salvar_planilhas_normas_agora()
@@ -1924,9 +1990,11 @@ def processar_pagina(fonte: dict, contadores: dict) -> None:
 # =============================================================
 
 def main():
-    # Mutação (sem `global`) — evita "assigned to before global declaration"
+    global _PROGRESSO_DONE, _PROGRESSO_TOTAL
     REGISTROS_DIARIAS.clear()
     REGISTROS_NORMAS.clear()
+    _PROGRESSO_DONE = 0
+    _PROGRESSO_TOTAL = 0
 
     print("=" * 60)
     print("  DOWNLOAD DE NORMAS MUNICIPAIS")

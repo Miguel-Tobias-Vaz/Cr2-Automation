@@ -14,9 +14,10 @@ from types import ModuleType
 
 from backend.jobs import JobCancelled
 
-# [3/40]  |  [3/40 · 12%]  |  [-> SESSAO] [3/40]  |  (3/40)  |  item 3/40  |  Total: 40
+# Só linha inteira “Total: 40” / “Fila: 40”. NÃO “posts novos. Total: 45”
+# nem “Portarias na fila: 001/2025” — isso travava a barra da Extração Pro.
 _RE_PROGRESSO_TOTAL = re.compile(
-    r"(?:total|fila)\s*[:=]\s*(\d+)|"
+    r"^\s*(?:total|fila)\s*[:=]\s*(\d+)\s*$|"
     r"(\d+)\s+licita[cç][aã]o\(ões\)\s+a processar|"
     r"vamos processar\s+(\d+)\s+licita",
     re.I,
@@ -180,6 +181,11 @@ class _ThreadDispatchStream(io.TextIOBase):
 
     def _target(self) -> io.TextIOBase:
         key = "tee_err" if self._stderr else "tee_out"
+        stream = getattr(_log_tls, key, None)
+        if stream is not None:
+            return stream
+        # ThreadPool das automações não herda thread-local — pega o Tee do job.
+        inherit_job_log_tee()
         stream = getattr(_log_tls, key, None)
         if stream is not None:
             return stream

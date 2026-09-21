@@ -40,3 +40,6 @@
 {"t": 1787693239.4641051, "ts": "2026-08-25T18:27:19", "action": "job.create", "user": "local", "job_id": "0eb6aa3ba755", "service_id": "licitacoes"}
 {"t": 1787694453.7634337, "ts": "2026-08-25T18:47:33", "action": "job.create", "user": "local", "job_id": "c1119f3d60b8", "service_id": "licitacoes"}
 {"t": 1787695350.457765, "ts": "2026-08-25T19:02:30", "action": "job.create", "user": "local", "job_id": "60fa1356d8ab", "service_id": "licitacoes"}
+{"t": 1790011009.7894626, "ts": "2026-09-21T14:16:49", "action": "job.create", "user": "local", "job_id": "febf6696df54", "service_id": "normas"}
+{"t": 1790011406.0871475, "ts": "2026-09-21T14:23:26", "action": "job.create", "user": "local", "job_id": "0435a9a4cc93", "service_id": "normas"}
+{"t": 1790011433.8547363, "ts": "2026-09-21T14:23:53", "action": "job.cancel", "user": "local", "job_id": "0435a9a4cc93"}
